@@ -1,0 +1,12 @@
+{
+  "name": "@chatman/castle",
+  "version": "26.8.15",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-strip-types --test test/*.test.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

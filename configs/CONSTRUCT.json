@@ -1,0 +1,44 @@
+{
+  "schema": "castle.construct.v1",
+  "hashAlgorithm": "BLAKE3-256",
+  "exclusiveDoPath": true,
+  "zeroUnreceiptedActuation": true,
+  "publicConstruction": true,
+  "requiredBindings": [
+    "O*",
+    "configGraph",
+    "ontology",
+    "process",
+    "subject",
+    "authority",
+    "allowedTransitionIds",
+    "maxSteps",
+    "expiresAtEpochMs",
+    "replayIdentity"
+  ],
+  "requiredParentReceipts": [
+    "O*",
+    "configGraph",
+    "ontology",
+    "process"
+  ],
+  "admission": {
+    "trustedOriginRequired": true,
+    "authorizedRoleRequired": true,
+    "exactSubjectRequired": true,
+    "exactProcessDigestRequired": true,
+    "exactBoundsRequired": true,
+    "parentReceiptChainRequired": true,
+    "freshnessRequired": true
+  },
+  "typedRefusals": [
+    "REFUSED:UNRECEIPTED_CONSTRUCT",
+    "REFUSED:UNVERIFIED_CONSTRUCT_PARENT",
+    "REFUSED:UNVERIFIED_CONSTRUCT_RECEIPT",
+    "REFUSED:CONSTRUCT_AUTHORITY_NOT_ADMITTED",
+    "REFUSED:CONSTRUCT_SUBJECT_MISMATCH",
+    "REFUSED:PROCESS_DIGEST_MISMATCH",
+    "REFUSED:CONSTRUCT_BOUND_MISMATCH",
+    "REFUSED:CONSTRUCT_EXPIRED"
+  ]
+}
