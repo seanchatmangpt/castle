@@ -1,16 +1,24 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import {
   DependencyGraph,
   WitnessPlanner,
+  admitConstructForDo,
   applyZeroDayObservation,
   compileAdversarialClasses,
   createReceipt,
   deriveVulnerabilities,
   executePowlWithGymAct,
+  manufactureConstructCapability,
   matchCompiledClasses,
   type AdversarialGoal,
+  type Blake3Provider,
   type GymActAdapter,
+  type PowlProcess,
+  type ReceiptSigner,
+  type ReceiptVerifier,
+  type TestEnvelope,
   type TransitionRule,
 } from "../src/castle.ts";
 
@@ -32,6 +40,37 @@ const rules: TransitionRule[] = [
     effects: ["dep:auth-service:execute"],
   },
 ];
+
+const testBlake3: Blake3Provider = {
+  // Deterministic shape-compatible test double. Production injects a real BLAKE3-256 provider.
+  digestUtf8(input) {
+    return createHash("sha256").update(`test-blake3:${input}`).digest("hex");
+  },
+};
+const testSigner: ReceiptSigner = {
+  keyId: "construct-root",
+  signDigest: (digest) => `sig:${digest}`,
+};
+const testVerifier: ReceiptVerifier = {
+  verifyDigest: (keyId, digest, signature) => keyId === "construct-root" && signature === `sig:${digest}`,
+};
+
+function constructFor(process: PowlProcess, envelope: TestEnvelope) {
+  const capability = manufactureConstructCapability({
+    subject: envelope.systemId,
+    authority: "defensive-test",
+    oStar: { admittedSubject: envelope.systemId },
+    configGraph: { root: "configs/CONSTRUCT", zeroUnreceiptedActuation: true },
+    ontology: { version: "castle-pack-v1" },
+    process,
+    envelope,
+  }, testBlake3, testSigner);
+  const admission = admitConstructForDo(capability, process, envelope, testBlake3, testVerifier, {
+    trustedOriginKeyIds: new Set(["construct-root"]),
+    allowedAuthorities: new Set(["defensive-test"]),
+  }, () => 1);
+  return { capability, admission };
+}
 
 test("DfCM derives minimal vulnerability conditions backward from the goal", () => {
   const vulnerabilities = deriveVulnerabilities(goal, rules);
@@ -81,11 +120,12 @@ test("known structural vulnerability selects a precompiled adversarial class", a
   assert.equal(matches[0]!.goal.id, goal.id);
 });
 
-test("GymAct executes only admitted POWL transitions and returns OCEL v2 evidence", async () => {
+test("GymAct executes only through admitted CONSTRUCT and returns receipted OCEL v2 evidence", async () => {
   const classes = await compileAdversarialClasses([goal], rules);
   const process = classes[0]!.process;
   const gymact: GymActAdapter = {
-    async execute(activity) {
+    async execute(activity, _state, permit) {
+      assert.equal(permit.transitionId, activity.transitionId);
       return {
         transitionId: activity.transitionId,
         status: "OBSERVED",
@@ -93,44 +133,105 @@ test("GymAct executes only admitted POWL transitions and returns OCEL v2 evidenc
       };
     },
   };
+  const envelope: TestEnvelope = {
+    systemId: "system:self",
+    allowedTransitionIds: new Set(["execute-auth-service", "assume-control-plane"]),
+    maxSteps: 2,
+    expiresAtEpochMs: 10_000,
+  };
+  const { admission } = constructFor(process, envelope);
   let tick = 0;
   const log = await executePowlWithGymAct(
     process,
     { systemId: "system:self", facts: new Set() },
-    {
-      systemId: "system:self",
-      allowedTransitionIds: new Set(["execute-auth-service", "assume-control-plane"]),
-      maxSteps: 2,
-      expiresAtEpochMs: 10_000,
-    },
+    envelope,
     gymact,
-    () => ++tick,
+    { admission, blake3: testBlake3, receiptSigner: testSigner, now: () => ++tick },
   );
   assert.equal(log.version, "2.0");
   assert.equal(log.events.length, 2);
   assert.deepEqual(log.events.map((e) => e.type), ["execute-auth-service", "assume-control-plane"]);
+  assert.equal(log.receipt.epistemicClass, "OBSERVED");
+  assert.deepEqual(log.receipt.parentDigests, [admission.constructDigest]);
+  assert.ok(log.events.every((event) => event.attributes.constructDigest === admission.constructDigest));
 });
 
-test("GymAct refuses a transition outside the admitted test envelope", async () => {
+test("DO refuses fabricated admission and envelope mutation after CONSTRUCT", async () => {
   const classes = await compileAdversarialClasses([goal], rules);
+  const process = classes[0]!.process;
+  const envelope: TestEnvelope = {
+    systemId: "system:self",
+    allowedTransitionIds: new Set(["execute-auth-service", "assume-control-plane"]),
+    maxSteps: 2,
+    expiresAtEpochMs: 10_000,
+  };
+  const gymact: GymActAdapter = {
+    async execute(activity) { return { transitionId: activity.transitionId, status: "OBSERVED" }; },
+  };
   await assert.rejects(
     executePowlWithGymAct(
-      classes[0]!.process,
+      process,
       { systemId: "system:self", facts: new Set() },
-      {
-        systemId: "system:self",
-        allowedTransitionIds: new Set(["execute-auth-service"]),
-        maxSteps: 2,
-        expiresAtEpochMs: 10_000,
-      },
-      { async execute(activity) { return { transitionId: activity.transitionId, status: "OBSERVED" }; } },
-      () => 1,
+      envelope,
+      gymact,
+      { admission: {} as never, blake3: testBlake3, receiptSigner: testSigner, now: () => 1 },
     ),
-    /REFUSED: transition not admitted/,
+    /REFUSED:UNRECEIPTED_CONSTRUCT/,
+  );
+
+  const { admission } = constructFor(process, envelope);
+  const mutatedEnvelope: TestEnvelope = { ...envelope, allowedTransitionIds: new Set(["execute-auth-service"]) };
+  await assert.rejects(
+    executePowlWithGymAct(
+      process,
+      { systemId: "system:self", facts: new Set() },
+      mutatedEnvelope,
+      gymact,
+      { admission, blake3: testBlake3, receiptSigner: testSigner, now: () => 1 },
+    ),
+    /REFUSED:CONSTRUCT_BOUND_MISMATCH/,
   );
 });
 
-test("receipt contract refuses non-BLAKE3-shaped provider output", () => {
+test("CONSTRUCT admission refuses config mutation, process substitution, and untrusted origin", async () => {
+  const classes = await compileAdversarialClasses([goal], rules);
+  const process = classes[0]!.process;
+  const envelope: TestEnvelope = {
+    systemId: "system:self",
+    allowedTransitionIds: new Set(["execute-auth-service", "assume-control-plane"]),
+    maxSteps: 2,
+    expiresAtEpochMs: 10_000,
+  };
+  const { capability } = constructFor(process, envelope);
+
+  capability.sources.configGraph = { root: "human-edited" };
+  assert.throws(
+    () => admitConstructForDo(capability, process, envelope, testBlake3, testVerifier, {
+      trustedOriginKeyIds: new Set(["construct-root"]),
+      allowedAuthorities: new Set(["defensive-test"]),
+    }, () => 1),
+    /REFUSED:UNVERIFIED_CONSTRUCT_PARENT/,
+  );
+
+  const fresh = constructFor(process, envelope).capability;
+  const substituted: PowlProcess = { ...process, id: `${process.id}:human-substitution` };
+  assert.throws(
+    () => admitConstructForDo(fresh, substituted, envelope, testBlake3, testVerifier, {
+      trustedOriginKeyIds: new Set(["construct-root"]),
+      allowedAuthorities: new Set(["defensive-test"]),
+    }, () => 1),
+    /REFUSED:/,
+  );
+  assert.throws(
+    () => admitConstructForDo(fresh, process, envelope, testBlake3, testVerifier, {
+      trustedOriginKeyIds: new Set(["other-root"]),
+      allowedAuthorities: new Set(["defensive-test"]),
+    }, () => 1),
+    /REFUSED:UNVERIFIED_CONSTRUCT_PARENT/,
+  );
+});
+
+test("receipt contract binds artifact, subject, parents, origin and signature", () => {
   assert.throws(
     () => createReceipt({ x: 1 }, "CONSTRUCTED", "subject", [], { digestUtf8: () => "bad" }, { keyId: "test", signDigest: () => "sig" }),
     /invalid BLAKE3-256/,
@@ -145,6 +246,8 @@ test("receipt contract refuses non-BLAKE3-shaped provider output", () => {
   );
   assert.equal(receipt.algorithm, "BLAKE3-256");
   assert.deepEqual(receipt.parentDigests, ["a".repeat(64), "b".repeat(64)]);
+  assert.equal(receipt.artifactDigest, "c".repeat(64));
+  assert.equal(receipt.receiptDigest, "c".repeat(64));
   assert.equal(receipt.originKeyId, "test-key");
   assert.equal(receipt.originSignature, `sig:${"c".repeat(64)}`);
 });

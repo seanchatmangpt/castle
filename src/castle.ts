@@ -81,6 +81,15 @@ export interface TestEnvelope {
   expiresAtEpochMs: number;
 }
 
+export interface ActuationPermit {
+  constructDigest: string;
+  processDigest: string;
+  subject: string;
+  authority: string;
+  transitionId: string;
+  expiresAtEpochMs: number;
+}
+
 export interface GymActResult {
   transitionId: string;
   status: "OBSERVED" | "REFUSED";
@@ -89,7 +98,7 @@ export interface GymActResult {
 }
 
 export interface GymActAdapter {
-  execute(activity: PowlActivity, state: WorldState): Promise<GymActResult>;
+  execute(activity: PowlActivity, state: WorldState, permit: ActuationPermit): Promise<GymActResult>;
 }
 
 export interface OcelObject {
@@ -129,9 +138,14 @@ export interface ReceiptSigner {
   signDigest(digestHex: string): string;
 }
 
+export interface ReceiptVerifier {
+  verifyDigest(keyId: string, digestHex: string, signature: string): boolean;
+}
+
 export interface Receipt {
   algorithm: "BLAKE3-256";
   artifactDigest: string;
+  receiptDigest: string;
   epistemicClass: EpistemicClass;
   subject: string;
   parentDigests: readonly string[];
@@ -146,6 +160,83 @@ export interface CompiledAdversarialClass {
   process: PowlProcess;
 }
 
+export interface ConstructSources {
+  oStar: unknown;
+  configGraph: unknown;
+  ontology: unknown;
+}
+
+export interface ConstructArtifact {
+  kind: "CASTLE_CONSTRUCT_V1";
+  algorithm: "BLAKE3-256";
+  subject: string;
+  authority: string;
+  oStarDigest: string;
+  configGraphDigest: string;
+  ontologyDigest: string;
+  processDigest: string;
+  replayIdentityDigest: string;
+  allowedTransitionIds: readonly string[];
+  maxSteps: number;
+  expiresAtEpochMs: number;
+}
+
+export interface ConstructSourceReceipts {
+  oStar: Receipt;
+  configGraph: Receipt;
+  ontology: Receipt;
+  process: Receipt;
+}
+
+export interface ConstructCapability {
+  sources: ConstructSources;
+  artifact: ConstructArtifact;
+  sourceReceipts: ConstructSourceReceipts;
+  receipt: Receipt;
+}
+
+export interface ConstructRequest extends ConstructSources {
+  subject: string;
+  authority: string;
+  process: PowlProcess;
+  envelope: TestEnvelope;
+}
+
+export interface ConstructTrustPolicy {
+  trustedOriginKeyIds: ReadonlySet<string>;
+  allowedAuthorities: ReadonlySet<string>;
+}
+
+const CONSTRUCT_ADMISSION_BRAND = Symbol("CASTLE_CONSTRUCT_ADMISSION");
+
+export interface ConstructAdmission {
+  readonly standing: "ALIVE";
+  readonly constructDigest: string;
+  readonly processDigest: string;
+  readonly oStarDigest: string;
+  readonly configGraphDigest: string;
+  readonly ontologyDigest: string;
+  readonly replayIdentityDigest: string;
+  readonly subject: string;
+  readonly authority: string;
+  readonly allowedTransitionIds: readonly string[];
+  readonly maxSteps: number;
+  readonly expiresAtEpochMs: number;
+  readonly [CONSTRUCT_ADMISSION_BRAND]: true;
+}
+
+export interface DoAuthorizationContext {
+  admission: ConstructAdmission;
+  blake3: Blake3Provider;
+  receiptSigner: ReceiptSigner;
+  now?: () => number;
+}
+
+export interface ReceiptedOcelLog extends OcelLog {
+  constructDigest: string;
+  receipt: Receipt;
+}
+
 function setKey(values: Iterable<string>): string {
   return [...new Set(values)].sort().join("\u0000");
 }
@@ -153,6 +244,35 @@ function setKey(values: Iterable<string>): string {
 function isSubset(a: readonly string[], b: readonly string[]): boolean {
   const bs = new Set(b);
   return a.every((x) => bs.has(x));
+}
+
+function sameStrings(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (value instanceof Set) return canonicalJson([...value].sort());
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(",")}}`;
+}
+
+function digestCanonical(value: unknown, blake3: Blake3Provider): string {
+  const digest = blake3.digestUtf8(canonicalJson(value));
+  if (!/^[0-9a-f]{64}$/.test(digest)) throw new Error("invalid BLAKE3-256 digest provider output");
+  return digest;
+}
+
+function unsignedReceiptPayload(receipt: Omit<Receipt, "receiptDigest" | "originSignature">): unknown {
+  return {
+    algorithm: receipt.algorithm,
+    artifactDigest: receipt.artifactDigest,
+    epistemicClass: receipt.epistemicClass,
+    subject: receipt.subject,
+    parentDigests: [...receipt.parentDigests].sort(),
+    originKeyId: receipt.originKeyId,
+  };
 }
 
 /**
@@ -289,10 +409,7 @@ export class DependencyGraph {
     return {
       dependencyId,
       capability,
-      facts: [
-        `compromised:${dependencyId}`,
-        `capability:${dependencyId}:${capability}`,
-      ],
+      facts: [`compromised:${dependencyId}`, `capability:${dependencyId}:${capability}`],
       impacted: this.impactedClosure([dependencyId]),
       epistemicClass: "COUNTERFACTUAL",
     };
@@ -358,15 +475,225 @@ export async function runPlannerEnsemble(
   );
 }
 
+export function createReceipt(
+  artifact: unknown,
+  epistemicClass: EpistemicClass,
+  subject: string,
+  parentDigests: readonly string[],
+  blake3: Blake3Provider,
+  signer: ReceiptSigner,
+): Receipt {
+  const artifactDigest = digestCanonical(artifact, blake3);
+  const normalizedParents = [...parentDigests].sort();
+  if (normalizedParents.some((digest) => !/^[0-9a-f]{64}$/.test(digest))) {
+    throw new Error("invalid parent BLAKE3-256 digest");
+  }
+  if (!signer.keyId) throw new Error("receipt signer keyId is required");
+  const unsigned = {
+    algorithm: "BLAKE3-256" as const,
+    artifactDigest,
+    epistemicClass,
+    subject,
+    parentDigests: normalizedParents,
+    originKeyId: signer.keyId,
+  };
+  const receiptDigest = digestCanonical(unsignedReceiptPayload(unsigned), blake3);
+  const originSignature = signer.signDigest(receiptDigest);
+  if (!originSignature) throw new Error("receipt signer returned an empty origin signature");
+  return { ...unsigned, receiptDigest, originSignature };
+}
+
+export function verifyReceipt(
+  artifact: unknown,
+  receipt: Receipt,
+  blake3: Blake3Provider,
+  verifier: ReceiptVerifier,
+  trustedOriginKeyIds: ReadonlySet<string>,
+): boolean {
+  if (receipt.algorithm !== "BLAKE3-256") return false;
+  if (!trustedOriginKeyIds.has(receipt.originKeyId)) return false;
+  if (!/^[0-9a-f]{64}$/.test(receipt.artifactDigest) || !/^[0-9a-f]{64}$/.test(receipt.receiptDigest)) return false;
+  if (receipt.parentDigests.some((digest) => !/^[0-9a-f]{64}$/.test(digest))) return false;
+  if (digestCanonical(artifact, blake3) !== receipt.artifactDigest) return false;
+  const expectedReceiptDigest = digestCanonical(
+    unsignedReceiptPayload({
+      algorithm: receipt.algorithm,
+      artifactDigest: receipt.artifactDigest,
+      epistemicClass: receipt.epistemicClass,
+      subject: receipt.subject,
+      parentDigests: receipt.parentDigests,
+      originKeyId: receipt.originKeyId,
+    }),
+    blake3,
+  );
+  if (expectedReceiptDigest !== receipt.receiptDigest) return false;
+  return verifier.verifyDigest(receipt.originKeyId, receipt.receiptDigest, receipt.originSignature);
+}
+
+function buildConstructArtifact(request: ConstructRequest, sourceReceipts: ConstructSourceReceipts, blake3: Blake3Provider): ConstructArtifact {
+  const allowedTransitionIds = [...request.envelope.allowedTransitionIds].sort();
+  const replayIdentityDigest = digestCanonical(
+    {
+      subject: request.subject,
+      authority: request.authority,
+      oStarDigest: sourceReceipts.oStar.artifactDigest,
+      configGraphDigest: sourceReceipts.configGraph.artifactDigest,
+      ontologyDigest: sourceReceipts.ontology.artifactDigest,
+      processDigest: sourceReceipts.process.artifactDigest,
+      allowedTransitionIds,
+      maxSteps: request.envelope.maxSteps,
+      expiresAtEpochMs: request.envelope.expiresAtEpochMs,
+    },
+    blake3,
+  );
+  return {
+    kind: "CASTLE_CONSTRUCT_V1",
+    algorithm: "BLAKE3-256",
+    subject: request.subject,
+    authority: request.authority,
+    oStarDigest: sourceReceipts.oStar.artifactDigest,
+    configGraphDigest: sourceReceipts.configGraph.artifactDigest,
+    ontologyDigest: sourceReceipts.ontology.artifactDigest,
+    processDigest: sourceReceipts.process.artifactDigest,
+    replayIdentityDigest,
+    allowedTransitionIds,
+    maxSteps: request.envelope.maxSteps,
+    expiresAtEpochMs: request.envelope.expiresAtEpochMs,
+  };
+}
+
+/**
+ * DfCM CONSTRUCT manufacture. This creates no execution authority by itself: only
+ * admitConstructForDo can turn a cryptographically valid construction into an opaque DO capability.
+ */
+export function manufactureConstructCapability(
+  request: ConstructRequest,
+  blake3: Blake3Provider,
+  signer: ReceiptSigner,
+): ConstructCapability {
+  if (!request.subject || request.envelope.systemId !== request.subject) {
+    throw new Error("REFUSED:CONSTRUCT_SUBJECT_MISMATCH");
+  }
+  if (!request.authority) throw new Error("REFUSED:MISSING_CONSTRUCT_AUTHORITY");
+  if (!Number.isInteger(request.envelope.maxSteps) || request.envelope.maxSteps < 0) {
+    throw new Error("REFUSED:INVALID_CONSTRUCT_STEP_BOUND");
+  }
+  const processTransitions = [...new Set(request.process.activities.map((activity) => activity.transitionId))].sort();
+  const allowed = [...request.envelope.allowedTransitionIds].sort();
+  if (processTransitions.some((transitionId) => !request.envelope.allowedTransitionIds.has(transitionId))) {
+    throw new Error("REFUSED:CONSTRUCT_PROCESS_EXCEEDS_BOUNDS");
+  }
+  if (request.process.activities.length > request.envelope.maxSteps) {
+    throw new Error("REFUSED:CONSTRUCT_PROCESS_EXCEEDS_STEP_BOUND");
+  }
+
+  const sourceReceipts: ConstructSourceReceipts = {
+    oStar: createReceipt(request.oStar, "CONSTRUCTED", request.subject, [], blake3, signer),
+    configGraph: createReceipt(request.configGraph, "CONSTRUCTED", request.subject, [], blake3, signer),
+    ontology: createReceipt(request.ontology, "CONSTRUCTED", request.subject, [], blake3, signer),
+    process: createReceipt(request.process, "CONSTRUCTED", request.subject, [], blake3, signer),
+  };
+  const artifact = buildConstructArtifact(request, sourceReceipts, blake3);
+  if (!sameStrings(artifact.allowedTransitionIds, allowed)) throw new Error("REFUSED:NONDETERMINISTIC_CONSTRUCT_BOUNDS");
+  const parentDigests = Object.values(sourceReceipts).map((receipt) => receipt.artifactDigest).sort();
+  const receipt = createReceipt(artifact, "CONSTRUCTED", request.subject, parentDigests, blake3, signer);
+  return {
+    sources: { oStar: request.oStar, configGraph: request.configGraph, ontology: request.ontology },
+    artifact,
+    sourceReceipts,
+    receipt,
+  };
+}
+
+export function admitConstructForDo(
+  capability: ConstructCapability,
+  process: PowlProcess,
+  envelope: TestEnvelope,
+  blake3: Blake3Provider,
+  verifier: ReceiptVerifier,
+  policy: ConstructTrustPolicy,
+  now: () => number = Date.now,
+): ConstructAdmission {
+  const refuse = (reason: string): never => { throw new Error(`REFUSED:${reason}`); };
+  const artifact = capability.artifact;
+  if (artifact.kind !== "CASTLE_CONSTRUCT_V1" || artifact.algorithm !== "BLAKE3-256") refuse("INVALID_CONSTRUCT_KIND");
+  if (!policy.allowedAuthorities.has(artifact.authority)) refuse("CONSTRUCT_AUTHORITY_NOT_ADMITTED");
+  if (artifact.subject !== envelope.systemId || capability.receipt.subject !== envelope.systemId) refuse("CONSTRUCT_SUBJECT_MISMATCH");
+  if (now() > artifact.expiresAtEpochMs || now() > envelope.expiresAtEpochMs) refuse("CONSTRUCT_EXPIRED");
+
+  const receipts: Array<[unknown, Receipt]> = [
+    [capability.sources.oStar, capability.sourceReceipts.oStar],
+    [capability.sources.configGraph, capability.sourceReceipts.configGraph],
+    [capability.sources.ontology, capability.sourceReceipts.ontology],
+    [process, capability.sourceReceipts.process],
+  ];
+  for (const [source, receipt] of receipts) {
+    if (receipt.subject !== artifact.subject || receipt.epistemicClass !== "CONSTRUCTED") refuse("INVALID_CONSTRUCT_PARENT");
+    if (!verifyReceipt(source, receipt, blake3, verifier, policy.trustedOriginKeyIds)) refuse("UNVERIFIED_CONSTRUCT_PARENT");
+  }
+
+  const expectedRequest: ConstructRequest = {
+    subject: artifact.subject,
+    authority: artifact.authority,
+    oStar: capability.sources.oStar,
+    configGraph: capability.sources.configGraph,
+    ontology: capability.sources.ontology,
+    process,
+    envelope,
+  };
+  const expectedArtifact = buildConstructArtifact(expectedRequest, capability.sourceReceipts, blake3);
+  if (canonicalJson(expectedArtifact) !== canonicalJson(artifact)) refuse("CONSTRUCT_BINDING_MISMATCH");
+
+  const parentDigests = Object.values(capability.sourceReceipts).map((receipt) => receipt.artifactDigest).sort();
+  if (!sameStrings([...capability.receipt.parentDigests].sort(), parentDigests)) refuse("CONSTRUCT_PARENT_CHAIN_MISMATCH");
+  if (capability.receipt.epistemicClass !== "CONSTRUCTED") refuse("INVALID_CONSTRUCT_RECEIPT_CLASS");
+  if (!verifyReceipt(artifact, capability.receipt, blake3, verifier, policy.trustedOriginKeyIds)) refuse("UNVERIFIED_CONSTRUCT_RECEIPT");
+
+  const processDigest = digestCanonical(process, blake3);
+  if (processDigest !== artifact.processDigest) refuse("PROCESS_DIGEST_MISMATCH");
+  if (!sameStrings([...envelope.allowedTransitionIds].sort(), artifact.allowedTransitionIds)) refuse("CONSTRUCT_BOUND_MISMATCH");
+  if (envelope.maxSteps !== artifact.maxSteps || envelope.expiresAtEpochMs !== artifact.expiresAtEpochMs) refuse("CONSTRUCT_BOUND_MISMATCH");
+  if (process.activities.some((activity) => !envelope.allowedTransitionIds.has(activity.transitionId))) refuse("PROCESS_OUTSIDE_CONSTRUCT_BOUNDS");
+
+  return Object.freeze({
+    standing: "ALIVE",
+    constructDigest: capability.receipt.artifactDigest,
+    processDigest: artifact.processDigest,
+    oStarDigest: artifact.oStarDigest,
+    configGraphDigest: artifact.configGraphDigest,
+    ontologyDigest: artifact.ontologyDigest,
+    replayIdentityDigest: artifact.replayIdentityDigest,
+    subject: artifact.subject,
+    authority: artifact.authority,
+    allowedTransitionIds: Object.freeze([...artifact.allowedTransitionIds]),
+    maxSteps: artifact.maxSteps,
+    expiresAtEpochMs: artifact.expiresAtEpochMs,
+    [CONSTRUCT_ADMISSION_BRAND]: true,
+  });
+}
+
+/**
+ * Exclusive DO path. There is intentionally no unreceipted GymAct execution path.
+ * The opaque admission must have been manufactured by admitConstructForDo.
+ */
 export async function executePowlWithGymAct(
   process: PowlProcess,
   state: WorldState,
   envelope: TestEnvelope,
   gymact: GymActAdapter,
-  now: () => number = Date.now,
-): Promise<OcelLog> {
-  if (envelope.systemId !== state.systemId) throw new Error("REFUSED: envelope subject mismatch");
-  if (now() > envelope.expiresAtEpochMs) throw new Error("REFUSED: envelope expired");
+  authorization: DoAuthorizationContext,
+): Promise<ReceiptedOcelLog> {
+  const { admission, blake3, receiptSigner } = authorization;
+  const now = authorization.now ?? Date.now;
+  if (!admission || admission[CONSTRUCT_ADMISSION_BRAND] !== true) throw new Error("REFUSED:UNRECEIPTED_CONSTRUCT");
+  if (admission.standing !== "ALIVE") throw new Error("REFUSED:CONSTRUCT_NOT_ALIVE");
+  if (envelope.systemId !== state.systemId || admission.subject !== state.systemId) throw new Error("REFUSED: envelope subject mismatch");
+  if (now() > envelope.expiresAtEpochMs || now() > admission.expiresAtEpochMs) throw new Error("REFUSED: envelope expired");
+  if (digestCanonical(process, blake3) !== admission.processDigest) throw new Error("REFUSED:PROCESS_DIGEST_MISMATCH");
+  if (!sameStrings([...envelope.allowedTransitionIds].sort(), admission.allowedTransitionIds)) throw new Error("REFUSED:CONSTRUCT_BOUND_MISMATCH");
+  if (envelope.maxSteps !== admission.maxSteps || envelope.expiresAtEpochMs !== admission.expiresAtEpochMs) {
+    throw new Error("REFUSED:CONSTRUCT_BOUND_MISMATCH");
+  }
 
   const completed = new Set<string>();
   const objects = new Map<string, OcelObject>();
@@ -380,22 +707,40 @@ export async function executePowlWithGymAct(
     if (steps + enabled.length > envelope.maxSteps) throw new Error("REFUSED: max step budget exceeded");
 
     for (const activity of enabled) {
-      if (!envelope.allowedTransitionIds.has(activity.transitionId)) {
+      if (!envelope.allowedTransitionIds.has(activity.transitionId) || !admission.allowedTransitionIds.includes(activity.transitionId)) {
         throw new Error(`REFUSED: transition not admitted: ${activity.transitionId}`);
       }
     }
 
-    const results = await Promise.all(enabled.map((activity) => gymact.execute(activity, state)));
+    const results = await Promise.all(enabled.map((activity) => gymact.execute(activity, state, {
+      constructDigest: admission.constructDigest,
+      processDigest: admission.processDigest,
+      subject: admission.subject,
+      authority: admission.authority,
+      transitionId: activity.transitionId,
+      expiresAtEpochMs: admission.expiresAtEpochMs,
+    })));
     for (let i = 0; i < enabled.length; i += 1) {
       const activity = enabled[i]!;
       const result = results[i]!;
+      if (result.transitionId !== activity.transitionId) throw new Error(`REFUSED: GymAct transition receipt mismatch ${activity.transitionId}`);
       if (result.status !== "OBSERVED") throw new Error(`REFUSED: GymAct refused ${activity.transitionId}`);
       for (const object of result.objects ?? []) objects.set(object.id, object);
       events.push({
         id: `event:${events.length + 1}:${activity.transitionId}`,
         type: activity.transitionId,
         time: new Date(now()).toISOString(),
-        attributes: { epistemicClass: "OBSERVED", ...(result.attributes ?? {}) },
+        attributes: {
+          epistemicClass: "OBSERVED",
+          constructDigest: admission.constructDigest,
+          processDigest: admission.processDigest,
+          configGraphDigest: admission.configGraphDigest,
+          oStarDigest: admission.oStarDigest,
+          ontologyDigest: admission.ontologyDigest,
+          replayIdentityDigest: admission.replayIdentityDigest,
+          authority: admission.authority,
+          ...(result.attributes ?? {}),
+        },
         objectIds: [state.systemId, ...(result.objects ?? []).map((o) => o.id)].sort(),
       });
       completed.add(activity.id);
@@ -403,41 +748,13 @@ export async function executePowlWithGymAct(
     }
   }
 
-  return {
+  const log: OcelLog = {
     version: "2.0",
     objects: [...objects.values()].sort((a, b) => a.id.localeCompare(b.id)),
     events,
   };
-}
-
-function canonicalJson(value: unknown): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  const record = value as Record<string, unknown>;
-  return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(",")}}`;
-}
-
-export function createReceipt(
-  artifact: unknown,
-  epistemicClass: EpistemicClass,
-  subject: string,
-  parentDigests: readonly string[],
-  blake3: Blake3Provider,
-  signer: ReceiptSigner,
-): Receipt {
-  const digest = blake3.digestUtf8(canonicalJson(artifact));
-  if (!/^[0-9a-f]{64}$/.test(digest)) throw new Error("invalid BLAKE3-256 digest provider output");
-  const signature = signer.signDigest(digest);
-  if (!signature) throw new Error("receipt signer returned an empty origin signature");
-  return {
-    algorithm: "BLAKE3-256",
-    artifactDigest: digest,
-    epistemicClass,
-    subject,
-    parentDigests: [...parentDigests].sort(),
-    originKeyId: signer.keyId,
-    originSignature: signature,
-  };
+  const receipt = createReceipt(log, "OBSERVED", state.systemId, [admission.constructDigest], blake3, receiptSigner);
+  return { ...log, constructDigest: admission.constructDigest, receipt };
 }
 
 export async function compileAdversarialClasses(
