@@ -3,10 +3,10 @@ import { DependencyGraph, type ConstructedCompromise, type DependencyEdge, type 
 
 export const GGEN_PIN = Object.freeze({
   repository: "https://github.com/seanchatmangpt/ggen",
+  package: "ggen-engine",
   version: "26.8.15",
   commit: "162e466d8f07d0a75a468b4441b4bc8b1aad369b",
-  linuxX8664Asset: "ggen-x86_64-unknown-linux-gnu.tar.gz",
-  linuxX8664Sha256: "f4c4ea396f5cec12cfa2dd46c13ac620291f9b83138f17ded6fa59c510dcfc42",
+  bridgeManifest: "crates/castle-ggen-rdf/Cargo.toml",
 });
 
 const PROV_ENTITY = "http://www.w3.org/ns/prov#Entity";
@@ -31,6 +31,11 @@ export interface NodeGgenCommandRunnerOptions {
   env?: Readonly<Record<string, string>>;
 }
 
+/**
+ * Executes CASTLE's tiny Rust bridge to the exact-revision ggen-engine crate.
+ * The bridge contains no RDF implementation; all Turtle/SPARQL semantics stay
+ * inside ggen-engine's GraphEngine/GraphLawStore.
+ */
 export class NodeGgenCommandRunner implements GgenCommandRunner {
   readonly binary: string;
   readonly cwd?: string;
@@ -39,7 +44,7 @@ export class NodeGgenCommandRunner implements GgenCommandRunner {
   readonly env: Readonly<Record<string, string>>;
 
   constructor(options: NodeGgenCommandRunnerOptions = {}) {
-    this.binary = options.binary ?? process.env.GGEN_BIN ?? "ggen";
+    this.binary = options.binary ?? process.env.CASTLE_GGEN_RDF_BIN ?? "castle-ggen-rdf";
     this.cwd = options.cwd;
     this.timeoutMs = options.timeoutMs ?? 30_000;
     this.maxOutputBytes = options.maxOutputBytes ?? 8 * 1024 * 1024;
@@ -97,37 +102,38 @@ export class NodeGgenCommandRunner implements GgenCommandRunner {
   }
 }
 
+export type GgenRdfScalar = string | number | boolean;
+
 export interface GgenQueryResult {
   variables: readonly string[];
-  bindings: readonly Readonly<Record<string, string>>[];
+  bindings: readonly Readonly<Record<string, GgenRdfScalar>>[];
   resultCount: number;
 }
 
-function parseJsonObject(stdout: string): unknown {
+interface GgenVersionEnvelope {
+  engine: string;
+  version: string;
+  commit: string;
+}
+
+function parseJsonObject(stdout: string): Record<string, unknown> {
   const trimmed = stdout.trim();
   if (!trimmed) throw new Error("REFUSED:GGEN_EMPTY_OUTPUT");
+  let parsed: unknown;
   try {
-    return JSON.parse(trimmed);
+    parsed = JSON.parse(trimmed);
   } catch {
-    const start = trimmed.indexOf("{");
-    const end = trimmed.lastIndexOf("}");
-    if (start >= 0 && end > start) {
-      try {
-        return JSON.parse(trimmed.slice(start, end + 1));
-      } catch {
-        // Fall through to the typed refusal below.
-      }
-    }
-    throw new Error("REFUSED:GGEN_NON_JSON_QUERY_OUTPUT");
+    throw new Error("REFUSED:GGEN_NON_JSON_OUTPUT");
   }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("REFUSED:GGEN_INVALID_JSON_ENVELOPE");
+  }
+  return parsed as Record<string, unknown>;
 }
 
 export function parseGgenQueryJson(stdout: string): GgenQueryResult {
-  const parsed = parseJsonObject(stdout);
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("REFUSED:GGEN_INVALID_QUERY_ENVELOPE");
-  }
-  const record = parsed as Record<string, unknown>;
+  const record = parseJsonObject(stdout);
+  if (record.kind !== "solutions") throw new Error("REFUSED:GGEN_QUERY_NOT_SOLUTIONS");
   const variables = record.variables;
   const bindings = record.bindings;
   const resultCount = record.result_count ?? record.resultCount;
@@ -140,9 +146,11 @@ export function parseGgenQueryJson(stdout: string): GgenQueryResult {
     if (!binding || typeof binding !== "object" || Array.isArray(binding)) {
       throw new Error("REFUSED:GGEN_INVALID_QUERY_BINDING");
     }
-    const normalized: Record<string, string> = {};
+    const normalized: Record<string, GgenRdfScalar> = {};
     for (const [key, value] of Object.entries(binding as Record<string, unknown>)) {
-      if (typeof value !== "string") throw new Error("REFUSED:GGEN_NON_STRING_RDF_TERM");
+      if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
+        throw new Error("REFUSED:GGEN_INVALID_RDF_SCALAR");
+      }
       normalized[key] = value;
     }
     return normalized;
@@ -153,20 +161,6 @@ export function parseGgenQueryJson(stdout: string): GgenQueryResult {
     throw new Error("REFUSED:GGEN_QUERY_COUNT_MISMATCH");
   }
   return { variables, bindings: normalizedBindings, resultCount: count };
-}
-
-function normalizeRdfTerm(term: string): string {
-  const value = term.trim();
-  if (value.startsWith("<") && value.endsWith(">")) return value.slice(1, -1);
-  const literal = value.match(/^"((?:[^"\\]|\\.)*)"(?:@[A-Za-z0-9-]+|\^\^<[^>]+>)?$/);
-  if (literal) {
-    try {
-      return JSON.parse(`"${literal[1]}"`);
-    } catch {
-      throw new Error("REFUSED:GGEN_INVALID_RDF_LITERAL");
-    }
-  }
-  return value;
 }
 
 function safeSparqlIri(iri: string): string {
@@ -183,10 +177,15 @@ function safeSparqlIri(iri: string): string {
   return `<${iri}>`;
 }
 
-function requireBinding(binding: Readonly<Record<string, string>>, key: string): string {
+function requireBinding(
+  binding: Readonly<Record<string, GgenRdfScalar>>,
+  key: string,
+): string {
   const value = binding[key];
-  if (typeof value !== "string" || value.length === 0) throw new Error(`REFUSED:GGEN_MISSING_BINDING:${key}`);
-  return normalizeRdfTerm(value);
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`REFUSED:GGEN_MISSING_STRING_BINDING:${key}`);
+  }
+  return value;
 }
 
 export class GgenRdfEngine {
@@ -201,68 +200,48 @@ export class GgenRdfEngine {
     return result;
   }
 
-  async assertPinnedVersion(): Promise<string> {
-    const result = await this.execute(["--version"]);
-    const version = result.stdout.trim();
-    if (!version.includes(GGEN_PIN.version)) {
-      throw new Error(`REFUSED:GGEN_VERSION_MISMATCH:expected=${GGEN_PIN.version}:observed=${version}`);
+  async assertPinnedVersion(): Promise<GgenVersionEnvelope> {
+    const result = await this.execute(["version"]);
+    const envelope = parseJsonObject(result.stdout);
+    const observed = {
+      engine: envelope.engine,
+      version: envelope.version,
+      commit: envelope.commit,
+    };
+    if (
+      observed.engine !== GGEN_PIN.package ||
+      observed.version !== GGEN_PIN.version ||
+      observed.commit !== GGEN_PIN.commit
+    ) {
+      throw new Error(
+        `REFUSED:GGEN_VERSION_MISMATCH:expected=${GGEN_PIN.package}@${GGEN_PIN.version}#${GGEN_PIN.commit}`,
+      );
     }
-    return version;
+    return observed as GgenVersionEnvelope;
   }
 
-  async validate(graphFile: string, strict = true): Promise<string> {
-    const args = ["graph", "validate", graphFile];
-    if (strict) args.push("--strict");
-    const result = await this.execute(args);
-    return result.stdout;
+  async validate(graphFile: string): Promise<Record<string, unknown>> {
+    const result = await this.execute(["validate", "--graph-file", graphFile]);
+    return parseJsonObject(result.stdout);
   }
 
   async query(graphFile: string, sparql: string): Promise<GgenQueryResult> {
     if (!sparql.trim()) throw new Error("REFUSED:EMPTY_SPARQL_QUERY");
-    const result = await this.execute([
-      "graph",
-      "query",
-      sparql,
-      "--graph-file",
-      graphFile,
-      "--format",
-      "json",
-    ]);
+    const result = await this.execute(["query", "--graph-file", graphFile, "--sparql", sparql]);
     return parseGgenQueryJson(result.stdout);
   }
 
-  async queryRaw(graphFile: string, sparql: string, format = "json"): Promise<string> {
+  async queryRaw(graphFile: string, sparql: string): Promise<Record<string, unknown>> {
     if (!sparql.trim()) throw new Error("REFUSED:EMPTY_SPARQL_QUERY");
-    const result = await this.execute([
-      "graph",
-      "query",
-      sparql,
-      "--graph-file",
-      graphFile,
-      "--format",
-      format,
-    ]);
-    return result.stdout;
+    const result = await this.execute(["query", "--graph-file", graphFile, "--sparql", sparql]);
+    return parseJsonObject(result.stdout);
   }
 
-  async constructOntology(
-    ontologyFile: string,
-    options: { manifest?: string; dryRun?: boolean } = {},
-  ): Promise<string> {
-    const args = [
-      "sync",
-      "--manifest",
-      options.manifest ?? "ggen.toml",
-      "--stage",
-      "mu1",
-      "--ontology",
-      ontologyFile,
-      "--format",
-      "json",
-    ];
-    if (options.dryRun ?? true) args.push("--dry-run", "true");
-    const result = await this.execute(args);
-    return result.stdout;
+  /** Execute a SPARQL CONSTRUCT through ggen-engine and return its graph envelope. */
+  async construct(graphFile: string, sparql: string): Promise<Record<string, unknown>> {
+    const result = await this.queryRaw(graphFile, sparql);
+    if (result.kind !== "graph") throw new Error("REFUSED:GGEN_CONSTRUCT_NOT_GRAPH");
+    return result;
   }
 
   async loadDependencyGraph(graphFile: string): Promise<DependencyGraph> {
@@ -277,7 +256,7 @@ export class GgenRdfEngine {
 
     const nodes: DependencyNode[] = nodesResult.bindings.map((binding) => ({
       id: requireBinding(binding, "node"),
-      kind: binding.kind ? normalizeRdfTerm(binding.kind) : "entity",
+      kind: typeof binding.kind === "string" ? binding.kind : "entity",
     }));
     const edges: DependencyEdge[] = edgesResult.bindings.map((binding) => ({
       from: requireBinding(binding, "from"),
@@ -302,7 +281,9 @@ export class GgenRdfEngine {
     dependencyId: string,
     capability: string,
   ): Promise<ConstructedCompromise> {
-    if (!capability || capability.includes("\u0000")) throw new Error("REFUSED:INVALID_COMPROMISE_CAPABILITY");
+    if (!capability || capability.includes("\u0000")) {
+      throw new Error("REFUSED:INVALID_COMPROMISE_CAPABILITY");
+    }
     const impacted = await this.impactedClosure(graphFile, dependencyId);
     return {
       dependencyId,
