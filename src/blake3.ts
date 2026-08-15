@@ -91,13 +91,19 @@ function wordsToBytes(words: Uint32Array): Uint8Array {
 }
 
 class Output {
-  constructor(
-    readonly inputCv: Uint32Array,
-    readonly blockWords: Uint32Array,
-    readonly counter: number,
-    readonly blockLen: number,
-    readonly flags: number,
-  ) {}
+  readonly inputCv: Uint32Array;
+  readonly blockWords: Uint32Array;
+  readonly counter: number;
+  readonly blockLen: number;
+  readonly flags: number;
+
+  constructor(inputCv: Uint32Array, blockWords: Uint32Array, counter: number, blockLen: number, flags: number) {
+    this.inputCv = inputCv;
+    this.blockWords = blockWords;
+    this.counter = counter;
+    this.blockLen = blockLen;
+    this.flags = flags;
+  }
 
   chainingValue(): Uint32Array {
     return compress(this.inputCv, this.blockWords, this.counter, this.blockLen, this.flags).slice(0, 8);
@@ -129,13 +135,13 @@ class ChunkState {
   private readonly block = new Uint8Array(BLOCK_LEN);
   private blockLen = 0;
   private blocksCompressed = 0;
+  readonly chunkCounter: number;
+  private readonly flags: number;
 
-  constructor(
-    keyWords: Uint32Array,
-    readonly chunkCounter: number,
-    private readonly flags: number,
-  ) {
+  constructor(keyWords: Uint32Array, chunkCounter: number, flags: number) {
     this.cv = new Uint32Array(keyWords);
+    this.chunkCounter = chunkCounter;
+    this.flags = flags;
   }
 
   length(): number {
