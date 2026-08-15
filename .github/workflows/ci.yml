@@ -18,3 +18,35 @@ jobs:
           node-version: 22
       - name: Run deterministic runtime tests
         run: npm test
+
+  ggen-rdf:
+    name: ggen RDF exact-subject qualification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install pinned ggen semantic engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="26.8.15"
+          asset="ggen-x86_64-unknown-linux-gnu.tar.gz"
+          expected_sha="f4c4ea396f5cec12cfa2dd46c13ac620291f9b83138f17ded6fa59c510dcfc42"
+          url="https://github.com/seanchatmangpt/ggen/releases/download/v${version}/${asset}"
+          curl -fsSL "${url}" -o /tmp/ggen.tar.gz
+          printf '%s  %s\n' "${expected_sha}" /tmp/ggen.tar.gz | sha256sum -c -
+          mkdir -p /tmp/castle-ggen
+          tar -xzf /tmp/ggen.tar.gz -C /tmp/castle-ggen
+          ggen_bin="$(find /tmp/castle-ggen -type f -name ggen -perm -111 -print -quit)"
+          test -n "${ggen_bin}"
+          printf 'GGEN_BIN=%s\n' "${ggen_bin}" >> "${GITHUB_ENV}"
+      - name: Prove pinned ggen version
+        run: |
+          set -euo pipefail
+          "${GGEN_BIN}" --version | grep -F '26.8.15'
+      - name: Execute real RDF/SPARQL qualification
+        env:
+          CASTLE_GGEN_INTEGRATION: "1"
+        run: node --experimental-strip-types --test test/ggen-rdf.integration.test.ts
