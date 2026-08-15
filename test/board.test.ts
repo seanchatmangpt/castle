@@ -2,11 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
 import { BLAKE3_EMPTY_HEX, blake3HexUtf8 } from "../src/blake3.ts";
-import { FORTUNE5_REQUIREMENTS } from "../src/fortune5.generated.ts";
 import {
+  BOARD_ADMISSION_REQUIREMENTS,
   admitEvidence,
   admitFailureSemantics,
   assessMateriality,
+  boardAdversarialGoals,
   buildBoardPackage,
   classifyIcfrSubject,
   detectSegregationOfDutyViolations,
@@ -56,7 +57,7 @@ function targetValue(target: string): number | boolean | string {
 }
 
 function evidenceForSubject(subject: string, overrides: Readonly<Record<string, number | boolean | string>> = {}): EvidenceBundle[] {
-  return FORTUNE5_REQUIREMENTS.map((requirement) => {
+  return BOARD_ADMISSION_REQUIREMENTS.map((requirement) => {
     const independent = ["independent_verifier_agreement_bps", "board_package_independent_assurance_passed"].includes(requirement.metric);
     return issueEvidenceReceipt(
       {
@@ -77,6 +78,13 @@ function evidenceForSubject(subject: string, overrides: Readonly<Record<string, 
     );
   });
 }
+
+test("DfCM board pack composes 40 base controls with 49 board controls and 10 prohibited goals", () => {
+  assert.equal(BOARD_ADMISSION_REQUIREMENTS.length, 89);
+  assert.equal(new Set(BOARD_ADMISSION_REQUIREMENTS.map((requirement) => requirement.controlId)).size, 89);
+  assert.equal(boardAdversarialGoals().length, 10);
+  assert.ok(boardAdversarialGoals().every((goal) => goal.authority === "PROHIBITED"));
+});
 
 test("in-repo BLAKE3 implementation matches the standard empty-input vector", () => {
   assert.equal(blake3HexUtf8(""), BLAKE3_EMPTY_HEX);
