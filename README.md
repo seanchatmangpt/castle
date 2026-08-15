@@ -1,10 +1,20 @@
 # CASTLE
 
-CASTLE is a continuously self-adversarial system for owned or explicitly authorized infrastructure. It derives vulnerability conditions backward from prohibited goals, CONSTRUCTs dependency compromise worlds, fans planning problems across a planner ensemble, compiles witnesses into POWL-style partial orders, executes admitted tests through a bounded GymAct interface, records OCEL v2 evidence, and binds artifacts to BLAKE3-256 receipts with origin signatures.
+CASTLE is a continuously self-adversarial system for owned or explicitly authorized infrastructure. It derives vulnerability conditions backward from prohibited goals, uses ggen as the canonical RDF/semantic control plane, CONSTRUCTs dependency compromise worlds, fans planning problems across a planner ensemble, compiles witnesses into POWL-style partial orders, executes admitted tests through a bounded GymAct interface, records OCEL v2 evidence, and binds artifacts to BLAKE3-256 receipts with origin signatures.
 
 ## Canonical flow
 
 ```text
+MARKETPLACE RDF / O*
+      |
+      v
+exact-revision ggen-engine
+Turtle + canonical graph + SPARQL + CONSTRUCT
+      |
+      v
+CASTLE typed semantic bindings
+      |
+      v
 ADVERSARIAL GOAL
       |
       v
@@ -46,9 +56,15 @@ child DO receipt
 precompiled replay / invariant synthesis
 ```
 
-## Source authority
+## Source authority and RDF control plane
 
-The generated semantic inventory in `src/generated.ts` and the Fortune-5 readiness profile in `src/fortune5.generated.ts` are projected from `ggen-marketplace/packs/castle-pack/ontology.ttl`. The consumer `ggen.toml` references that pack using the marketplace local-path contract.
+The generated semantic inventory in `src/generated.ts` and the Fortune-5 readiness profile in `src/fortune5.generated.ts` are projected from `ggen-marketplace/packs/castle-pack`. The marketplace pack now carries an imported `ggen-rdf-capability.ttl` module declaring `GgenRDFControlPlane` and binding DfCM goal inversion plus dependency CONSTRUCT to that semantic capability.
+
+CASTLE deliberately does **not** implement a second Turtle parser, SPARQL evaluator, reasoner, or triple store. `crates/castle-ggen-rdf` depends on the exact git revision of `ggen-engine` recorded in `configs/ggen.lock.json` and calls its public `GraphEngine` / `GraphLawStore` API. The TypeScript adapter in `src/ggen-rdf.ts` receives only engine-neutral JSON results and maps them into CASTLE's typed graph/runtime structures.
+
+The current ggen subject is `ggen-engine` v26.8.15 at commit `162e466d8f07d0a75a468b4441b4bc8b1aad369b`. The integration court builds that exact git dependency and exercises real Turtle parsing, canonical BLAKE3 graph-state hashing, SPARQL SELECT, transitive property paths, and SPARQL CONSTRUCT over `rdf/examples/dependency-system.ttl`.
+
+The consumer `ggen.toml` still uses the marketplace local-path development contract because the current CASTLE marketplace pack is itself an unmerged draft. ggen supports remote git pack coordinates with a monorepo `subdir`; CASTLE should move to that coordinate once the marketplace subject has a stable merged/tagged version instead of pretending a draft branch has release standing.
 
 `CONSTRUCT` and planner results are candidates only. They have no consequential actuation authority. GymAct is restricted to an explicit test envelope over owned or authorized systems. Consequential defensive `DO` remains behind the BRCE receipt-bound boundary.
 
@@ -98,8 +114,12 @@ The 80/20 adversarial strategy is represented by `minimumImpactCoverage()`, whic
 
 ## Current executable slice
 
-The TypeScript runtime implements:
+The runtime implements:
 
+- exact-revision ggen RDF provider binding with typed refusal on semantic-engine drift;
+- Turtle validation/canonical graph-state hashing through `ggen-engine`;
+- SPARQL SELECT/CONSTRUCT and dependency property-path evaluation through `ggen-engine`;
+- PROV-O + DCTERMS dependency RDF projection into CASTLE graph types;
 - backward goal-to-vulnerability derivation with minimal-condition reduction;
 - dependency impact closure and counterfactual compromise CONSTRUCT;
 - planner interface and deterministic ensemble fanout/selection;
@@ -117,10 +137,10 @@ The TypeScript runtime implements:
 - replay invalidation on structural, ontology, provider-semantics, or invariant drift;
 - empirical Pareto consequence-coverage selection.
 
-Run:
+Run the deterministic TypeScript court:
 
 ```bash
 npm test
 ```
 
-The runtime has no external npm dependencies; Node 22's type-stripping support executes the TypeScript tests directly.
+The runtime has no external npm dependencies; Node 22's type-stripping support executes the TypeScript tests directly. The separate CI `ggen RDF exact-subject qualification` builds the Rust bridge and executes the real pinned ggen semantic engine.
