@@ -30,10 +30,10 @@ function perfectEvidence(): MetricObservation[] {
   }));
 }
 
-test("marketplace projection exposes the complete Fortune-5 readiness profile", () => {
-  assert.equal(FORTUNE5_REQUIREMENTS.length, 40);
-  assert.equal(new Set(FORTUNE5_REQUIREMENTS.map((r) => r.controlId)).size, 40);
-  assert.equal(new Set(FORTUNE5_REQUIREMENTS.map((r) => r.metric)).size, 40);
+test("marketplace projection exposes the complete Fortune-5 board admission profile", () => {
+  assert.equal(FORTUNE5_REQUIREMENTS.length, 89);
+  assert.equal(new Set(FORTUNE5_REQUIREMENTS.map((r) => r.controlId)).size, 89);
+  assert.equal(new Set(FORTUNE5_REQUIREMENTS.map((r) => r.metric)).size, 89);
   for (const category of [
     "authority",
     "isolation",
@@ -52,6 +52,15 @@ test("marketplace projection exposes the complete Fortune-5 readiness profile", 
     "change",
     "air-gap",
     "adversarial-coverage",
+    "self-governance",
+    "cryptographic-trust",
+    "failure-semantics",
+    "governance",
+    "materiality",
+    "assurance",
+    "exitability",
+    "icfr",
+    "board-reporting",
   ]) {
     assert.ok(FORTUNE5_REQUIREMENTS.some((r) => r.category === category), `missing ${category}`);
   }
@@ -62,7 +71,7 @@ test("missing evidence is UNKNOWN rather than vacuously passing", () => {
   assert.equal(result.standing, "UNKNOWN");
   assert.equal(result.alive, 0);
   assert.equal(result.refused, 0);
-  assert.equal(result.unknown, 40);
+  assert.equal(result.unknown, 89);
   assert.ok(result.controls.every((control) => control.reason === "UNKNOWN:MISSING_RECEIPTED_EVIDENCE"));
 });
 
@@ -73,7 +82,7 @@ test("complete receipted boundary evidence qualifies ALIVE", () => {
     maxEvidenceAgeMs: 5 * 60 * 1000,
   });
   assert.equal(result.standing, "ALIVE");
-  assert.equal(result.alive, 40);
+  assert.equal(result.alive, 89);
   assert.equal(result.refused, 0);
   assert.equal(result.unknown, 0);
   assert.ok(Object.values(result.categories).every((standing) => standing === "ALIVE"));
@@ -120,7 +129,7 @@ test("replay standing requires structural, ontology, provider, and invariant com
   const manifest = {
     replayClassId: "class:authority-loss:v1",
     structuralSignature: "1".repeat(64),
-    ontologyVersion: "castle-ontology:26.8.15+f5.1",
+    ontologyVersion: "castle-ontology:26.8.15+f5.board.1",
     providerSemanticsVersion: "aws-control-plane:2026-08-15",
     invariantSetDigest: "2".repeat(64),
     processDigest: "3".repeat(64),
