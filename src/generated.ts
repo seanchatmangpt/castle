@@ -14,29 +14,12 @@ export const GENERATED_BINDINGS = [
   { kind: "goal", order: 120, identifier: "ConfidentialityLoss", slug: "confidentiality-loss", role: "Adversary gains protected information disclosure.", authority: "PROHIBITED", predicate: "goal:confidentiality-loss", consequence: 95 },
   { kind: "goal", order: 130, identifier: "IntegrityLoss", slug: "integrity-loss", role: "Adversary causes unauthorized protected-state mutation.", authority: "PROHIBITED", predicate: "goal:integrity-loss", consequence: 95 },
   { kind: "goal", order: 140, identifier: "AvailabilityLoss", slug: "availability-loss", role: "Adversary prevents a required service outcome.", authority: "PROHIBITED", predicate: "goal:availability-loss", consequence: 90 },
-  { kind: "goal", order: 150, identifier: "UnauthorizedPersistence", slug: "unauthorized-persistence", role: "Adversary preserves unauthorized standing across state transitions.", authority: "PROHIBITED", predicate: "goal:unauthorized-persistence", consequence: 90 },
-  { kind: "board-goal", order: 160, identifier: "BoardEvidenceForgery", slug: "board-evidence-forgery", role: "An attacker manufactures evidence that appears admissible without cryptographic standing.", authority: "PROHIBITED", predicate: "goal:board-evidence-forgery", consequence: 100 },
-  { kind: "board-goal", order: 161, identifier: "BoardCastleSelfExemption", slug: "board-castle-self-exemption", role: "CASTLE bypasses or weakens the controls it imposes on enterprise subjects.", authority: "PROHIBITED", predicate: "goal:board-castle-self-exemption", consequence: 100 },
-  { kind: "board-goal", order: 162, identifier: "BoardRootOfTrustCompromise", slug: "board-root-of-trust-compromise", role: "Compromised trust material preserves false standing or prevents recovery.", authority: "PROHIBITED", predicate: "goal:board-root-of-trust-compromise", consequence: 100 },
-  { kind: "board-goal", order: 163, identifier: "BoardCastleAvailabilityFailure", slug: "board-castle-availability-failure", role: "CASTLE unavailability creates uncontrolled, unreceipted, or ambiguous actuation.", authority: "PROHIBITED", predicate: "goal:board-castle-availability-failure", consequence: 100 },
-  { kind: "board-goal", order: 164, identifier: "BoardRiskPolicyDrift", slug: "board-risk-policy-drift", role: "Operational controls diverge from admitted board risk appetite or accountable policy.", authority: "PROHIBITED", predicate: "goal:board-risk-policy-drift", consequence: 100 },
-  { kind: "board-goal", order: 165, identifier: "BoardMaterialityMiss", slug: "board-materiality-miss", role: "A material event is not deterministically classified, escalated, and receipted.", authority: "PROHIBITED", predicate: "goal:board-materiality-miss", consequence: 100 },
-  { kind: "board-goal", order: 166, identifier: "BoardAssuranceCapture", slug: "board-assurance-capture", role: "CASTLE self-attestation substitutes for independent assurance.", authority: "PROHIBITED", predicate: "goal:board-assurance-capture", consequence: 100 },
-  { kind: "board-goal", order: 167, identifier: "BoardVendorLockIn", slug: "board-vendor-lock-in", role: "Historical verification or evidence standing depends on a CASTLE-operated service.", authority: "PROHIBITED", predicate: "goal:board-vendor-lock-in", consequence: 100 },
-  { kind: "board-goal", order: 168, identifier: "BoardFinancialControlBypass", slug: "board-financial-control-bypass", role: "A financial-reporting subject or management override bypasses ICFR evidence and segregation controls.", authority: "PROHIBITED", predicate: "goal:board-financial-control-bypass", consequence: 100 },
-  { kind: "board-goal", order: 169, identifier: "BoardEvidenceBlindness", slug: "board-evidence-blindness", role: "Board reporting cannot trace risk claims back to controls, receipts, and source events.", authority: "PROHIBITED", predicate: "goal:board-evidence-blindness", consequence: 100 }
+  { kind: "goal", order: 150, identifier: "UnauthorizedPersistence", slug: "unauthorized-persistence", role: "Adversary preserves unauthorized standing across state transitions.", authority: "PROHIBITED", predicate: "goal:unauthorized-persistence", consequence: 90 }
 ] as const;
 
 export const GENERATED_COMPONENTS = GENERATED_BINDINGS.filter((binding) => binding.kind === "component");
 export const DEFAULT_ADVERSARIAL_GOALS = GENERATED_BINDINGS
   .filter((binding) => binding.kind === "goal")
-  .map((binding) => ({
-    id: binding.slug,
-    predicate: binding.predicate,
-    consequence: binding.consequence,
-  }));
-export const BOARD_ADVERSARIAL_GOALS = GENERATED_BINDINGS
-  .filter((binding) => binding.kind === "board-goal")
   .map((binding) => ({
     id: binding.slug,
     predicate: binding.predicate,
