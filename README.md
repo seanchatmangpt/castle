@@ -115,7 +115,12 @@ The TypeScript runtime implements:
 - zero-day capability observations as dependency-graph mutations;
 - 40-control Fortune-5 readiness qualification from receipted observations;
 - replay invalidation on structural, ontology, provider-semantics, or invariant drift;
-- empirical Pareto consequence-coverage selection.
+- empirical Pareto consequence-coverage selection;
+- receipted evidence admission with BLAKE3 payload/DAG verification against a trust root;
+- dual independent-assurance Fortune-5 board qualification across enterprise and CASTLE domains;
+- fail-closed failure-semantics gating for degraded/local-capability actuation modes;
+- materiality, ICFR-scope, and segregation-of-duty governance checks;
+- receipted board package assembly with evidence digest and control-count binding.
 
 Run:
 
