@@ -10,8 +10,15 @@ import {
   type Standing,
 } from "./fortune5.ts";
 import { FORTUNE5_REQUIREMENTS } from "./fortune5.generated.ts";
+import { BOARD_REQUIREMENTS } from "./board.generated.ts";
+import { BOARD_ADVERSARIAL_GOALS } from "./board-goals.generated.ts";
 
 const DIGEST_RE = /^[0-9a-f]{64}$/;
+
+export const BOARD_ADMISSION_REQUIREMENTS: readonly Fortune5Requirement[] = [
+  ...FORTUNE5_REQUIREMENTS,
+  ...BOARD_REQUIREMENTS,
+];
 
 function canonicalJson(value: unknown): string {
   if (value === null || typeof value !== "object") {
@@ -301,8 +308,20 @@ function findEvidenceDomain(evidence: readonly EvidenceBundle[], metric: string)
 
 export function qualifyFortune5Board(input: BoardAdmissionInput): BoardAdmission {
   const store = input.receiptStore ?? new Map<string, ReceiptV2>();
-  const enterprise = qualifyVerifiedFortune5(input.enterprise.evidence, input.enterprise.context, input.trust, store);
-  const castle = qualifyVerifiedFortune5(input.castle.evidence, input.castle.context, input.trust, store);
+  const enterprise = qualifyVerifiedFortune5(
+    input.enterprise.evidence,
+    input.enterprise.context,
+    input.trust,
+    store,
+    BOARD_ADMISSION_REQUIREMENTS,
+  );
+  const castle = qualifyVerifiedFortune5(
+    input.castle.evidence,
+    input.castle.context,
+    input.trust,
+    store,
+    BOARD_ADMISSION_REQUIREMENTS,
+  );
   const reasons: string[] = [];
   if (enterprise.standing !== "ALIVE") reasons.push(`REFUSED:ENTERPRISE_NOT_ALIVE:${enterprise.standing}`);
   if (castle.standing !== "ALIVE") reasons.push(`REFUSED:CASTLE_NOT_ALIVE:${castle.standing}`);
@@ -392,6 +411,7 @@ export function assessMateriality(event: MaterialityEvent, policy: MaterialityPo
   if (!Number.isInteger(policy.aggregateThresholdBps) || policy.aggregateThresholdBps < 0) throw new Error("REFUSED:INVALID_MATERIALITY_POLICY");
   if (!Number.isInteger(policy.escalationWithinMs) || policy.escalationWithinMs < 0) throw new Error("REFUSED:INVALID_ESCALATION_POLICY");
   const dimensions = Object.keys(event.impactBps) as MaterialityDimension[];
+  if (dimensions.length === 0) throw new Error("REFUSED:EMPTY_MATERIALITY_IMPACT");
   let scoreBps = 0;
   const triggeringDimensions: MaterialityDimension[] = [];
   for (const dimension of dimensions) {
@@ -505,11 +525,15 @@ export function buildBoardPackage(
     castleStanding: admission.castle.standing,
     materialRefusedSubjects,
     riskAppetiteBreaches,
-    controlCount: FORTUNE5_REQUIREMENTS.length,
+    controlCount: BOARD_ADMISSION_REQUIREMENTS.length,
     evidenceDigest,
   };
 }
 
 export function boardRequirements(): readonly Fortune5Requirement[] {
-  return FORTUNE5_REQUIREMENTS;
+  return BOARD_ADMISSION_REQUIREMENTS;
+}
+
+export function boardAdversarialGoals(): typeof BOARD_ADVERSARIAL_GOALS {
+  return BOARD_ADVERSARIAL_GOALS;
 }
