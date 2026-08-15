@@ -110,10 +110,15 @@ fn execute(args: &[String]) -> Result<Value, String> {
             let hash = graph
                 .state_hash()
                 .map_err(|error| format!("REFUSED:GGEN_STATE_HASH:{error}"))?;
+            let state_hash = hash
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<Vec<_>>()
+                .join("");
             Ok(json!({
                 "valid": true,
                 "quad_count": quads.len(),
-                "state_hash": hash.iter().map(|byte| format!("{byte:02x}")).collect::<String>()
+                "state_hash": state_hash
             }))
         }
         "query" => {
