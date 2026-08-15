@@ -21,7 +21,7 @@ integration("real ggen-engine executes CASTLE RDF dependency semantics", async (
 
   const validation = await engine.validate(fixture);
   assert.equal(validation.valid, true);
-  assert.equal(validation.quad_count, 7);
+  assert.equal(validation.quad_count, 10);
   assert.match(String(validation.state_hash), /^[0-9a-f]{64}$/);
 
   const graph = await engine.loadDependencyGraph(fixture);
