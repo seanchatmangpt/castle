@@ -7,7 +7,7 @@ falsifiable condition — not an adjective.
 
 ## Where CASTLE stands today (ALIVE, verified 2026-08-15)
 
-A single Rust crate + CLI, 45/45 tests passing, implementing one complete but narrow slice of the
+A single Rust crate + CLI, 47/47 tests passing, implementing one complete but narrow slice of the
 canonical flow in `README.md`:
 
 - DfCM backward goal-to-vulnerability derivation, subset-minimal, over a hand-supplied
@@ -27,7 +27,7 @@ canonical flow in `README.md`:
   there is no `castle construct` or `castle gymact` verb yet, so CONSTRUCT manufacture and DO
   execution are library-only, not yet CLI-reachable.
 - CI (`.github/workflows/ci.yml`) runs `npm test` on Node 22, not `cargo test` — there is no
-  `package.json` in this repo and no Rust test step in CI. The 45/45 figure above is a real,
+  `package.json` in this repo and no Rust test step in CI. The 47/47 figure above is a real,
   reproducible local result; it currently has no CI backstop.
 
 What this means concretely: CASTLE today is a **verified reasoning and receipt-admission kernel**,
