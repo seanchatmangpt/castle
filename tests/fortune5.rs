@@ -180,3 +180,26 @@ fn invalid_impact_evidence_and_impossible_coverage_targets_are_typed_refusals() 
     assert_eq!(minimum_impact_coverage(&[AdversarialImpactClass { key: "x".to_string(), impact: 1.0 }], 0).unwrap_err(), "REFUSED:INVALID_COVERAGE_TARGET");
     assert_eq!(minimum_impact_coverage(&[AdversarialImpactClass { key: "x".to_string(), impact: 0.0 }], 8000).unwrap_err(), "REFUSED:NO_POSITIVE_IMPACT_EVIDENCE");
 }
+
+#[test]
+fn extreme_finite_impact_values_sort_deterministically_without_panicking() {
+    // Regression test for the former `b.impact.partial_cmp(&a.impact).unwrap()` sort
+    // comparator in `minimum_impact_coverage`. That `unwrap()` only avoided a panic
+    // because of the `is_finite` guard nine lines above it in the same function — a
+    // real but decoupled precondition that a future refactor could split from the sort.
+    // `f64::total_cmp` removes the dependency on that guard entirely: it is a total
+    // order over every f64 bit pattern (including NaN and signed zero), so the
+    // comparator itself can never return "unorderable" regardless of what reaches it.
+    // This exercises adjacent/extreme finite values (signed zero, f64::MAX, subnormals)
+    // that are the sharpest edge partial_cmp and total_cmp can disagree on, and confirms
+    // the call completes with an ordered, deterministic result instead of panicking.
+    let classes = vec![
+        AdversarialImpactClass { key: "max".to_string(), impact: f64::MAX },
+        AdversarialImpactClass { key: "neg_zero".to_string(), impact: -0.0 },
+        AdversarialImpactClass { key: "pos_zero".to_string(), impact: 0.0 },
+        AdversarialImpactClass { key: "min_positive".to_string(), impact: f64::MIN_POSITIVE },
+    ];
+
+    let selection = minimum_impact_coverage(&classes, 10000).expect("all-finite, non-negative impact values are accepted");
+    assert_eq!(selection.selected.first().unwrap().key, "max");
+}

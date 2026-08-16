@@ -411,7 +411,7 @@ pub fn minimum_impact_coverage(classes: &[AdversarialImpactClass], target_covera
     }
 
     let mut ordered: Vec<&AdversarialImpactClass> = classes.iter().collect();
-    ordered.sort_by(|a, b| b.impact.partial_cmp(&a.impact).unwrap().then_with(|| a.key.cmp(&b.key)));
+    ordered.sort_by(|a, b| f64::total_cmp(&b.impact, &a.impact).then_with(|| a.key.cmp(&b.key)));
 
     let mut selected: Vec<AdversarialImpactClass> = Vec::new();
     let mut selected_impact = 0.0f64;
