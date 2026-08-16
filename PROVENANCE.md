@@ -4,8 +4,8 @@ CASTLE separates semantic authority from consumer consequences.
 
 - Marketplace authority: `seanchatmangpt/ggen-marketplace/packs/castle-pack`
 - Consumer: `seanchatmangpt/castle`
-- Generated consequences: `src/generated.ts`, `docs/GENERATED_ARCHITECTURE.md`
-- Runtime consequences: `src/castle.ts`, tests, and adapters
+- Generated consequences: `src/generated.rs`, `src/fortune5_generated.rs`, `docs/GENERATED_ARCHITECTURE.md`, `docs/FORTUNE5_REQUIREMENTS.md`
+- Runtime consequences: `src/castle.rs`, `src/board.rs`, `src/fortune5.rs`, tests, and adapters
 
 The marketplace ontology owns the generated component inventory, authority boundaries, and default prohibited-goal priorities. The runtime must not silently redefine those facts.
 

@@ -1,0 +1,40 @@
+[package]
+name = "castle"
+version = "26.8.15"
+edition = "2021"
+rust-version = "1.82"
+description = "Continuously self-adversarial cloud system generated from ggen-marketplace semantic authority"
+license = "AGPL-3.0"
+authors = ["Sean Chatman"]
+
+[lib]
+name = "castle"
+path = "src/lib.rs"
+
+[[bin]]
+name = "castle"
+path = "src/bin/castle/main.rs"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+async-trait = "0.1"
+blake3 = "1.5"
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+rand = "0.8"
+tracing = "0.1"
+clap-noun-verb = "=26.7.4"
+clap-noun-verb-macros = "=26.7.4"
+linkme = "0.3"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt"] }
+proptest = "1.8"
+
+[lints.rust]
+unsafe_code = "warn"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"
+nursery = "warn"

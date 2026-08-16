@@ -48,7 +48,7 @@ precompiled replay / invariant synthesis
 
 ## Source authority
 
-The generated semantic inventory in `src/generated.ts` and the Fortune-5 readiness profile in `src/fortune5.generated.ts` are projected from `ggen-marketplace/packs/castle-pack/ontology.ttl`. The consumer `ggen.toml` references that pack using the marketplace local-path contract.
+The generated semantic inventory in `src/generated.rs` and the Fortune-5 readiness profile in `src/fortune5_generated.rs` are projected from `ggen-marketplace/packs/castle-pack/ontology.ttl`. The consumer `ggen.toml` references that pack using the marketplace local-path contract.
 
 `CONSTRUCT` and planner results are candidates only. They have no consequential actuation authority. GymAct is restricted to an explicit test envelope over owned or authorized systems. Consequential defensive `DO` remains behind the BRCE receipt-bound boundary.
 
@@ -56,11 +56,11 @@ The generated semantic inventory in `src/generated.ts` and the Fortune-5 readine
 
 `configs/CONSTRUCT.json` is intentionally public and reversible. Secrecy is not the security boundary. CASTLE obtains standing from cryptographic origin plus exact semantic binding.
 
-`manufactureConstructCapability()` binds the admitted `O*`, configuration graph, ontology, exact POWL process, subject, authority, transition set, step bound, expiry, and deterministic replay identity. Each source receives a BLAKE3-256 receipt; the CONSTRUCT receipt names those four artifact digests as its parent chain. Receipt signatures cover the artifact identity, epistemic class, subject, parent digests, and origin key.
+`manufacture_construct_capability()` binds the admitted `O*`, configuration graph, ontology, exact POWL process, subject, authority, transition set, step bound, expiry, and deterministic replay identity. Each source receives a BLAKE3-256 receipt; the CONSTRUCT receipt names those four artifact digests as its parent chain. Receipt signatures cover the artifact identity, epistemic class, subject, parent digests, and origin key.
 
-`admitConstructForDo()` then fails closed unless every source receipt and the CONSTRUCT receipt verify under an admitted trust root, the authority is admitted, subject identity matches, the process digest is exact, bounds are unchanged, and the capability is fresh. Successful admission returns an opaque frozen runtime capability manufactured inside the CASTLE module.
+`admit_construct_for_do()` then fails closed unless every source receipt and the CONSTRUCT receipt verify under an admitted trust root, the authority is admitted, subject identity matches, the process digest is exact, bounds are unchanged, and the capability is fresh. Successful admission returns an opaque `ConstructAdmission` whose module-private brand field means it can only be constructed by `admit_construct_for_do` — no external code can fabricate one.
 
-`executePowlWithGymAct()` is the exclusive exported DO path. It rejects missing or fabricated admission with `REFUSED:UNRECEIPTED_CONSTRUCT`, recomputes the process digest and bounds immediately before execution, passes a transition-specific permit to GymAct, stamps every OCEL event with the construct/process/config/O*/ontology/replay digests and authority, and returns a child receipt whose parent is the admitted CONSTRUCT digest.
+`execute_powl_with_gym_act()` is the exclusive exported DO path. It requires a genuine `ConstructAdmission`, recomputes the process digest and bounds immediately before execution, passes a transition-specific permit to GymAct, stamps every OCEL event with the construct/process/config/O*/ontology/replay digests and authority, and returns a child receipt whose parent is the admitted CONSTRUCT digest.
 
 The resulting property is not secrecy of the open-source implementation. A fork can execute modified code, but it cannot manufacture CASTLE standing under the deployment trust roots without an admitted CONSTRUCT origin:
 
@@ -90,15 +90,15 @@ CASTLE treats enterprise readiness as a deterministic evidence gate rather than 
 - prohibited-goal and losing-region regression coverage;
 - explicit owned-or-authorized GymAct execution scope.
 
-`qualifyFortune5()` consumes receipted metric observations. Missing evidence is `UNKNOWN`; invalid or threshold-failing evidence is `REFUSED`; only complete passing evidence is `ALIVE`. The profile is an internal executable readiness gate, not a claim of external certification.
+`qualify_fortune5()` consumes receipted metric observations. Missing evidence is `UNKNOWN`; invalid or threshold-failing evidence is `REFUSED`; only complete passing evidence is `ALIVE`. The profile is an internal executable readiness gate, not a claim of external certification.
 
-Replay is also fail-closed: `admitReplay()` requires an exact structural signature plus matching ontology version, provider-semantics version, invariant-set digest, and satisfied invariants. A previously successful replay class does not retain standing across semantic drift.
+Replay is also fail-closed: `admit_replay()` requires an exact structural signature plus matching ontology version, provider-semantics version, invariant-set digest, and satisfied invariants. A previously successful replay class does not retain standing across semantic drift.
 
-The 80/20 adversarial strategy is represented by `minimumImpactCoverage()`, which selects the smallest deterministic prefix of observed consequence classes needed to reach a requested impact-coverage threshold. Pareto skew is measured from evidence rather than assumed.
+The 80/20 adversarial strategy is represented by `minimum_impact_coverage()`, which selects the smallest deterministic prefix of observed consequence classes needed to reach a requested impact-coverage threshold. Pareto skew is measured from evidence rather than assumed.
 
 ## Current executable slice
 
-The TypeScript runtime implements:
+The Rust runtime implements:
 
 - backward goal-to-vulnerability derivation with minimal-condition reduction;
 - dependency impact closure and counterfactual compromise CONSTRUCT;
@@ -120,7 +120,44 @@ The TypeScript runtime implements:
 Run:
 
 ```bash
-npm test
+cargo test
 ```
 
-The runtime has no external npm dependencies; Node 22's type-stripping support executes the TypeScript tests directly.
+The runtime depends on the `blake3`, `ed25519-dalek`, `serde`/`serde_json`, and `async-trait` crates — the same dependency set `~/ggen` (the chatman/ggen ecosystem's own Rust engine) pins, rather than a hand-rolled or Node-specific implementation.
+
+## `castle` CLI
+
+A `castle` binary exposes the library over a noun-verb CLI, built on the ecosystem's own
+`clap-noun-verb` / `clap-noun-verb-macros` / `linkme` crates (the same pattern as
+`~/ggen/examples/clap-noun-verb-cli` and `ggen-marketplace/packs/clap-noun-verb-crate-pack`):
+routes in `src/bin/castle/verbs/routes.rs` are thin `#[verb]` wrappers with no logic of their
+own; all behavior lives in `src/bin/castle/verbs/handlers.rs`, which calls straight into the
+`castle` library.
+
+```bash
+cargo build --bin castle
+./target/debug/castle --help
+
+# List the 40 generated Fortune-5 readiness controls
+castle fortune5 requirements
+
+# Qualify a subject from a receipted evidence JSON file
+castle fortune5 qualify --subject <subject> --evidence-path evidence.json \
+  --now-epoch-ms <epoch-ms> --max-evidence-age-ms <ms>
+
+# Check replay admission for a manifest/subject signature
+castle replay admit --replay-class-id <id> --structural-signature <64-hex> \
+  --ontology-version <v> --provider-semantics-version <v> \
+  --invariant-set-digest <64-hex> --process-digest <64-hex> [--invariants-hold]
+
+# Select the minimal Pareto-coverage prefix of adversarial impact classes
+castle impact coverage --classes-path classes.json --target-coverage-bps 8000
+
+# Inspect the marketplace-generated component/goal inventory
+castle inventory components
+castle inventory goals
+```
+
+Every subcommand accepts `--format json|json-pretty|yaml|table|plain|tsv|quiet` (provided by
+`clap-noun-verb` itself). `tests/cli_fortune5.rs` and `tests/cli_replay_impact_inventory.rs`
+exercise the real compiled binary as a subprocess — no mocking of the CLI layer.

@@ -1,0 +1,6 @@
+[
+  { "key": "authority", "impact": 60 },
+  { "key": "confidentiality", "impact": 20 },
+  { "key": "integrity", "impact": 10 },
+  { "key": "availability", "impact": 10 }
+]

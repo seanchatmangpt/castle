@@ -1,0 +1,322 @@
+[
+  {
+    "metric": "zero_unreceipted_actuations",
+    "value": 0,
+    "receipt_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "construct_actuation_authority",
+    "value": false,
+    "receipt_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "cross_tenant_authority_edges",
+    "value": 0,
+    "receipt_digest": "2222222222222222222222222222222222222222222222222222222222222222",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "unreceipted_breakglass_events",
+    "value": 0,
+    "receipt_digest": "3333333333333333333333333333333333333333333333333333333333333333",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "sbom_coverage_bps",
+    "value": 10000,
+    "receipt_digest": "4444444444444444444444444444444444444444444444444444444444444444",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "signed_provenance_coverage_bps",
+    "value": 10000,
+    "receipt_digest": "5555555555555555555555555555555555555555555555555555555555555555",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "content_addressed_dependency_coverage_bps",
+    "value": 10000,
+    "receipt_digest": "6666666666666666666666666666666666666666666666666666666666666666",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "replay_version_compatible",
+    "value": true,
+    "receipt_digest": "7777777777777777777777777777777777777777777777777777777777777777",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "replay_invariant_pass_bps",
+    "value": 10000,
+    "receipt_digest": "8888888888888888888888888888888888888888888888888888888888888888",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "ocel_actuation_coverage_bps",
+    "value": 10000,
+    "receipt_digest": "9999999999999999999999999999999999999999999999999999999999999999",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "receipt_actuation_coverage_bps",
+    "value": 10000,
+    "receipt_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "restore_drill_passed",
+    "value": true,
+    "receipt_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "observed_rpo_seconds",
+    "value": 300,
+    "receipt_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "observed_rto_seconds",
+    "value": 900,
+    "receipt_digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "independent_failure_domains",
+    "value": 3,
+    "receipt_digest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "availability_bps",
+    "value": 9990,
+    "receipt_digest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "p99_control_plane_latency_ms",
+    "value": 500,
+    "receipt_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "encryption_coverage_bps",
+    "value": 10000,
+    "receipt_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "residency_policy_conformant",
+    "value": true,
+    "receipt_digest": "2222222222222222222222222222222222222222222222222222222222222222",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "deny_by_default",
+    "value": true,
+    "receipt_digest": "3333333333333333333333333333333333333333333333333333333333333333",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "policy_exception_receipt_coverage_bps",
+    "value": 10000,
+    "receipt_digest": "4444444444444444444444444444444444444444444444444444444444444444",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "tested_concurrent_subjects",
+    "value": 10000,
+    "receipt_digest": "5555555555555555555555555555555555555555555555555555555555555555",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "deterministic_replay_success_bps",
+    "value": 9999,
+    "receipt_digest": "6666666666666666666666666666666666666666666666666666666666666666",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "evidence_retention_days",
+    "value": 365,
+    "receipt_digest": "7777777777777777777777777777777777777777777777777777777777777777",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "tamper_evident_evidence",
+    "value": true,
+    "receipt_digest": "8888888888888888888888888888888888888888888888888888888888888888",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "typed_refusal_coverage_bps",
+    "value": 10000,
+    "receipt_digest": "9999999999999999999999999999999999999999999999999999999999999999",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "failure_injection_suite_passed",
+    "value": true,
+    "receipt_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "rollback_path_coverage_bps",
+    "value": 10000,
+    "receipt_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "construct_network_dependency_count",
+    "value": 0,
+    "receipt_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "construct_secret_dependency_count",
+    "value": 0,
+    "receipt_digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "prohibited_goal_coverage_bps",
+    "value": 10000,
+    "receipt_digest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "losing_region_regression_passed",
+    "value": true,
+    "receipt_digest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "backup_encryption_coverage_bps",
+    "value": 10000,
+    "receipt_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "privileged_identity_mfa_coverage_bps",
+    "value": 10000,
+    "receipt_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "evidence_clock_skew_ms",
+    "value": 1000,
+    "receipt_digest": "2222222222222222222222222222222222222222222222222222222222222222",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "immutable_change_receipt_coverage_bps",
+    "value": 10000,
+    "receipt_digest": "3333333333333333333333333333333333333333333333333333333333333333",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "canary_or_equivalent_validation_coverage_bps",
+    "value": 10000,
+    "receipt_digest": "4444444444444444444444444444444444444444444444444444444444444444",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "region_failover_drill_passed",
+    "value": true,
+    "receipt_digest": "5555555555555555555555555555555555555555555555555555555555555555",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "quota_headroom_bps",
+    "value": 2000,
+    "receipt_digest": "6666666666666666666666666666666666666666666666666666666666666666",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  },
+  {
+    "metric": "owned_or_authorized_subject_coverage_bps",
+    "value": 10000,
+    "receipt_digest": "7777777777777777777777777777777777777777777777777777777777777777",
+    "subject": "castle:cli-fixture",
+    "observed_at": "2026-08-15T19:59:00.000Z",
+    "epistemic_class": "OBSERVED"
+  }
+]
