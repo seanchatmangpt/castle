@@ -69,6 +69,28 @@ fn evidence_from_an_untrusted_key_is_refused_not_silently_accepted() {
 }
 
 #[test]
+fn a_malformed_signature_length_is_a_clean_refusal_not_a_panic() {
+    // Regression test for the former `sig_bytes.try_into().unwrap()` in
+    // `verify_receipt_node`: base64-decodes fine (so it clears the b64::decode `Ok(..)`
+    // arm) but is the wrong byte length for an Ed25519 signature. This used to rely on a
+    // separate `sig_bytes.len() == 64` guard three lines above the `try_into().unwrap()`
+    // to avoid a panic; the fix folds the length check into the fallible `TryFrom` itself
+    // so a malformed length is a typed refusal by construction, not by adjacent guard.
+    let signing_key = SigningKey::from_bytes(&[5u8; 32]);
+    let trust = trust_store("board-root", signing_key.verifying_key(), "castle-assurance");
+    let mut bundle = issue("deny_by_default", MetricValue::Bool(true), &signing_key, "board-root", "castle-assurance", 5);
+
+    // Chop a full base64 quantum off the real, validly-issued signature: still decodes
+    // (valid alphabet, well-formed base64) but no longer yields exactly 64 bytes.
+    let truncated_len = bundle.receipt.signature.len() - 4;
+    bundle.receipt.signature.truncate(truncated_len);
+
+    let verification = verify_receipt_dag(&bundle.receipt, &trust, &HashMap::new());
+    assert_eq!(verification.standing, Standing::Refused);
+    assert!(verification.reasons.contains(&"REFUSED:INVALID_RECEIPT_SIGNATURE".to_string()));
+}
+
+#[test]
 fn admit_evidence_round_trips_a_real_issued_receipt_to_alive() {
     let signing_key = SigningKey::from_bytes(&[4u8; 32]);
     let trust = trust_store("board-root", signing_key.verifying_key(), "castle-assurance");

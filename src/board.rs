@@ -341,10 +341,14 @@ fn verify_receipt_node(
             }
             let valid = match (hex::decode(&receipt.receipt_digest), b64::decode(&receipt.signature)) {
                 (Ok(digest_bytes), Ok(sig_bytes)) => {
-                    if digest_bytes.len() == 32 && sig_bytes.len() == 64 {
-                        let sig_array: [u8; 64] = sig_bytes.try_into().unwrap();
-                        let sig = Signature::from_bytes(&sig_array);
-                        key.verifying_key.verify(&digest_bytes, &sig).is_ok()
+                    if digest_bytes.len() == 32 {
+                        match <[u8; 64]>::try_from(sig_bytes.as_slice()) {
+                            Ok(sig_array) => {
+                                let sig = Signature::from_bytes(&sig_array);
+                                key.verifying_key.verify(&digest_bytes, &sig).is_ok()
+                            }
+                            Err(_) => false,
+                        }
                     } else {
                         false
                     }
