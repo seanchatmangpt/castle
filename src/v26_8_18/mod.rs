@@ -2,14 +2,15 @@
 //!
 //! The release adds a cellular deployment constitution, O -> O* admission,
 //! transport-neutral CLI/API/MCP/A2A intent contracts, air-gapped CONSTRUCT,
-//! BRCE-wrapped real provider execution, dual identity/crypto admission,
-//! cross-cell reconciliation, chaos qualification, and global standing without
-//! creating any alternate DO edge.
+//! BRCE-wrapped real provider execution, durable local evidence, dual
+//! identity/crypto admission, cross-cell reconciliation, chaos qualification,
+//! and global standing without creating any alternate DO edge.
 
 mod airgap;
 mod brce;
 mod chaos;
 mod crypto;
+mod evidence;
 mod protocol;
 mod replication;
 mod runtime;
@@ -22,6 +23,7 @@ pub use airgap::*;
 pub use brce::*;
 pub use chaos::*;
 pub use crypto::*;
+pub use evidence::*;
 pub use protocol::*;
 pub use replication::*;
 pub use runtime::*;
