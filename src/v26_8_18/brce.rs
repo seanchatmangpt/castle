@@ -98,22 +98,23 @@ impl GymActAdapter for BrceGymActAdapter<'_> {
             }
         };
 
-        let Ok(mut journal) = self.journal.lock() else {
-            return GymActResult {
-                transition_id: activity.transition_id.clone(),
-                status: GymActStatus::Refused,
-                objects: Vec::new(),
-                attributes: BTreeMap::from([("reason".to_string(), json!("BLOCKED:BRCE_JOURNAL_UNAVAILABLE"))]),
+        {
+            let Ok(mut journal) = self.journal.lock() else {
+                return GymActResult {
+                    transition_id: activity.transition_id.clone(),
+                    status: GymActStatus::Refused,
+                    objects: Vec::new(),
+                    attributes: BTreeMap::from([("reason".to_string(), json!("BLOCKED:BRCE_JOURNAL_UNAVAILABLE"))]),
+                };
             };
-        };
-        journal.push(BrceTransitionRecord {
-            transition_id: activity.transition_id.clone(),
-            prepare_receipt: prepare.clone(),
-            outcome_receipt: None,
-            standing: ReleaseStanding::PartialAlive,
-            reason: "PARTIAL_ALIVE:PREPARED".to_string(),
-        });
-        drop(journal);
+            journal.push(BrceTransitionRecord {
+                transition_id: activity.transition_id.clone(),
+                prepare_receipt: prepare.clone(),
+                outcome_receipt: None,
+                standing: ReleaseStanding::PartialAlive,
+                reason: "PARTIAL_ALIVE:PREPARED".to_string(),
+            });
+        }
 
         let mut result = self.inner.execute(activity, state, permit).await;
         let outcome = create_receipt(
