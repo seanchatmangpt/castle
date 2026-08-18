@@ -1,0 +1,130 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  release:
+    name: Reconcile, verify, tag, and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b # stable
+        with:
+          toolchain: stable
+
+      - name: Resolve immutable release identity
+        id: release-state
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cargo_version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          test -n "${cargo_version}"
+          tag="v${cargo_version}"
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "CASTLE_RELEASE_TAG=${tag}" >> "${GITHUB_ENV}"
+
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            test "${GITHUB_REF_NAME}" = "${tag}"
+            if gh release view "${tag}" >/dev/null 2>&1; then
+              echo "already_released=true" >> "${GITHUB_OUTPUT}"
+            else
+              echo "already_released=false" >> "${GITHUB_OUTPUT}"
+            fi
+            exit 0
+          fi
+
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            echo "${tag} is already published; no release mutation required."
+            echo "already_released=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+            echo "::error::REFUSED:IMMUTABLE_TAG_EXISTS_WITHOUT_RELEASE:${tag}"
+            exit 1
+          fi
+          echo "already_released=false" >> "${GITHUB_OUTPUT}"
+
+      - name: Reconcile generated lockfile projection on main
+        if: github.ref == 'refs/heads/main' && steps.release-state.outputs.already_released != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo metadata --format-version 1 >/dev/null
+          if ! git diff --quiet -- Cargo.lock; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add Cargo.lock
+            git commit -m "chore: synchronize ${CASTLE_RELEASE_TAG} lockfile"
+            git push origin HEAD:main
+          fi
+
+      - name: Verify lockfile is exact
+        if: steps.release-state.outputs.already_released != 'true'
+        run: cargo metadata --locked --format-version 1 >/dev/null
+
+      - name: Build and test exact release subject
+        if: steps.release-state.outputs.already_released != 'true'
+        run: |
+          cargo build --locked --workspace --all-targets
+          cargo test --locked --workspace
+
+      - name: Qualify checked-in Fortune-5 topology
+        if: steps.release-state.outputs.already_released != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo run --locked --bin castle -- deployment qualify \
+            --manifest-path configs/fortune5-v26.8.18.json \
+            --now-epoch-ms 1787080000000 \
+            --format json | tee /tmp/deployment.json
+          grep -q '"standing":"ALIVE"' /tmp/deployment.json
+
+      - name: Package Linux binary and hashes
+        if: steps.release-state.outputs.already_released != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --locked --release --bin castle
+          mkdir -p dist
+          cp target/release/castle "dist/castle-${CASTLE_RELEASE_TAG}-x86_64-unknown-linux-gnu"
+          sha256sum dist/castle-* > dist/SHA256SUMS
+
+      - name: Cut immutable Cargo-version tag from verified main subject
+        if: github.ref == 'refs/heads/main' && steps.release-state.outputs.already_released != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a "${CASTLE_RELEASE_TAG}" -m "CASTLE ${CASTLE_RELEASE_TAG}"
+          git push origin "refs/tags/${CASTLE_RELEASE_TAG}"
+
+      - name: Publish GitHub release
+        if: steps.release-state.outputs.already_released != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "${CASTLE_RELEASE_TAG}" dist/* \
+            --title "CASTLE ${CASTLE_RELEASE_TAG}" \
+            --generate-notes \
+            --verify-tag
