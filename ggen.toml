@@ -1,6 +1,6 @@
 [project]
 name = "castle"
-version = "26.8.15"
+version = "26.8.18"
 description = "Continuously self-adversarial cloud system generated from ggen-marketplace semantic authority"
 authors = ["Sean Chatman"]
 license = "AGPL-3.0"
