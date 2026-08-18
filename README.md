@@ -73,6 +73,22 @@ DO => verified signed CONSTRUCT => receipted observed consequence
 
 There is no raw-input, human, planner, model, replay, or unsigned-config fallback edge into the official DO path.
 
+## EMPIRE reconstitution intake
+
+`admit_empire_reconstitution_for_construct()` is the fail-closed seam from the
+ggen-legacy OSTAR case study into CASTLE. The current authority-vacuum
+observation (`NO_AUTHORITY`) is refused before any GymAct or cluster boundary.
+Only a later explicit contract that binds the observation receipt, remains
+within named observable surfaces, closes all six candidate capabilities, and
+exercises all five final dispositions can produce the opaque
+`EmpireReconstitutionAdmission`.
+
+That admission is still `CONSTRUCT`-only. Its `to_o_star_value()` projection
+carries `actuation_authority: false` into the existing BLAKE3/Ed25519 construct
+rail. CASTLE's signed origin, trust-root, subject, process, transition, expiry,
+and replay checks remain mandatory before the existing exclusive `DO` path can
+return a `ConstructAdmission`.
+
 ## Fortune-5 readiness admission
 
 CASTLE treats enterprise readiness as a deterministic evidence gate rather than a checklist assertion. The marketplace ontology currently projects 40 controls across:
