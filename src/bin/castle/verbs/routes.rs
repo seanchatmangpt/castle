@@ -5,13 +5,11 @@
 use clap_noun_verb::Result;
 use clap_noun_verb_macros::verb;
 
-/// List the 40 generated Fortune-5 readiness controls.
 #[verb("requirements", "fortune5")]
 fn fortune5_requirements() -> Result<serde_json::Value> {
     super::handlers::fortune5_requirements_handler()
 }
 
-/// Evaluate Fortune-5 readiness for a subject from a receipted evidence JSON file.
 #[verb("qualify", "fortune5")]
 fn fortune5_qualify(
     subject: String,
@@ -22,7 +20,6 @@ fn fortune5_qualify(
     super::handlers::fortune5_qualify_handler(subject, evidence_path, now_epoch_ms, max_evidence_age_ms)
 }
 
-/// Check whether a replay class is admitted against a subject's current signature.
 #[verb("admit", "replay")]
 fn replay_admit(
     replay_class_id: String,
@@ -44,31 +41,50 @@ fn replay_admit(
     )
 }
 
-/// Select the minimal Pareto-coverage prefix of adversarial impact classes from a JSON file.
 #[verb("coverage", "impact")]
 fn impact_coverage(classes_path: String, target_coverage_bps: Option<i64>) -> Result<serde_json::Value> {
     super::handlers::impact_coverage_handler(classes_path, target_coverage_bps)
 }
 
-/// List the marketplace-generated architecture component inventory.
 #[verb("components", "inventory")]
 fn inventory_components() -> Result<serde_json::Value> {
     super::handlers::inventory_components_handler()
 }
 
-/// List the marketplace-generated default prohibited adversarial goals.
 #[verb("goals", "inventory")]
 fn inventory_goals() -> Result<serde_json::Value> {
     super::handlers::inventory_goals_handler()
 }
 
-// ---------------------------------------------------------------------
-// Noun `--help` descriptions. `__NOUN_REGISTRY` entries all run before
-// `__VERB_REGISTRY` entries at first access, and `CommandRegistry::
-// register_noun` is first-writer-wins, so this registration always wins
-// over the `#[verb]` macro's own runtime doc-comment scrape attempt (which
-// only resolves when the process's cwd happens to be the source checkout).
-// ---------------------------------------------------------------------
+/// Qualify a v26.8.18 Fortune-5 global deployment manifest.
+#[verb("qualify", "deployment")]
+fn deployment_qualify(manifest_path: String, now_epoch_ms: i64) -> Result<serde_json::Value> {
+    super::handlers::deployment_qualify_handler(manifest_path, now_epoch_ms)
+}
+
+/// List the official v26.8.18 provider adapter families and authority models.
+#[verb("adapters", "deployment")]
+fn deployment_adapters() -> Result<serde_json::Value> {
+    super::handlers::deployment_adapters_handler()
+}
+
+/// Return the v26.8.18 release identity and constitutional invariants.
+#[verb("info", "release")]
+fn release_info() -> Result<serde_json::Value> {
+    super::handlers::release_info_handler()
+}
+
+/// Return the MCP tool contract. DO remains receipt-bound.
+#[verb("mcp", "protocol")]
+fn protocol_mcp() -> Result<serde_json::Value> {
+    super::handlers::protocol_mcp_handler()
+}
+
+/// Return the A2A agent card. Default authority remains CONSTRUCT_ONLY.
+#[verb("a2a", "protocol")]
+fn protocol_a2a() -> Result<serde_json::Value> {
+    super::handlers::protocol_a2a_handler()
+}
 
 #[linkme::distributed_slice(::clap_noun_verb::cli::registry::__NOUN_REGISTRY)]
 static REGISTER_FORTUNE5_NOUN: fn() = register_fortune5_noun;
@@ -92,4 +108,22 @@ fn register_impact_noun() {
 static REGISTER_INVENTORY_NOUN: fn() = register_inventory_noun;
 fn register_inventory_noun() {
     ::clap_noun_verb::cli::registry::CommandRegistry::register_noun("inventory", "Query the marketplace-generated component and goal inventory.");
+}
+
+#[linkme::distributed_slice(::clap_noun_verb::cli::registry::__NOUN_REGISTRY)]
+static REGISTER_DEPLOYMENT_NOUN: fn() = register_deployment_noun;
+fn register_deployment_noun() {
+    ::clap_noun_verb::cli::registry::CommandRegistry::register_noun("deployment", "Qualify the cellular Fortune-5 global deployment and inspect provider adapters.");
+}
+
+#[linkme::distributed_slice(::clap_noun_verb::cli::registry::__NOUN_REGISTRY)]
+static REGISTER_RELEASE_NOUN: fn() = register_release_noun;
+fn register_release_noun() {
+    ::clap_noun_verb::cli::registry::CommandRegistry::register_noun("release", "Inspect CASTLE release identity and constitutional invariants.");
+}
+
+#[linkme::distributed_slice(::clap_noun_verb::cli::registry::__NOUN_REGISTRY)]
+static REGISTER_PROTOCOL_NOUN: fn() = register_protocol_noun;
+fn register_protocol_noun() {
+    ::clap_noun_verb::cli::registry::CommandRegistry::register_noun("protocol", "Inspect MCP and A2A semantic surfaces without granting ambient DO authority.");
 }
