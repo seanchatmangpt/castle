@@ -13,12 +13,15 @@ fn run(args: &[&str]) -> (bool, serde_json::Value, String) {
     (output.status.success(), parsed, stderr)
 }
 
-fn fixture_files() -> (String, String) {
+fn fixture_files() -> (String, String, String) {
     let suffix = format!("{}-{}", std::process::id(), std::thread::current().name().unwrap_or("test").replace(':', "-"));
     let dir = std::env::temp_dir();
     let request_path = dir.join(format!("castle-v26-request-{suffix}.json"));
     let key_path = dir.join(format!("castle-v26-key-{suffix}.hex"));
+    let evidence_dir = dir.join(format!("castle-v26-evidence-{suffix}"));
     let request = serde_json::json!({
+        "cell_id": "cell:cli-proof",
+        "evidence_dir": evidence_dir.to_string_lossy(),
         "subject": "system:cli-proof",
         "authority": "bounded-do",
         "o_star": {"subject":"system:cli-proof","admitted":true},
@@ -39,12 +42,16 @@ fn fixture_files() -> (String, String) {
     });
     fs::write(&request_path, serde_json::to_vec_pretty(&request).unwrap()).unwrap();
     fs::write(&key_path, "09".repeat(32)).unwrap();
-    (request_path.to_string_lossy().into_owned(), key_path.to_string_lossy().into_owned())
+    (
+        request_path.to_string_lossy().into_owned(),
+        key_path.to_string_lossy().into_owned(),
+        evidence_dir.to_string_lossy().into_owned(),
+    )
 }
 
 #[test]
 fn compiled_cli_requires_construct_checkpoint_before_real_do() {
-    let (request_path, key_path) = fixture_files();
+    let (request_path, key_path, evidence_dir) = fixture_files();
     let (construct_ok, construct, construct_err) = run(&[
         "construct", "manufacture", "--request-path", &request_path, "--signing-key-path", &key_path,
         "--key-id", "cli-runtime-key", "--format", "json",
@@ -64,6 +71,9 @@ fn compiled_cli_requires_construct_checkpoint_before_real_do() {
     assert_eq!(executed["event_count"], 1);
     assert_eq!(executed["brce_prepare_receipt_digests"].as_array().unwrap().len(), 1);
     assert_eq!(executed["brce_outcome_receipt_digests"].as_array().unwrap().len(), 1);
+    assert_eq!(executed["evidence_commit"]["standing"], "ALIVE");
+    let evidence_path = executed["evidence_commit"]["path"].as_str().unwrap();
+    assert!(std::path::Path::new(evidence_path).is_file());
 
     let (wrong_ok, _, wrong_err) = run(&[
         "do", "execute", "--request-path", &request_path, "--signing-key-path", &key_path,
@@ -74,6 +84,7 @@ fn compiled_cli_requires_construct_checkpoint_before_real_do() {
 
     let _ = fs::remove_file(request_path);
     let _ = fs::remove_file(key_path);
+    let _ = fs::remove_dir_all(evidence_dir);
 }
 
 #[test]
