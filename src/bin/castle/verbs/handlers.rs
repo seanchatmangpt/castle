@@ -10,6 +10,10 @@ use castle::fortune5::{
     EvidenceEpistemicClass, MetricObservation, MetricValue, QualificationContext, ReplayManifest,
     ReplaySubject,
 };
+use castle::v26_8_18::{
+    a2a_agent_card, fortune5_adapter_catalog, mcp_tool_catalog, qualify_deployment,
+    DeploymentManifest, RELEASE_KIND, RELEASE_VERSION,
+};
 use clap_noun_verb::NounVerbError;
 use serde_json::{json, Value};
 
@@ -56,7 +60,6 @@ fn observation_from_json(row: &Value) -> Result<MetricObservation> {
     })
 }
 
-/// `fortune5 requirements` — list the 40 generated readiness controls.
 pub fn fortune5_requirements_handler() -> Result<Value> {
     let controls: Vec<Value> = castle::fortune5_generated::FORTUNE5_REQUIREMENTS
         .iter()
@@ -76,9 +79,6 @@ pub fn fortune5_requirements_handler() -> Result<Value> {
     Ok(json!({ "count": controls.len(), "requirements": controls }))
 }
 
-/// `fortune5 qualify <subject> <evidence_path>` — evaluate Fortune-5 readiness
-/// from a receipted evidence JSON file: `[{metric, value, receipt_digest,
-/// subject, observed_at, epistemic_class}, ...]`.
 pub fn fortune5_qualify_handler(
     subject: String,
     evidence_path: String,
@@ -117,9 +117,6 @@ pub fn fortune5_qualify_handler(
     }))
 }
 
-/// `replay admit ...` — check whether a replay class is admitted against the
-/// current subject's structural signature, ontology, provider semantics, and
-/// invariant set.
 #[allow(clippy::too_many_arguments)]
 pub fn replay_admit_handler(
     replay_class_id: String,
@@ -147,9 +144,6 @@ pub fn replay_admit_handler(
     }))
 }
 
-/// `impact coverage <classes_path> [--target-coverage-bps N]` — select the
-/// smallest deterministic prefix of highest-impact classes reaching the
-/// requested Pareto coverage target from a JSON file `[{key, impact}, ...]`.
 pub fn impact_coverage_handler(classes_path: String, target_coverage_bps: Option<i64>) -> Result<Value> {
     let raw = read_json_file(&classes_path)?;
     let rows = raw.as_array().ok_or_else(|| exec_err("classes file must contain a JSON array"))?;
@@ -171,8 +165,6 @@ pub fn impact_coverage_handler(classes_path: String, target_coverage_bps: Option
     }))
 }
 
-/// `inventory components` — list the marketplace-generated architecture
-/// component inventory.
 pub fn inventory_components_handler() -> Result<Value> {
     let components: Vec<Value> = castle::generated_components()
         .map(|c| json!({ "order": c.order, "identifier": c.identifier, "slug": c.slug, "role": c.role, "authority": c.authority }))
@@ -180,12 +172,52 @@ pub fn inventory_components_handler() -> Result<Value> {
     Ok(json!({ "count": components.len(), "components": components }))
 }
 
-/// `inventory goals` — list the marketplace-generated default prohibited
-/// adversarial goals.
 pub fn inventory_goals_handler() -> Result<Value> {
     let goals: Vec<Value> = castle::default_adversarial_goals()
         .iter()
         .map(|g| json!({ "id": g.id, "predicate": g.predicate, "consequence": g.consequence }))
         .collect();
     Ok(json!({ "count": goals.len(), "goals": goals }))
+}
+
+pub fn deployment_qualify_handler(manifest_path: String, now_epoch_ms: i64) -> Result<Value> {
+    let raw = read_json_file(&manifest_path)?;
+    let manifest: DeploymentManifest = serde_json::from_value(raw)
+        .map_err(|e| exec_err(format!("invalid v26.8.18 deployment manifest: {e}")))?;
+    serde_json::to_value(qualify_deployment(&manifest, now_epoch_ms))
+        .map_err(|e| exec_err(format!("failed to serialize qualification: {e}")))
+}
+
+pub fn deployment_adapters_handler() -> Result<Value> {
+    serde_json::to_value(fortune5_adapter_catalog())
+        .map(|adapters| json!({ "release": RELEASE_VERSION, "adapters": adapters }))
+        .map_err(|e| exec_err(format!("failed to serialize adapter catalog: {e}")))
+}
+
+pub fn release_info_handler() -> Result<Value> {
+    Ok(json!({
+        "name": "CASTLE",
+        "release": RELEASE_VERSION,
+        "kind": RELEASE_KIND,
+        "standingModel": ["UNKNOWN", "PARTIAL_ALIVE", "ALIVE", "BLOCKED", "BUILD_BROKEN", "UNSUPPORTED", "REFUSED"],
+        "invariants": [
+            "CONSTRUCT != DO",
+            "DO => admitted CONSTRUCT",
+            "DO => BRCE prepare receipt before provider actuation",
+            "provider adapters have no ambient credential authority",
+            "replay loses standing on semantic or invariant drift",
+            "regional failure domain approximates authority domain"
+        ]
+    }))
+}
+
+pub fn protocol_mcp_handler() -> Result<Value> {
+    serde_json::to_value(mcp_tool_catalog())
+        .map(|tools| json!({ "release": RELEASE_VERSION, "tools": tools }))
+        .map_err(|e| exec_err(format!("failed to serialize MCP catalog: {e}")))
+}
+
+pub fn protocol_a2a_handler() -> Result<Value> {
+    serde_json::to_value(a2a_agent_card())
+        .map_err(|e| exec_err(format!("failed to serialize A2A agent card: {e}")))
 }
