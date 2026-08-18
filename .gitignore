@@ -1,1 +1,6 @@
 /target
+
+# ggen-generated local state: private signing keys (.ggen/keys/*.key) and
+# receipt logs (.ggen-v2/) must never be committed.
+.ggen/
+.ggen-v2/

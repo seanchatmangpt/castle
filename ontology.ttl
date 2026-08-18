@@ -1,0 +1,43 @@
+# castle — consumer-owned ontology facts.
+#
+# platform-engineers-handbook-ch02-cluster-pack ships its own complete
+# instance data (pech2:platformDevCluster, pech2:platformEngColimaCluster)
+# inside the pack itself, so castle supplies zero pech2: facts.
+#
+# github-actions-pack is schema-only (zero individuals shipped) -- a real
+# consumer must author its own gha:Workflow/gha:Job/gha:Step facts against
+# that vocabulary. This is castle's real CI workflow: build + test on push,
+# with a minimal read-only permission ceiling and a push trigger (required
+# by gate 030_push_trigger_required.rq).
+
+@prefix gha: <http://seanchatmangpt.github.io/packs/github-actions#> .
+
+gha:castleCi
+    a gha:Workflow ;
+    gha:fileName "ggen-ci.yml" ;
+    gha:purpose "Build and test the castle Rust workspace on every push to a governed ref." ;
+    gha:trigger gha:EventPush ;
+    gha:permissionCeiling "contents: read" ;
+    gha:evidenceObligation "cargo test output (pass/fail per crate)" ;
+    gha:artifactBody "true" .
+
+gha:castleCiBuildJob
+    a gha:Job ;
+    gha:inWorkflow gha:castleCi ;
+    gha:jobName "build-and-test" ;
+    gha:runner "ubuntu-latest" ;
+    gha:timeoutMinutes 20 .
+
+gha:castleCiCheckoutStep
+    a gha:Step ;
+    gha:inJob gha:castleCiBuildJob ;
+    gha:stepOrder 1 ;
+    gha:stepName "Checkout" ;
+    gha:usesAction "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683" .
+
+gha:castleCiTestStep
+    a gha:Step ;
+    gha:inJob gha:castleCiBuildJob ;
+    gha:stepOrder 2 ;
+    gha:stepName "Cargo test" ;
+    gha:runCommand "cargo test --workspace" .
