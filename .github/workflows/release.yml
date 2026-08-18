@@ -179,18 +179,49 @@ jobs:
 
           gh release download "${CASTLE_RELEASE_TAG}" -p "${CASTLE_RELEASE_BINARY}" -D "${receipt_dir}"
           gh release download "${CASTLE_RELEASE_TAG}" -p SHA256SUMS -D "${receipt_dir}"
+
+          nonempty_lines="$(grep -cve '^[[:space:]]*$' "${receipt_dir}/SHA256SUMS" || true)"
+          if [[ "${nonempty_lines}" != "1" ]]; then
+            echo "::error::REFUSED:RELEASE_CHECKSUM_MANIFEST_CARDINALITY:${nonempty_lines}"
+            exit 2
+          fi
+
+          expected_hash="$(awk 'NF {print $1; exit}' "${receipt_dir}/SHA256SUMS")"
+          expected_name="$(awk 'NF {$1=""; sub(/^[[:space:]]+/, ""); sub(/^\*/, ""); print; exit}' "${receipt_dir}/SHA256SUMS")"
+          actual_hash="$(sha256sum "${receipt_dir}/${CASTLE_RELEASE_BINARY}" | awk '{print $1}')"
+
+          if [[ ! "${expected_hash}" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::REFUSED:INVALID_RELEASE_CHECKSUM_HASH"
+            exit 2
+          fi
+          if [[ "${expected_hash}" != "${actual_hash}" ]]; then
+            echo "::error::REFUSED:RELEASE_BINARY_HASH_MISMATCH:expected=${expected_hash}:actual=${actual_hash}"
+            exit 2
+          fi
+
+          checksum_manifest_repaired=false
+          if [[ "${expected_name}" != "${CASTLE_RELEASE_BINARY}" ]]; then
+            # v26.8.18 was initially published with `dist/<binary>` in the
+            # checksum filename. Repair is permitted only after proving that
+            # its legacy hash exactly equals the downloaded immutable binary.
+            printf '%s  %s\n' "${actual_hash}" "${CASTLE_RELEASE_BINARY}" > "${receipt_dir}/SHA256SUMS"
+            gh release upload "${CASTLE_RELEASE_TAG}" "${receipt_dir}/SHA256SUMS" --clobber
+            checksum_manifest_repaired=true
+          fi
+
           (
             cd "${receipt_dir}"
             sha256sum -c SHA256SUMS
           )
-          binary_sha256="$(sha256sum "${receipt_dir}/${CASTLE_RELEASE_BINARY}" | awk '{print $1}')"
-          echo "binary_sha256=${binary_sha256}" >> "${GITHUB_OUTPUT}"
+          echo "binary_sha256=${actual_hash}" >> "${GITHUB_OUTPUT}"
+          echo "checksum_manifest_repaired=${checksum_manifest_repaired}" >> "${GITHUB_OUTPUT}"
 
       - name: Manufacture publication receipt on main
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
           BINARY_SHA256: ${{ steps.publication.outputs.binary_sha256 }}
+          CHECKSUM_MANIFEST_REPAIRED: ${{ steps.publication.outputs.checksum_manifest_repaired }}
         shell: bash
         run: |
           set -euo pipefail
@@ -201,9 +232,9 @@ jobs:
           tag_tree="$(git rev-parse "${CASTLE_RELEASE_TAG}^{tree}")"
           sha256sums="$(cat "${RUNNER_TEMP}/published-assets/SHA256SUMS")"
 
-          python3 - "${release_json}" "${receipt_path}" "${CASTLE_RELEASE_TAG}" "${tag_commit}" "${tag_tree}" "${CASTLE_RELEASE_BINARY}" "${BINARY_SHA256}" "${sha256sums}" "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" <<'PY'
+          python3 - "${release_json}" "${receipt_path}" "${CASTLE_RELEASE_TAG}" "${tag_commit}" "${tag_tree}" "${CASTLE_RELEASE_BINARY}" "${BINARY_SHA256}" "${sha256sums}" "${CHECKSUM_MANIFEST_REPAIRED}" "${GITHUB_RUN_ID}" "${GITHUB_RUN_ATTEMPT}" <<'PY'
           import json, sys
-          release_path, out, tag, commit, tree, binary, binary_sha, sums, run_id, attempt = sys.argv[1:]
+          release_path, out, tag, commit, tree, binary, binary_sha, sums, repaired, run_id, attempt = sys.argv[1:]
           with open(release_path, encoding="utf-8") as fh:
               release = json.load(fh)
           assets = sorted(
@@ -224,10 +255,12 @@ jobs:
               "binary": binary,
               "binary_sha256": binary_sha,
               "sha256sums": sums,
+              "checksum_manifest_repaired": repaired == "true",
               "evidence": [
                   "gh release view",
                   "gh release download binary",
                   "gh release download SHA256SUMS",
+                  "legacy checksum hash equality before any filename repair",
                   "sha256sum -c SHA256SUMS",
                   "git rev-list exact tag",
                   "git rev-parse exact tag tree",
