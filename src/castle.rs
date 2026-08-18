@@ -469,6 +469,147 @@ pub async fn run_planner_ensemble(problem: &PlanningProblem<'_>, planners: &[Box
     .await
 }
 
+/// Second real `Planner` implementor. Shells out to a real Python subprocess
+/// (`scripts/castle_bridge/plan_astar.py` in the autofde-lab checkout) that
+/// runs a genuine A* forward search over the problem's transition rules,
+/// serializing/deserializing the problem and candidates over stdin/stdout.
+///
+/// This is a candidate source only, exactly like `WitnessPlanner` -- it
+/// produces `PlanCandidate`s for `run_planner_ensemble` to sort and rank. It
+/// has no actuation authority: `CONSTRUCT != DO` is unaffected because this
+/// planner, like `WitnessPlanner`, never touches `admit_construct_for_do` or
+/// `execute_powl_with_gym_act`.
+pub struct AutofdeLabPlanner {
+    pub id: String,
+    /// Path to the bridge script. Defaults to the sibling `autofde-lab`
+    /// checkout's `scripts/castle_bridge/plan_astar.py`.
+    pub script_path: std::path::PathBuf,
+    /// Python interpreter to invoke. Defaults to `python3` on PATH -- the
+    /// bridge script is pure stdlib so no autofde-lab venv is required.
+    pub python_bin: String,
+}
+
+impl Default for AutofdeLabPlanner {
+    fn default() -> Self {
+        Self {
+            id: "autofde-lab-astar".to_string(),
+            script_path: std::path::PathBuf::from("/Users/sac/autofde-lab/scripts/castle_bridge/plan_astar.py"),
+            python_bin: "python3".to_string(),
+        }
+    }
+}
+
+fn planning_problem_to_json(problem: &PlanningProblem<'_>) -> Value {
+    json!({
+        "goal": {
+            "id": problem.goal.id,
+            "predicate": problem.goal.predicate,
+            "consequence": problem.goal.consequence,
+        },
+        "vulnerability": {
+            "goal_id": problem.vulnerability.goal_id,
+            "predicates": problem.vulnerability.predicates,
+            "witness_transitions": problem.vulnerability.witness_transitions,
+        },
+        "rules": problem.rules.iter().map(|r| json!({
+            "id": r.id,
+            "preconditions": r.preconditions,
+            "effects": r.effects,
+            "cost": r.cost,
+            "planner_hint": r.planner_hint,
+        })).collect::<Vec<_>>(),
+    })
+}
+
+fn json_to_powl_activity(v: &Value) -> Option<PowlActivity> {
+    Some(PowlActivity {
+        id: v.get("id")?.as_str()?.to_string(),
+        transition_id: v.get("transition_id")?.as_str()?.to_string(),
+        predecessors: v.get("predecessors")?.as_array()?.iter().filter_map(|p| p.as_str().map(str::to_string)).collect(),
+    })
+}
+
+fn json_to_plan_candidate(v: &Value) -> Option<PlanCandidate> {
+    let planner_id = v.get("planner_id")?.as_str()?.to_string();
+    let process_v = v.get("process")?;
+    let process = PowlProcess {
+        id: process_v.get("id")?.as_str()?.to_string(),
+        goal_id: process_v.get("goal_id")?.as_str()?.to_string(),
+        activities: process_v.get("activities")?.as_array()?.iter().filter_map(json_to_powl_activity).collect(),
+    };
+    let score = v.get("score")?.as_i64()?;
+    Some(PlanCandidate { planner_id, process, score })
+}
+
+#[async_trait]
+impl Planner for AutofdeLabPlanner {
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    fn applicable(&self, problem: &PlanningProblem<'_>) -> bool {
+        !problem.rules.is_empty() && !problem.goal.predicate.is_empty()
+    }
+
+    async fn plan(&self, problem: &PlanningProblem<'_>) -> Vec<PlanCandidate> {
+        if !self.applicable(problem) {
+            return Vec::new();
+        }
+        let _span = tracing::info_span!(
+            "autofde_lab_planner_plan",
+            goal_id = %problem.goal.id,
+            script = %self.script_path.display(),
+        )
+        .entered();
+
+        let stdin_payload = planning_problem_to_json(problem).to_string();
+
+        let output = match std::process::Command::new(&self.python_bin)
+            .arg(&self.script_path)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+        {
+            Ok(mut child) => {
+                use std::io::Write;
+                if let Some(mut stdin) = child.stdin.take() {
+                    if stdin.write_all(stdin_payload.as_bytes()).is_err() {
+                        tracing::warn!("autofde-lab bridge: failed to write stdin");
+                        return Vec::new();
+                    }
+                }
+                match child.wait_with_output() {
+                    Ok(out) => out,
+                    Err(err) => {
+                        tracing::warn!(error = %err, "autofde-lab bridge: subprocess wait failed");
+                        return Vec::new();
+                    }
+                }
+            }
+            Err(err) => {
+                tracing::warn!(error = %err, "autofde-lab bridge: failed to spawn subprocess");
+                return Vec::new();
+            }
+        };
+
+        if !output.status.success() {
+            tracing::warn!(status = ?output.status, stderr = %String::from_utf8_lossy(&output.stderr), "autofde-lab bridge: subprocess exited non-zero");
+            return Vec::new();
+        }
+
+        let stdout_text = String::from_utf8_lossy(&output.stdout);
+        let parsed: Value = match serde_json::from_str(&stdout_text) {
+            Ok(v) => v,
+            Err(err) => {
+                tracing::warn!(error = %err, "autofde-lab bridge: invalid JSON on stdout");
+                return Vec::new();
+            }
+        };
+        parsed.as_array().map(|arr| arr.iter().filter_map(json_to_plan_candidate).collect()).unwrap_or_default()
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Receipts
 // ---------------------------------------------------------------------------
@@ -645,6 +786,321 @@ pub enum GymActStatus {
 #[async_trait]
 pub trait GymActAdapter: Send + Sync {
     async fn execute(&self, activity: &PowlActivity, state: &WorldState, permit: &ActuationPermit) -> GymActResult;
+}
+
+/// Real `GymActAdapter` against a real, already-running, already-authorized
+/// local target: the `kind-platform-eng-colima` kind cluster on this host
+/// (`kubectl config get-contexts` shows it; `docker ps` shows its live
+/// containers). This is the first non-test-double implementor of
+/// `GymActAdapter` in the crate.
+///
+/// Scoped deliberately narrow to stay inside `CONSTRUCT != DO`'s "explicit
+/// test envelope over owned or authorized systems, no unbounded actuation"
+/// contract (`README.md:53`):
+///
+/// - Every `transition_id` this adapter will run is a **read-only**
+///   `kubectl get` query (nodes / pods / namespaces), fixed at construction
+///   time in `allowed_read_only_queries`. There is no code path from a
+///   `PowlActivity`'s `transition_id` to an arbitrary shell command --
+///   `transition_id` is looked up in the map, and anything not present is
+///   refused (`GymActStatus::Refused`) rather than passed through.
+/// - It shells out to the real `kubectl` binary against a fixed
+///   `--context`, exactly the same "real subprocess, real collaborator"
+///   pattern `AutofdeLabPlanner` above uses for its A* bridge -- no network
+///   client crate, no mocked Kubernetes API.
+/// - `execute_powl_with_gym_act`'s own admission/envelope/receipt chain
+///   (digest match, envelope expiry, `allowed_transition_ids` containment)
+///   still gates every call into this adapter; this adapter adds a second,
+///   independent allowlist on top rather than relying solely on the
+///   envelope.
+/// - No cluster mutation is possible: the allowlisted commands are `get`
+///   verbs only, and the adapter does not accept caller-supplied kubectl
+///   arguments.
+pub struct KindClusterReadOnlyGymAct {
+    /// kubectl context to query, e.g. "kind-platform-eng-colima".
+    pub kube_context: String,
+    /// transition_id -> fixed, read-only kubectl argv (no user input is ever
+    /// interpolated into these).
+    pub allowed_read_only_queries: BTreeMap<String, Vec<String>>,
+}
+
+impl KindClusterReadOnlyGymAct {
+    /// Real, safe default envelope for the `platform-eng-colima` kind
+    /// cluster: three read-only `kubectl get` queries against cluster-scoped
+    /// or `kube-system` resources only, nothing namespace-arbitrary and
+    /// nothing that mutates state.
+    #[must_use]
+    pub fn platform_eng_colima_default() -> Self {
+        let mut allowed_read_only_queries = BTreeMap::new();
+        allowed_read_only_queries.insert("observe-cluster-nodes".to_string(), vec!["get".to_string(), "nodes".to_string(), "-o".to_string(), "json".to_string()]);
+        allowed_read_only_queries.insert(
+            "observe-kube-system-pods".to_string(),
+            vec!["get".to_string(), "pods".to_string(), "-n".to_string(), "kube-system".to_string(), "-o".to_string(), "json".to_string()],
+        );
+        allowed_read_only_queries.insert("observe-namespaces".to_string(), vec!["get".to_string(), "namespaces".to_string(), "-o".to_string(), "json".to_string()]);
+        Self { kube_context: "kind-platform-eng-colima".to_string(), allowed_read_only_queries }
+    }
+}
+
+#[async_trait]
+impl GymActAdapter for KindClusterReadOnlyGymAct {
+    async fn execute(&self, activity: &PowlActivity, _state: &WorldState, permit: &ActuationPermit) -> GymActResult {
+        let _span = tracing::info_span!(
+            "kind_cluster_read_only_gym_act_execute",
+            transition_id = %activity.transition_id,
+            kube_context = %self.kube_context,
+        )
+        .entered();
+
+        let Some(argv) = self.allowed_read_only_queries.get(&activity.transition_id) else {
+            tracing::warn!("kind cluster GymAct: transition_id not in the read-only allowlist, refusing");
+            return GymActResult {
+                transition_id: activity.transition_id.clone(),
+                status: GymActStatus::Refused,
+                objects: vec![OcelObject { id: format!("object:{}", activity.transition_id), kind: "RefusedObservation".to_string() }],
+                attributes: Default::default(),
+            };
+        };
+
+        let output = match std::process::Command::new("kubectl").arg("--context").arg(&self.kube_context).args(argv).output() {
+            Ok(out) => out,
+            Err(err) => {
+                tracing::warn!(error = %err, "kind cluster GymAct: failed to spawn kubectl");
+                return GymActResult {
+                    transition_id: activity.transition_id.clone(),
+                    status: GymActStatus::Refused,
+                    objects: vec![OcelObject { id: format!("object:{}", activity.transition_id), kind: "RefusedObservation".to_string() }],
+                    attributes: Default::default(),
+                };
+            }
+        };
+
+        if !output.status.success() {
+            tracing::warn!(status = ?output.status, stderr = %String::from_utf8_lossy(&output.stderr), "kind cluster GymAct: kubectl exited non-zero");
+            return GymActResult {
+                transition_id: activity.transition_id.clone(),
+                status: GymActStatus::Refused,
+                objects: vec![OcelObject { id: format!("object:{}", activity.transition_id), kind: "RefusedObservation".to_string() }],
+                attributes: Default::default(),
+            };
+        }
+
+        let stdout_text = String::from_utf8_lossy(&output.stdout);
+        let parsed: Value = match serde_json::from_str(&stdout_text) {
+            Ok(v) => v,
+            Err(err) => {
+                tracing::warn!(error = %err, "kind cluster GymAct: kubectl returned non-JSON stdout");
+                return GymActResult {
+                    transition_id: activity.transition_id.clone(),
+                    status: GymActStatus::Refused,
+                    objects: vec![OcelObject { id: format!("object:{}", activity.transition_id), kind: "RefusedObservation".to_string() }],
+                    attributes: Default::default(),
+                };
+            }
+        };
+
+        // Real observation, from a real cluster response: turn each item's
+        // metadata.name into an OcelObject so the resulting OCEL log names
+        // the actual nodes/pods/namespaces observed, not a synthetic label.
+        let kind = parsed.get("kind").and_then(Value::as_str).unwrap_or("KubernetesList").to_string();
+        let mut objects = Vec::new();
+        if let Some(items) = parsed.get("items").and_then(Value::as_array) {
+            for item in items {
+                let name = item.pointer("/metadata/name").and_then(Value::as_str).unwrap_or("unknown");
+                objects.push(OcelObject { id: format!("k8s:{}:{}", self.kube_context, name), kind: kind.trim_end_matches("List").to_string() });
+            }
+        }
+        if objects.is_empty() {
+            objects.push(OcelObject { id: format!("k8s:{}:{}:empty", self.kube_context, activity.transition_id), kind });
+        }
+
+        let mut attributes = BTreeMap::new();
+        attributes.insert("observed_item_count".to_string(), json!(objects.len()));
+        attributes.insert("kube_context".to_string(), json!(self.kube_context));
+        attributes.insert("permit_authority".to_string(), json!(permit.authority));
+
+        GymActResult { transition_id: activity.transition_id.clone(), status: GymActStatus::Observed, objects, attributes }
+    }
+}
+
+/// Production `GymActAdapter` against the real, already-running `gymact`
+/// service (`platform-console/services/gymact/facts.json`), shelling out to
+/// the real `gymact` Typer CLI's `verify` subcommand (subprocess+JSON) --
+/// the same subprocess-bridge precedent used by `~/autofde-lab` -- rather
+/// than gymact's HTTP/FastAPI surface, which avoids network/auth setup for
+/// a same-host CLI that is already installed and already authorized against
+/// the target cluster's kubeconfig context.
+///
+/// `VISION.md`'s gap #1 ("no production adapter exists yet") is closed by
+/// this type: it is the crate's first `GymActAdapter` implementor backed by
+/// a real external CLI process rather than a hand-rolled `kubectl` call.
+///
+/// Scoped narrow, matching `KindClusterReadOnlyGymAct`'s `CONSTRUCT != DO`
+/// discipline (README.md:53 -- "explicit test envelope over owned or
+/// authorized systems, no unbounded actuation"):
+///
+/// - Every `transition_id` this adapter will run is fixed at construction
+///   time in `allowed_verifications`, mapping to a caller-supplied gymact
+///   `provider` name and an `expected` postcondition object. There is no
+///   code path from a `PowlActivity`'s `transition_id` to an arbitrary
+///   provider/config -- anything not present in the map is refused
+///   (`GymActStatus::Refused`) rather than passed through.
+/// - It shells out to the real `gymact` binary's `verify <request.json>`
+///   subcommand, which materializes the configured subject then
+///   independently observes and checks its current state (READ-shaped:
+///   `gymact.gyms.kubernetes_reconciliation`'s `get_status` capability path,
+///   never `act`/`scale_restart`) -- see `~/gymact/src/gymact/cli.py`.
+/// - `gymact verify`'s CLI path materializes a real subject per invocation
+///   (e.g. a real `kubernetes-reconciliation` Pod) but has no CLI
+///   `teardown` command (`~/gymact/src/gymact/cli.py` has no such
+///   subcommand); this adapter best-effort tears the materialized subject
+///   down itself afterward via a fixed, non-interpolated `kubectl delete
+///   pod <observed-name> --now` when the verification response exposes a
+///   `pod_name` field, so repeated runs do not accumulate live pods on the
+///   real cluster. A teardown failure is logged, not surfaced as a GymAct
+///   refusal -- the verification's own pass/fail is the receipted fact.
+pub struct ProcessGymActAdapter {
+    /// Path to the real `gymact` executable (e.g. the project venv's
+    /// `.venv/bin/gymact`), invoked as a real subprocess.
+    pub gymact_bin: String,
+    /// kubectl context used for best-effort teardown of subjects gymact's
+    /// CLI materialized but did not tear down itself.
+    pub kube_context: String,
+    /// transition_id -> (gymact provider name, expected postcondition
+    /// object). Fixed at construction time; nothing from `PowlActivity` or
+    /// `WorldState` is interpolated into the gymact request.
+    pub allowed_verifications: BTreeMap<String, (String, Value)>,
+}
+
+impl ProcessGymActAdapter {
+    /// Real default envelope for the live `kubernetes-reconciliation`
+    /// provider on the `kind-platform-eng-colima` cluster: one transition,
+    /// `verify-kubernetes-reconciliation-running`, checking the real
+    /// cluster-observed postcondition `{"running": true}`.
+    #[must_use]
+    pub fn platform_eng_colima_default(gymact_bin: impl Into<String>) -> Self {
+        let mut allowed_verifications = BTreeMap::new();
+        allowed_verifications.insert(
+            "verify-kubernetes-reconciliation-running".to_string(),
+            ("kubernetes-reconciliation".to_string(), json!({"running": true})),
+        );
+        Self {
+            gymact_bin: gymact_bin.into(),
+            kube_context: "kind-platform-eng-colima".to_string(),
+            allowed_verifications,
+        }
+    }
+
+    fn refused(transition_id: &str) -> GymActResult {
+        GymActResult {
+            transition_id: transition_id.to_string(),
+            status: GymActStatus::Refused,
+            objects: vec![OcelObject { id: format!("object:{}", transition_id), kind: "RefusedObservation".to_string() }],
+            attributes: Default::default(),
+        }
+    }
+
+    fn best_effort_teardown_pod(&self, pod_name: &str, namespace: &str) {
+        let outcome = std::process::Command::new("kubectl")
+            .arg("--context")
+            .arg(&self.kube_context)
+            .args(["delete", "pod", pod_name, "-n", namespace, "--now"])
+            .output();
+        match outcome {
+            Ok(out) if out.status.success() => {
+                tracing::info!(pod_name, namespace, "ProcessGymActAdapter: tore down materialized pod");
+            }
+            Ok(out) => {
+                tracing::warn!(pod_name, namespace, stderr = %String::from_utf8_lossy(&out.stderr), "ProcessGymActAdapter: teardown kubectl exited non-zero");
+            }
+            Err(err) => {
+                tracing::warn!(pod_name, namespace, error = %err, "ProcessGymActAdapter: failed to spawn teardown kubectl");
+            }
+        }
+    }
+}
+
+#[async_trait]
+impl GymActAdapter for ProcessGymActAdapter {
+    async fn execute(&self, activity: &PowlActivity, _state: &WorldState, permit: &ActuationPermit) -> GymActResult {
+        let _span = tracing::info_span!(
+            "process_gym_act_adapter_execute",
+            transition_id = %activity.transition_id,
+            gymact_bin = %self.gymact_bin,
+        )
+        .entered();
+
+        let Some((provider, expected)) = self.allowed_verifications.get(&activity.transition_id) else {
+            tracing::warn!("ProcessGymActAdapter: transition_id not in the allowlist, refusing");
+            return Self::refused(&activity.transition_id);
+        };
+
+        let request = json!({"provider": provider, "config": {}, "expected": expected});
+        let request_path = std::env::temp_dir().join(format!("castle-gymact-request-{}-{}.json", activity.transition_id, uuid_like_suffix()));
+        if let Err(err) = std::fs::write(&request_path, request.to_string()) {
+            tracing::warn!(error = %err, "ProcessGymActAdapter: failed to write request file");
+            return Self::refused(&activity.transition_id);
+        }
+
+        let output = std::process::Command::new(&self.gymact_bin).arg("verify").arg(&request_path).output();
+        let _ = std::fs::remove_file(&request_path);
+
+        let output = match output {
+            Ok(out) => out,
+            Err(err) => {
+                tracing::warn!(error = %err, "ProcessGymActAdapter: failed to spawn gymact");
+                return Self::refused(&activity.transition_id);
+            }
+        };
+
+        if !output.status.success() {
+            tracing::warn!(status = ?output.status, stderr = %String::from_utf8_lossy(&output.stderr), "ProcessGymActAdapter: gymact exited non-zero");
+            return Self::refused(&activity.transition_id);
+        }
+
+        let stdout_text = String::from_utf8_lossy(&output.stdout);
+        let parsed: Value = match serde_json::from_str(stdout_text.trim()) {
+            Ok(v) => v,
+            Err(err) => {
+                tracing::warn!(error = %err, "ProcessGymActAdapter: gymact returned non-JSON stdout");
+                return Self::refused(&activity.transition_id);
+            }
+        };
+
+        let verification = parsed.get("verification").cloned().unwrap_or(Value::Null);
+        let passed = verification.get("passed").and_then(Value::as_bool).unwrap_or(false);
+        let observed = verification.get("observed").cloned().unwrap_or(Value::Null);
+
+        if let Some(pod_name) = observed.get("pod_name").and_then(Value::as_str) {
+            let namespace = observed.get("namespace").and_then(Value::as_str).unwrap_or("default");
+            self.best_effort_teardown_pod(pod_name, namespace);
+        }
+
+        if !passed {
+            tracing::warn!(?verification, "ProcessGymActAdapter: gymact verification did not pass");
+            return Self::refused(&activity.transition_id);
+        }
+
+        let episode_id = verification.get("episode_id").and_then(Value::as_str).unwrap_or("unknown-episode");
+        let mut objects = vec![OcelObject { id: format!("gymact:{}:{}", provider, episode_id), kind: "GymActEpisode".to_string() }];
+        if let Some(pod_name) = observed.get("pod_name").and_then(Value::as_str) {
+            objects.push(OcelObject { id: format!("k8s:{}:{}", self.kube_context, pod_name), kind: "Pod".to_string() });
+        }
+
+        let mut attributes = BTreeMap::new();
+        attributes.insert("gymact_provider".to_string(), json!(provider));
+        attributes.insert("gymact_episode_id".to_string(), json!(episode_id));
+        attributes.insert("gymact_observed".to_string(), observed);
+        attributes.insert("permit_authority".to_string(), json!(permit.authority));
+
+        GymActResult { transition_id: activity.transition_id.clone(), status: GymActStatus::Observed, objects, attributes }
+    }
+}
+
+fn uuid_like_suffix() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    format!("{:x}", nanos)
 }
 
 #[derive(Debug, Clone)]
@@ -1193,6 +1649,96 @@ pub fn apply_zero_day_observation(graph: &DependencyGraph, observation: ZeroDayO
 // ---------------------------------------------------------------------------
 // Property tests: canonical_json digest-stability (additive, private-fn coverage)
 // ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod planner_ensemble_tests {
+    use super::*;
+
+    /// Real second planner in the ensemble, VISION.md gap #2: proves
+    /// `run_planner_ensemble`'s scoring/selection logic generalizes across
+    /// TWO structurally different planners, not just `WitnessPlanner` alone.
+    ///
+    /// `WitnessPlanner` compiles the fixed `witness_transitions` list into a
+    /// data-dependency partial order (score = activities.len() +
+    /// predicates.len()). `AutofdeLabPlanner` shells out to a real Python
+    /// subprocess (`plan_astar.py`) that runs a genuine, independent A*
+    /// forward search over the same `TransitionRule` set (score =
+    /// path length) -- a different algorithm producing a differently
+    /// shaped/ordered `PowlProcess`. This is a real subprocess call against a
+    /// real script on disk, not a mock of the `Planner` trait: per Chicago
+    /// testing discipline, invoking the actual autofde-lab-side process is
+    /// the real collaborator here, and is used directly rather than faked.
+    #[tokio::test]
+    async fn ensemble_selects_between_witness_and_autofde_lab_planners() {
+        let goal = AdversarialGoal { id: "goal:priv-esc".to_string(), predicate: "p_root".to_string(), consequence: 9 };
+        let vulnerability = VulnerabilityCondition {
+            goal_id: goal.id.clone(),
+            predicates: vec!["p_root".to_string()],
+            witness_transitions: vec!["rule:gain-shell".to_string(), "rule:escalate".to_string()],
+        };
+        let rules = vec![
+            TransitionRule {
+                id: "rule:gain-shell".to_string(),
+                preconditions: vec![],
+                effects: vec!["p_shell".to_string()],
+                cost: Some(1.0),
+                planner_hint: None,
+            },
+            TransitionRule {
+                id: "rule:escalate".to_string(),
+                preconditions: vec!["p_shell".to_string()],
+                effects: vec!["p_root".to_string()],
+                cost: Some(1.0),
+                planner_hint: None,
+            },
+        ];
+
+        let problem = PlanningProblem { goal: &goal, vulnerability: &vulnerability, rules: &rules };
+
+        let script_path = std::path::PathBuf::from("/Users/sac/autofde-lab/scripts/castle_bridge/plan_astar.py");
+        assert!(script_path.exists(), "autofde-lab bridge script must exist on disk for a real subprocess call: {}", script_path.display());
+
+        let planners: Vec<Box<dyn Planner>> = vec![
+            Box::new(WitnessPlanner::default()),
+            Box::new(AutofdeLabPlanner { script_path, ..AutofdeLabPlanner::default() }),
+        ];
+
+        let candidates = run_planner_ensemble(&problem, &planners).await;
+
+        // Both planners are applicable and both must have genuinely contributed.
+        let planner_ids: std::collections::BTreeSet<&str> = candidates.iter().map(|c| c.planner_id.as_str()).collect();
+        assert!(planner_ids.contains("witness-partial-order"), "witness planner produced no candidates: {candidates:?}");
+        assert!(planner_ids.contains("autofde-lab-astar"), "autofde-lab subprocess planner produced no candidates: {candidates:?}");
+        assert_eq!(candidates.len(), 2, "expected exactly one candidate from each of the two structurally different planners: {candidates:?}");
+
+        // Real selection: the combined list is sorted ascending by score, so
+        // the ensemble's ranking (not planner registration order) determines
+        // who is first -- this is the actual scoring/selection logic being
+        // exercised, not an assumed outcome.
+        assert!(candidates.windows(2).all(|w| w[0].score <= w[1].score), "ensemble output must be score-ascending: {candidates:?}");
+
+        let witness_candidate = candidates.iter().find(|c| c.planner_id == "witness-partial-order").unwrap();
+        let autofde_candidate = candidates.iter().find(|c| c.planner_id == "autofde-lab-astar").unwrap();
+
+        // Structurally different processes proving these are two genuinely
+        // different planners, not one planner's output relabeled: witness
+        // compiles a fixed process id prefixed "powl:", autofde-lab's bridge
+        // emits a distinctly-prefixed "powl:astar:" id from its own search.
+        assert!(witness_candidate.process.id.starts_with("powl:goal:priv-esc"));
+        assert!(autofde_candidate.process.id.starts_with("powl:astar:goal:priv-esc"));
+
+        // Witness score = activities.len() (2) + predicates.len() (1) = 3.
+        assert_eq!(witness_candidate.score, 3);
+        // A* score = real shortest-path length found by search = 2 steps.
+        assert_eq!(autofde_candidate.score, 2);
+
+        // The ensemble's ascending-score ranking genuinely selects the
+        // lower-scoring autofde-lab plan first over the witness plan --
+        // this is the real cross-planner selection behavior under test.
+        assert_eq!(candidates[0].planner_id, "autofde-lab-astar");
+        assert_eq!(candidates[1].planner_id, "witness-partial-order");
+    }
+}
 
 #[cfg(test)]
 mod canonical_json_proptests {
