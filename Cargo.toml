@@ -30,6 +30,7 @@ linkme = "0.3"
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }
 proptest = "1.8"
+chicago-tdd-tools = { path = "../chicago-tdd-tools", features = ["testing-extras"] }
 
 [lints.rust]
 unsafe_code = "warn"
