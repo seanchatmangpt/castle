@@ -82,8 +82,26 @@ fn all_required_failure_domains_must_be_receipted_and_fail_closed() {
 }
 
 #[test]
+fn durable_evidence_is_content_addressed_and_idempotent() {
+    let root = std::env::temp_dir().join(format!("castle-evidence-{}", std::process::id()));
+    let record = DurableEvidenceRecord {
+        cell_id: "cell:test".to_string(), subject: "system:test".to_string(),
+        construct_digest: "a".repeat(64), ocel_receipt_digest: "b".repeat(64),
+        brce_prepare_receipt_digests: vec!["c".repeat(64)],
+        brce_outcome_receipt_digests: vec!["d".repeat(64)], event_count: 1,
+    };
+    let first = persist_evidence(&root, &record).unwrap();
+    let second = persist_evidence(&root, &record).unwrap();
+    assert_eq!(first.standing, ReleaseStanding::Alive);
+    assert_eq!(first.record_identity, second.record_identity);
+    assert_eq!(first.path, second.path);
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
 fn runtime_construct_digest_is_deterministic_and_checkpointed() {
     let request = RuntimeExecutionRequest {
+        cell_id: "cell:test".to_string(), evidence_dir: "target/test-evidence".to_string(),
         subject: "system:test".to_string(), authority: "bounded-do".to_string(),
         o_star: serde_json::json!({"subject":"system:test"}),
         config_graph: serde_json::json!({"zeroUnreceiptedActuation":true}),
