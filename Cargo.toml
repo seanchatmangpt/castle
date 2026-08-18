@@ -1,6 +1,6 @@
 [package]
 name = "castle"
-version = "26.8.16"
+version = "26.8.18"
 edition = "2021"
 rust-version = "1.82"
 description = "Continuously self-adversarial cloud system generated from ggen-marketplace semantic authority"
