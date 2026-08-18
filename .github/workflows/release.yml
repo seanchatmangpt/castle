@@ -2,6 +2,7 @@ name: Release
 
 on:
   push:
+    branches: [main]
     tags:
       - 'v*'
 
@@ -13,8 +14,54 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  release:
-    name: Verify and publish
+  cut-tag:
+    name: Reconcile lock and cut release tag
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b # stable
+        with:
+          toolchain: stable
+
+      - name: Reconcile generated lockfile projection
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo metadata --format-version 1 >/dev/null
+          if ! git diff --quiet -- Cargo.lock; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add Cargo.lock
+            git commit -m 'chore: synchronize v26.8.18 lockfile'
+            git push origin HEAD:main
+            echo 'Lockfile projection changed; the new main push will cut the tag.'
+            exit 0
+          fi
+
+      - name: Cut immutable Cargo-version tag if absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo_version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          tag="v${cargo_version}"
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+            echo "${tag} already exists; refusing to move it."
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a "${tag}" -m "CASTLE ${tag}"
+          git push origin "refs/tags/${tag}"
+
+  publish:
+    name: Verify exact tag and publish
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -32,14 +79,17 @@ jobs:
           cargo_version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
           test "${GITHUB_REF_NAME}" = "v${cargo_version}"
 
+      - name: Verify lockfile is exact
+        run: cargo metadata --locked --format-version 1 >/dev/null
+
       - name: Build and test exact tag
         run: |
-          cargo build --workspace --all-targets
-          cargo test --workspace
+          cargo build --locked --workspace --all-targets
+          cargo test --locked --workspace
 
       - name: Qualify checked-in Fortune-5 topology
         run: |
-          cargo run --bin castle -- deployment qualify \
+          cargo run --locked --bin castle -- deployment qualify \
             --manifest-path configs/fortune5-v26.8.18.json \
             --now-epoch-ms 1787080000000 \
             --format json | tee /tmp/deployment.json
@@ -49,7 +99,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo build --release --bin castle
+          cargo build --locked --release --bin castle
           mkdir -p dist
           cp target/release/castle "dist/castle-${GITHUB_REF_NAME}-x86_64-unknown-linux-gnu"
           sha256sum dist/castle-* > dist/SHA256SUMS
