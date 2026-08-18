@@ -11,7 +11,8 @@ use crate::castle::{
 };
 
 use super::{
-    execute_command_process, BrceTransitionRecord, CommandAdapterPolicy, ReleaseStanding,
+    execute_command_process, persist_evidence, BrceTransitionRecord, CommandAdapterPolicy,
+    DurableEvidenceRecord, EvidenceCommit, ReleaseStanding,
 };
 
 pub struct NativeBlake3;
@@ -129,6 +130,8 @@ impl PortableEnvelope {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RuntimeExecutionRequest {
+    pub cell_id: String,
+    pub evidence_dir: String,
     pub subject: String,
     pub authority: String,
     pub o_star: Value,
@@ -160,6 +163,9 @@ struct ManufacturedRuntimeConstruct {
 }
 
 fn manufacture_internal(request: &RuntimeExecutionRequest, key_id: String, seed: [u8; 32]) -> Result<ManufacturedRuntimeConstruct, String> {
+    if request.cell_id.is_empty() || request.evidence_dir.is_empty() {
+        return Err("REFUSED:RUNTIME_CELL_OR_EVIDENCE_STORE_MISSING".to_string());
+    }
     if request.subject != request.envelope.system_id {
         return Err("REFUSED:RUNTIME_SUBJECT_MISMATCH".to_string());
     }
@@ -170,6 +176,7 @@ fn manufacture_internal(request: &RuntimeExecutionRequest, key_id: String, seed:
     let envelope = request.envelope.to_envelope();
     let signer = Ed25519RuntimeSigner::from_seed(key_id, seed)?;
     let verifier = signer.verifier();
+    let blake3 = NativeBlake3;
     let capability = manufacture_construct_capability(
         ConstructRequest {
             subject: request.subject.clone(),
@@ -180,7 +187,7 @@ fn manufacture_internal(request: &RuntimeExecutionRequest, key_id: String, seed:
             process: process.clone(),
             envelope: envelope.clone(),
         },
-        &NativeBlake3,
+        &blake3,
         &signer,
     )?;
     Ok(ManufacturedRuntimeConstruct { capability, process, envelope, signer, verifier })
@@ -215,13 +222,14 @@ pub struct RuntimeDoSummary {
     pub event_count: usize,
     pub brce_prepare_receipt_digests: Vec<String>,
     pub brce_outcome_receipt_digests: Vec<String>,
+    pub evidence_commit: EvidenceCommit,
 }
 
 /// CLI/API callers cannot submit a raw DO. They must first manufacture the
 /// exact deterministic CONSTRUCT and carry its digest into this second stage.
 /// This function recomputes that CONSTRUCT, compares identity, performs the
-/// normal opaque ConstructAdmission, then enters the private real-provider
-/// execution rail. The expected digest is a checkpoint, not authority.
+/// normal opaque ConstructAdmission, enters the private real-provider rail,
+/// and only returns ALIVE after post-BRCE/OCEL evidence is durably committed.
 pub async fn execute_runtime_request(
     request: &RuntimeExecutionRequest,
     key_id: String,
@@ -241,11 +249,12 @@ pub async fn execute_runtime_request(
         trusted_origin_key_ids: BTreeSet::from([manufactured.signer.key_id().to_string()]),
         allowed_authorities: request.allowed_authorities.clone(),
     };
+    let blake3 = NativeBlake3;
     let admission = admit_construct_for_do(
         &manufactured.capability,
         &manufactured.process,
         &manufactured.envelope,
-        &NativeBlake3,
+        &blake3,
         &manufactured.verifier,
         &policy,
         || now_epoch_ms,
@@ -257,17 +266,35 @@ pub async fn execute_runtime_request(
         &manufactured.envelope,
         &admission,
         request.adapter_policy.clone(),
-        &NativeBlake3,
+        &blake3,
         &manufactured.signer,
         || now_epoch_ms,
     ).await?;
 
+    let ocel_receipt_digest = log.receipt.receipt_digest.clone();
+    let event_count = log.log.events.len();
+    let brce_prepare_receipt_digests: Vec<String> = journal.iter().map(|r| r.prepare_receipt.receipt_digest.clone()).collect();
+    let brce_outcome_receipt_digests: Vec<String> = journal.iter().filter_map(|r| r.outcome_receipt.as_ref().map(|receipt| receipt.receipt_digest.clone())).collect();
+    let evidence_commit = persist_evidence(
+        &request.evidence_dir,
+        &DurableEvidenceRecord {
+            cell_id: request.cell_id.clone(),
+            subject: request.subject.clone(),
+            construct_digest: construct.construct_digest.clone(),
+            ocel_receipt_digest: ocel_receipt_digest.clone(),
+            brce_prepare_receipt_digests: brce_prepare_receipt_digests.clone(),
+            brce_outcome_receipt_digests: brce_outcome_receipt_digests.clone(),
+            event_count,
+        },
+    )?;
+
     Ok(RuntimeDoSummary {
         standing: ReleaseStanding::Alive,
         construct,
-        ocel_receipt_digest: log.receipt.receipt_digest,
-        event_count: log.log.events.len(),
-        brce_prepare_receipt_digests: journal.iter().map(|r| r.prepare_receipt.receipt_digest.clone()).collect(),
-        brce_outcome_receipt_digests: journal.iter().filter_map(|r| r.outcome_receipt.as_ref().map(|receipt| receipt.receipt_digest.clone())).collect(),
+        ocel_receipt_digest,
+        event_count,
+        brce_prepare_receipt_digests,
+        brce_outcome_receipt_digests,
+        evidence_commit,
     })
 }
