@@ -3,6 +3,7 @@
 //! `castle` library crate — the routes layer is never allowed to touch
 //! `castle::*` directly.
 
+use std::collections::BTreeSet;
 use std::fs;
 
 use castle::fortune5::{
@@ -11,8 +12,10 @@ use castle::fortune5::{
     ReplaySubject,
 };
 use castle::v26_8_18::{
-    a2a_agent_card, fortune5_adapter_catalog, mcp_tool_catalog, qualify_deployment,
-    DeploymentManifest, RELEASE_KIND, RELEASE_VERSION,
+    a2a_agent_card, decode_seed_hex, dual_artifact_identity, execute_runtime_request,
+    fortune5_adapter_catalog, manufacture_runtime_construct, mcp_tool_catalog, qualify_chaos,
+    qualify_crypto_profile, qualify_deployment, ChaosEvidence, CryptoProfile, DeploymentManifest,
+    RuntimeExecutionRequest, SignatureSuite, RELEASE_KIND, RELEASE_VERSION,
 };
 use clap_noun_verb::NounVerbError;
 use serde_json::{json, Value};
@@ -26,6 +29,16 @@ fn exec_err(message: impl Into<String>) -> NounVerbError {
 fn read_json_file(path: &str) -> Result<Value> {
     let contents = fs::read_to_string(path).map_err(|e| exec_err(format!("failed to read {path}: {e}")))?;
     serde_json::from_str(&contents).map_err(|e| exec_err(format!("invalid JSON in {path}: {e}")))
+}
+
+fn read_runtime_request(path: &str) -> Result<RuntimeExecutionRequest> {
+    serde_json::from_value(read_json_file(path)?)
+        .map_err(|e| exec_err(format!("invalid runtime execution request in {path}: {e}")))
+}
+
+fn read_signing_seed(path: &str) -> Result<[u8; 32]> {
+    let seed = fs::read_to_string(path).map_err(|e| exec_err(format!("failed to read signing key {path}: {e}")))?;
+    decode_seed_hex(seed.trim()).map_err(exec_err)
 }
 
 fn metric_value_from_json(value: &Value) -> Result<MetricValue> {
@@ -63,129 +76,76 @@ fn observation_from_json(row: &Value) -> Result<MetricObservation> {
 pub fn fortune5_requirements_handler() -> Result<Value> {
     let controls: Vec<Value> = castle::fortune5_generated::FORTUNE5_REQUIREMENTS
         .iter()
-        .map(|r| {
-            json!({
-                "order": r.order,
-                "controlId": r.control_id,
-                "category": r.category,
-                "description": r.description,
-                "metric": r.metric,
-                "comparator": r.comparator,
-                "target": r.target,
-                "authority": r.authority,
-            })
-        })
+        .map(|r| json!({
+            "order": r.order, "controlId": r.control_id, "category": r.category,
+            "description": r.description, "metric": r.metric, "comparator": r.comparator,
+            "target": r.target, "authority": r.authority,
+        }))
         .collect();
     Ok(json!({ "count": controls.len(), "requirements": controls }))
 }
 
-pub fn fortune5_qualify_handler(
-    subject: String,
-    evidence_path: String,
-    now_epoch_ms: Option<i64>,
-    max_evidence_age_ms: Option<i64>,
-) -> Result<Value> {
+pub fn fortune5_qualify_handler(subject: String, evidence_path: String, now_epoch_ms: Option<i64>, max_evidence_age_ms: Option<i64>) -> Result<Value> {
     let raw = read_json_file(&evidence_path)?;
     let rows = raw.as_array().ok_or_else(|| exec_err("evidence file must contain a JSON array"))?;
     let observations: Vec<MetricObservation> = rows.iter().map(observation_from_json).collect::<Result<_>>()?;
-
     let context = QualificationContext { subject, now_epoch_ms, max_evidence_age_ms };
     let qualification = qualify_fortune5_default(&observations, &context);
-
-    let controls: Vec<Value> = qualification
-        .controls
-        .iter()
-        .map(|c| {
-            json!({
-                "controlId": c.control_id,
-                "category": c.category,
-                "metric": c.metric,
-                "standing": c.standing.as_str(),
-                "expected": c.expected,
-                "reason": c.reason,
-            })
-        })
-        .collect();
-
+    let controls: Vec<Value> = qualification.controls.iter().map(|c| json!({
+        "controlId": c.control_id, "category": c.category, "metric": c.metric,
+        "standing": c.standing.as_str(), "expected": c.expected, "reason": c.reason,
+    })).collect();
     Ok(json!({
-        "standing": qualification.standing.as_str(),
-        "subject": qualification.subject,
-        "alive": qualification.alive,
-        "refused": qualification.refused,
-        "unknown": qualification.unknown,
-        "controls": controls,
+        "standing": qualification.standing.as_str(), "subject": qualification.subject,
+        "alive": qualification.alive, "refused": qualification.refused,
+        "unknown": qualification.unknown, "controls": controls,
     }))
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn replay_admit_handler(
-    replay_class_id: String,
-    structural_signature: String,
-    ontology_version: String,
-    provider_semantics_version: String,
-    invariant_set_digest: String,
-    process_digest: String,
-    invariants_hold: bool,
-) -> Result<Value> {
+pub fn replay_admit_handler(replay_class_id: String, structural_signature: String, ontology_version: String, provider_semantics_version: String, invariant_set_digest: String, process_digest: String, invariants_hold: bool) -> Result<Value> {
     let manifest = ReplayManifest {
-        replay_class_id,
-        structural_signature: structural_signature.clone(),
-        ontology_version: ontology_version.clone(),
-        provider_semantics_version: provider_semantics_version.clone(),
-        invariant_set_digest: invariant_set_digest.clone(),
-        process_digest,
+        replay_class_id, structural_signature: structural_signature.clone(), ontology_version: ontology_version.clone(),
+        provider_semantics_version: provider_semantics_version.clone(), invariant_set_digest: invariant_set_digest.clone(), process_digest,
     };
     let subject = ReplaySubject { structural_signature, ontology_version, provider_semantics_version, invariant_set_digest, invariants_hold };
     let admission = admit_replay(&manifest, &subject);
-    Ok(json!({
-        "standing": admission.standing.as_str(),
-        "replayClassId": admission.replay_class_id,
-        "reasons": admission.reasons,
-    }))
+    Ok(json!({ "standing": admission.standing.as_str(), "replayClassId": admission.replay_class_id, "reasons": admission.reasons }))
 }
 
 pub fn impact_coverage_handler(classes_path: String, target_coverage_bps: Option<i64>) -> Result<Value> {
     let raw = read_json_file(&classes_path)?;
     let rows = raw.as_array().ok_or_else(|| exec_err("classes file must contain a JSON array"))?;
-    let classes: Vec<AdversarialImpactClass> = rows
-        .iter()
-        .map(|row| {
-            let key = row.get("key").and_then(Value::as_str).ok_or_else(|| exec_err("class row missing string field 'key'"))?.to_string();
-            let impact = row.get("impact").and_then(Value::as_f64).ok_or_else(|| exec_err("class row missing numeric field 'impact'"))?;
-            Ok(AdversarialImpactClass { key, impact })
-        })
-        .collect::<Result<_>>()?;
-
+    let classes: Vec<AdversarialImpactClass> = rows.iter().map(|row| {
+        let key = row.get("key").and_then(Value::as_str).ok_or_else(|| exec_err("class row missing string field 'key'"))?.to_string();
+        let impact = row.get("impact").and_then(Value::as_f64).ok_or_else(|| exec_err("class row missing numeric field 'impact'"))?;
+        Ok(AdversarialImpactClass { key, impact })
+    }).collect::<Result<_>>()?;
     let selection = minimum_impact_coverage(&classes, target_coverage_bps.unwrap_or(8000)).map_err(exec_err)?;
     Ok(json!({
         "selected": selection.selected.iter().map(|c| json!({"key": c.key, "impact": c.impact})).collect::<Vec<_>>(),
-        "coverageBps": selection.coverage_bps,
-        "totalImpact": selection.total_impact,
-        "selectedImpact": selection.selected_impact,
+        "coverageBps": selection.coverage_bps, "totalImpact": selection.total_impact, "selectedImpact": selection.selected_impact,
     }))
 }
 
 pub fn inventory_components_handler() -> Result<Value> {
-    let components: Vec<Value> = castle::generated_components()
-        .map(|c| json!({ "order": c.order, "identifier": c.identifier, "slug": c.slug, "role": c.role, "authority": c.authority }))
-        .collect();
+    let components: Vec<Value> = castle::generated_components().map(|c| json!({
+        "order": c.order, "identifier": c.identifier, "slug": c.slug, "role": c.role, "authority": c.authority,
+    })).collect();
     Ok(json!({ "count": components.len(), "components": components }))
 }
 
 pub fn inventory_goals_handler() -> Result<Value> {
-    let goals: Vec<Value> = castle::default_adversarial_goals()
-        .iter()
-        .map(|g| json!({ "id": g.id, "predicate": g.predicate, "consequence": g.consequence }))
-        .collect();
+    let goals: Vec<Value> = castle::default_adversarial_goals().iter().map(|g| json!({
+        "id": g.id, "predicate": g.predicate, "consequence": g.consequence,
+    })).collect();
     Ok(json!({ "count": goals.len(), "goals": goals }))
 }
 
 pub fn deployment_qualify_handler(manifest_path: String, now_epoch_ms: i64) -> Result<Value> {
-    let raw = read_json_file(&manifest_path)?;
-    let manifest: DeploymentManifest = serde_json::from_value(raw)
+    let manifest: DeploymentManifest = serde_json::from_value(read_json_file(&manifest_path)?)
         .map_err(|e| exec_err(format!("invalid v26.8.18 deployment manifest: {e}")))?;
-    serde_json::to_value(qualify_deployment(&manifest, now_epoch_ms))
-        .map_err(|e| exec_err(format!("failed to serialize qualification: {e}")))
+    serde_json::to_value(qualify_deployment(&manifest, now_epoch_ms)).map_err(|e| exec_err(format!("failed to serialize qualification: {e}")))
 }
 
 pub fn deployment_adapters_handler() -> Result<Value> {
@@ -196,28 +156,57 @@ pub fn deployment_adapters_handler() -> Result<Value> {
 
 pub fn release_info_handler() -> Result<Value> {
     Ok(json!({
-        "name": "CASTLE",
-        "release": RELEASE_VERSION,
-        "kind": RELEASE_KIND,
+        "name": "CASTLE", "release": RELEASE_VERSION, "kind": RELEASE_KIND,
         "standingModel": ["UNKNOWN", "PARTIAL_ALIVE", "ALIVE", "BLOCKED", "BUILD_BROKEN", "UNSUPPORTED", "REFUSED"],
         "invariants": [
-            "CONSTRUCT != DO",
-            "DO => admitted CONSTRUCT",
-            "DO => BRCE prepare receipt before provider actuation",
-            "provider adapters have no ambient credential authority",
-            "replay loses standing on semantic or invariant drift",
+            "CONSTRUCT != DO", "DO => admitted CONSTRUCT", "DO => BRCE prepare receipt before provider actuation",
+            "provider adapters have no ambient credential authority", "replay loses standing on semantic or invariant drift",
             "regional failure domain approximates authority domain"
         ]
     }))
 }
 
 pub fn protocol_mcp_handler() -> Result<Value> {
-    serde_json::to_value(mcp_tool_catalog())
-        .map(|tools| json!({ "release": RELEASE_VERSION, "tools": tools }))
+    serde_json::to_value(mcp_tool_catalog()).map(|tools| json!({ "release": RELEASE_VERSION, "tools": tools }))
         .map_err(|e| exec_err(format!("failed to serialize MCP catalog: {e}")))
 }
 
 pub fn protocol_a2a_handler() -> Result<Value> {
-    serde_json::to_value(a2a_agent_card())
-        .map_err(|e| exec_err(format!("failed to serialize A2A agent card: {e}")))
+    serde_json::to_value(a2a_agent_card()).map_err(|e| exec_err(format!("failed to serialize A2A agent card: {e}")))
+}
+
+pub fn construct_manufacture_handler(request_path: String, signing_key_path: String, key_id: String) -> Result<Value> {
+    let request = read_runtime_request(&request_path)?;
+    let seed = read_signing_seed(&signing_key_path)?;
+    let summary = manufacture_runtime_construct(&request, key_id, seed).map_err(exec_err)?;
+    serde_json::to_value(summary).map_err(|e| exec_err(format!("failed to serialize construct summary: {e}")))
+}
+
+pub fn do_execute_handler(request_path: String, signing_key_path: String, key_id: String, expected_construct_digest: String, now_epoch_ms: i64) -> Result<Value> {
+    let request = read_runtime_request(&request_path)?;
+    let seed = read_signing_seed(&signing_key_path)?;
+    let runtime = tokio::runtime::Builder::new_current_thread().build()
+        .map_err(|e| exec_err(format!("failed to build bounded DO runtime: {e}")))?;
+    let summary = runtime.block_on(execute_runtime_request(&request, key_id, seed, &expected_construct_digest, now_epoch_ms)).map_err(exec_err)?;
+    serde_json::to_value(summary).map_err(|e| exec_err(format!("failed to serialize DO summary: {e}")))
+}
+
+pub fn crypto_capabilities_handler() -> Result<Value> {
+    let profile = CryptoProfile {
+        required_identity_hashes: BTreeSet::from(["blake3-256".to_string(), "sha256".to_string()]),
+        accepted_signature_suites: BTreeSet::from([SignatureSuite::Ed25519]),
+        require_post_quantum: false,
+    };
+    let qualification = qualify_crypto_profile(&profile);
+    Ok(json!({
+        "release": RELEASE_VERSION,
+        "identity": dual_artifact_identity(format!("CASTLE:{RELEASE_VERSION}").as_bytes()),
+        "qualification": qualification,
+    }))
+}
+
+pub fn chaos_qualify_handler(evidence_path: String) -> Result<Value> {
+    let evidence: Vec<ChaosEvidence> = serde_json::from_value(read_json_file(&evidence_path)?)
+        .map_err(|e| exec_err(format!("invalid chaos evidence: {e}")))?;
+    serde_json::to_value(qualify_chaos(&evidence)).map_err(|e| exec_err(format!("failed to serialize chaos qualification: {e}")))
 }
