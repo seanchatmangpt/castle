@@ -1,0 +1,38 @@
+{
+  "assets": [
+    {
+      "name": "SHA256SUMS",
+      "size": 112,
+      "url": "https://github.com/seanchatmangpt/castle/releases/download/v26.8.18/SHA256SUMS"
+    },
+    {
+      "name": "castle-v26.8.18-x86_64-unknown-linux-gnu",
+      "size": 4011600,
+      "url": "https://github.com/seanchatmangpt/castle/releases/download/v26.8.18/castle-v26.8.18-x86_64-unknown-linux-gnu"
+    }
+  ],
+  "binary": "castle-v26.8.18-x86_64-unknown-linux-gnu",
+  "binary_sha256": "76ff1e44a6f0d5d8c9c167ff0153c1acf9a03053875c1e3a8aa2629a97e5a62a",
+  "checksum_manifest_repaired": true,
+  "evidence": [
+    "gh release view",
+    "gh release download binary",
+    "gh release download SHA256SUMS",
+    "legacy checksum hash equality before any filename repair",
+    "sha256sum -c SHA256SUMS",
+    "git rev-list exact tag",
+    "git rev-parse exact tag tree"
+  ],
+  "kind": "CASTLE_GITHUB_RELEASE_RECEIPT_V1",
+  "release_is_draft": false,
+  "release_is_prerelease": false,
+  "release_url": "https://github.com/seanchatmangpt/castle/releases/tag/v26.8.18",
+  "sha256sums": "76ff1e44a6f0d5d8c9c167ff0153c1acf9a03053875c1e3a8aa2629a97e5a62a  castle-v26.8.18-x86_64-unknown-linux-gnu",
+  "standing": "ALIVE",
+  "tag": "v26.8.18",
+  "tag_commit": "3c3b03c7401e85e7a25f1b7b4cf7bae90c815aa5",
+  "tag_tree": "8f4202a2a3a8aa632ab8aa2b60b7cba6b36cfe10",
+  "target_commitish": "main",
+  "workflow_run_attempt": "1",
+  "workflow_run_id": "32194598790"
+}
