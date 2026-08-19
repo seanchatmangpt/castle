@@ -1,8 +1,8 @@
 [package]
 name = "castle"
-version = "26.8.18"
+version = "26.8.18+dfcm.1"
 edition = "2021"
-rust-version = "1.82"
+rust-version = "1.85"
 description = "Continuously self-adversarial cloud system generated from ggen-marketplace semantic authority"
 license = "AGPL-3.0"
 authors = ["Sean Chatman"]
@@ -22,6 +22,8 @@ sha2 = "0.10"
 async-trait = "0.1"
 blake3 = "1.5"
 ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+ml-dsa = "0.1.1"
+slh-dsa = "0.2.0-rc.5"
 rand = "0.8"
 tracing = "0.1"
 clap-noun-verb = "=26.7.4"
