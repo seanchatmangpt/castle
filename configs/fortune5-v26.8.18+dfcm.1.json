@@ -1,0 +1,175 @@
+{
+  "kind": "CASTLE_FORTUNE5_GLOBAL_V1",
+  "release": "26.8.18+dfcm.1",
+  "constitution": {
+    "constitution_id": "constitution:fortune5:global:v26.8.18+dfcm.1",
+    "ontology_version": "castle-pack-v26.8.18+dfcm.1",
+    "invariant_set_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "trust_root_ids": ["castle-global-root-v26.8.18+dfcm.1"],
+    "provider_semantics": {
+      "aws": "2026-08-18",
+      "azure": "2026-08-18",
+      "gcp": "2026-08-18",
+      "kubernetes": "1.35",
+      "github": "2026-08-18"
+    },
+    "issued_at_epoch_ms": 1787072400000,
+    "expires_at_epoch_ms": 1818608400000
+  },
+  "cells": [
+    {
+      "cell_id": "aws-us-east-1-payments",
+      "region": "us-east-1",
+      "provider": "aws",
+      "authority_domain": "payments-prod-us",
+      "residency": "US",
+      "subject_prefixes": ["aws:payments:prod:"],
+      "local_receipt_store": "receipt://aws-us-east-1-payments",
+      "local_ocel_store": "ocel://aws-us-east-1-payments",
+      "max_parallel_do": 64,
+      "adapters": [
+        {
+          "adapter_id": "aws-payments",
+          "kind": "aws",
+          "provider_semantics_key": "aws",
+          "provider_semantics_version": "2026-08-18",
+          "allowed_transition_ids": ["aws:iam:quarantine-role", "aws:eks:isolate-workload"],
+          "workload_identity": "aws:iam-role/castle-payments",
+          "ambient_credentials": false
+        },
+        {
+          "adapter_id": "eks-payments",
+          "kind": "kubernetes",
+          "provider_semantics_key": "kubernetes",
+          "provider_semantics_version": "1.35",
+          "allowed_transition_ids": ["k8s:networkpolicy:quarantine", "k8s:deployment:rollback"],
+          "workload_identity": "k8s:sa/castle-payments",
+          "ambient_credentials": false
+        },
+        {
+          "adapter_id": "github-payments",
+          "kind": "github",
+          "provider_semantics_key": "github",
+          "provider_semantics_version": "2026-08-18",
+          "allowed_transition_ids": ["github:deployment:block", "github:artifact:quarantine"],
+          "workload_identity": "github-app:castle",
+          "ambient_credentials": false
+        }
+      ]
+    },
+    {
+      "cell_id": "aws-eu-west-1-commerce",
+      "region": "eu-west-1",
+      "provider": "aws",
+      "authority_domain": "commerce-prod-eu",
+      "residency": "EU",
+      "subject_prefixes": ["aws:commerce:prod:"],
+      "local_receipt_store": "receipt://aws-eu-west-1-commerce",
+      "local_ocel_store": "ocel://aws-eu-west-1-commerce",
+      "max_parallel_do": 48,
+      "adapters": [
+        {
+          "adapter_id": "aws-commerce-eu",
+          "kind": "aws",
+          "provider_semantics_key": "aws",
+          "provider_semantics_version": "2026-08-18",
+          "allowed_transition_ids": ["aws:iam:quarantine-role", "aws:ec2:isolate"],
+          "workload_identity": "aws:iam-role/castle-commerce-eu",
+          "ambient_credentials": false
+        }
+      ]
+    },
+    {
+      "cell_id": "azure-westeurope-identity",
+      "region": "westeurope",
+      "provider": "azure",
+      "authority_domain": "identity-prod-eu",
+      "residency": "EU",
+      "subject_prefixes": ["azure:identity:prod:"],
+      "local_receipt_store": "receipt://azure-westeurope-identity",
+      "local_ocel_store": "ocel://azure-westeurope-identity",
+      "max_parallel_do": 48,
+      "adapters": [
+        {
+          "adapter_id": "azure-identity",
+          "kind": "azure",
+          "provider_semantics_key": "azure",
+          "provider_semantics_version": "2026-08-18",
+          "allowed_transition_ids": ["azure:entra:disable-principal", "azure:arm:deny-change"],
+          "workload_identity": "azure:managed-identity/castle-identity",
+          "ambient_credentials": false
+        },
+        {
+          "adapter_id": "aks-identity",
+          "kind": "kubernetes",
+          "provider_semantics_key": "kubernetes",
+          "provider_semantics_version": "1.35",
+          "allowed_transition_ids": ["k8s:networkpolicy:quarantine"],
+          "workload_identity": "k8s:sa/castle-identity",
+          "ambient_credentials": false
+        }
+      ]
+    },
+    {
+      "cell_id": "gcp-asia-northeast1-analytics",
+      "region": "asia-northeast1",
+      "provider": "gcp",
+      "authority_domain": "analytics-prod-jp",
+      "residency": "JP",
+      "subject_prefixes": ["gcp:analytics:prod:"],
+      "local_receipt_store": "receipt://gcp-asia-northeast1-analytics",
+      "local_ocel_store": "ocel://gcp-asia-northeast1-analytics",
+      "max_parallel_do": 48,
+      "adapters": [
+        {
+          "adapter_id": "gcp-analytics",
+          "kind": "gcp",
+          "provider_semantics_key": "gcp",
+          "provider_semantics_version": "2026-08-18",
+          "allowed_transition_ids": ["gcp:iam:disable-binding", "gcp:gke:isolate-workload"],
+          "workload_identity": "gcp:workload-identity/castle-analytics",
+          "ambient_credentials": false
+        },
+        {
+          "adapter_id": "gke-analytics",
+          "kind": "kubernetes",
+          "provider_semantics_key": "kubernetes",
+          "provider_semantics_version": "1.35",
+          "allowed_transition_ids": ["k8s:networkpolicy:quarantine"],
+          "workload_identity": "k8s:sa/castle-analytics",
+          "ambient_credentials": false
+        }
+      ]
+    },
+    {
+      "cell_id": "private-us-manufacturing",
+      "region": "us-west-dc1",
+      "provider": "private_cloud",
+      "authority_domain": "manufacturing-private-us",
+      "residency": "US",
+      "subject_prefixes": ["private:manufacturing:"],
+      "local_receipt_store": "receipt://private-us-manufacturing",
+      "local_ocel_store": "ocel://private-us-manufacturing",
+      "max_parallel_do": 16,
+      "adapters": [
+        {
+          "adapter_id": "private-k8s",
+          "kind": "kubernetes",
+          "provider_semantics_key": "kubernetes",
+          "provider_semantics_version": "1.35",
+          "allowed_transition_ids": ["k8s:networkpolicy:quarantine", "k8s:deployment:rollback"],
+          "workload_identity": "k8s:sa/castle-manufacturing",
+          "ambient_credentials": false
+        }
+      ]
+    }
+  ],
+  "protocol_surfaces": [
+    {"surface": "cli", "endpoint": "castle://cli", "modes": ["select", "construct", "do"]},
+    {"surface": "api", "endpoint": "https://castle.internal/v26.8.18+dfcm.1", "modes": ["select", "construct", "do"]},
+    {"surface": "mcp", "endpoint": "mcp://castle", "modes": ["select", "construct", "do"]},
+    {"surface": "a2a", "endpoint": "a2a://castle", "modes": ["select", "construct", "do"]}
+  ],
+  "required_providers": ["aws", "azure", "gcp", "private_cloud"],
+  "required_adapter_kinds": ["aws", "azure", "gcp", "kubernetes", "github"]
+}
