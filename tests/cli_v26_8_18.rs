@@ -17,17 +17,17 @@ fn run(args: &[&str]) -> (bool, serde_json::Value, String) {
 }
 
 #[test]
-fn release_info_reports_v26_8_18_and_zero_unreceipted_do() {
+fn release_info_reports_dfcm_release_and_zero_unreceipted_do() {
     let (ok, value, stderr) = run(&["release", "info", "--format", "json"]);
     assert!(ok, "{stderr}");
-    assert_eq!(value["release"], "26.8.18");
+    assert_eq!(value["release"], "26.8.18+dfcm.1");
     let invariants = value["invariants"].as_array().unwrap();
     assert!(invariants.iter().any(|v| v == "CONSTRUCT != DO"));
 }
 
 #[test]
 fn checked_in_global_manifest_qualifies_alive() {
-    let path = format!("{}/configs/fortune5-v26.8.18.json", env!("CARGO_MANIFEST_DIR"));
+    let path = format!("{}/configs/fortune5-v26.8.18+dfcm.1.json", env!("CARGO_MANIFEST_DIR"));
     let (ok, value, stderr) = run(&[
         "deployment", "qualify", "--manifest-path", &path, "--now-epoch-ms", "1787080000000", "--format", "json",
     ]);
@@ -41,7 +41,7 @@ fn checked_in_global_manifest_qualifies_alive() {
 fn provider_adapter_catalog_is_exposed() {
     let (ok, value, stderr) = run(&["deployment", "adapters", "--format", "json"]);
     assert!(ok, "{stderr}");
-    assert_eq!(value["release"], "26.8.18");
+    assert_eq!(value["release"], "26.8.18+dfcm.1");
     assert_eq!(value["adapters"].as_array().unwrap().len(), 5);
 }
 
@@ -55,4 +55,24 @@ fn protocol_catalogs_are_exposed_without_ambient_do() {
     let (a2a_ok, a2a, a2a_err) = run(&["protocol", "a2a", "--format", "json"]);
     assert!(a2a_ok, "{a2a_err}");
     assert_eq!(a2a["default_authority"], "CONSTRUCT_ONLY");
+}
+
+#[test]
+fn dfcm_runtime_verify_executes_real_pqc_and_protocol_fence() {
+    let (ok, value, stderr) = run(&["dfcm", "verify", "--format", "json"]);
+    assert!(ok, "{stderr}");
+    assert_eq!(value["standing"], "ALIVE");
+    assert_eq!(value["pqcRuntime"]["standing"], "ALIVE");
+    assert_eq!(value["protocolFence"]["standing"], "ALIVE");
+    assert_eq!(value["readOnlyProbe"]["standing"], "ALIVE");
+}
+
+#[test]
+fn crypto_capabilities_include_real_pqc_runtime() {
+    let (ok, value, stderr) = run(&["crypto", "capabilities", "--format", "json"]);
+    assert!(ok, "{stderr}");
+    assert_eq!(value["qualification"]["standing"], "ALIVE");
+    assert_eq!(value["pqcRuntime"]["standing"], "ALIVE");
+    assert_eq!(value["pqcRuntime"]["ml_dsa_65"], true);
+    assert_eq!(value["pqcRuntime"]["slh_dsa_shake_128f"], true);
 }
