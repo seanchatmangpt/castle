@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 
+use ml_dsa::Keypair;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
