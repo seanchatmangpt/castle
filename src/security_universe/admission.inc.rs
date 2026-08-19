@@ -140,6 +140,39 @@ pub fn qualify_fortune5_security_universe(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FederatedFortune5Qualification {
+    pub standing: SecurityStanding,
+    pub base_standing: crate::fortune5::Standing,
+    pub security: SecurityQualification,
+}
+
+/// Compose CASTLE's generated Fortune-5 readiness gate with the federated
+/// security-universe evidence gate. Neither side can crown the other.
+pub fn qualify_federated_fortune5(
+    base: &crate::fortune5::Fortune5Qualification,
+    evidence: &[CoverageEvidence<'_>],
+) -> Result<FederatedFortune5Qualification, String> {
+    let security = qualify_fortune5_security_universe(evidence)?;
+    let standing = match (base.standing, security.standing) {
+        (crate::fortune5::Standing::Refused, _) | (_, SecurityStanding::Refused) => {
+            SecurityStanding::Refused
+        }
+        (crate::fortune5::Standing::Unknown, _) | (_, SecurityStanding::Unknown) => {
+            SecurityStanding::Unknown
+        }
+        (crate::fortune5::Standing::Alive, SecurityStanding::PartialAlive) => {
+            SecurityStanding::PartialAlive
+        }
+        (crate::fortune5::Standing::Alive, SecurityStanding::Alive) => SecurityStanding::Alive,
+    };
+    Ok(FederatedFortune5Qualification {
+        standing,
+        base_standing: base.standing,
+        security,
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SecurityIntent<'a> {
     pub tool_id: &'a str,
     pub target_subject: &'a str,
