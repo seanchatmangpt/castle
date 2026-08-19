@@ -1,0 +1,42 @@
+{
+  "assets": [
+    {
+      "name": "SHA256SUMS",
+      "size": 114,
+      "url": "https://github.com/seanchatmangpt/castle/releases/download/v26.8.18%2Bdfcm.1/SHA256SUMS"
+    },
+    {
+      "name": "castle-v26.8.18+dfcm.1-x86_64-unknown-linux-gnu",
+      "size": 4725360,
+      "url": "https://github.com/seanchatmangpt/castle/releases/download/v26.8.18%2Bdfcm.1/castle-v26.8.18%2Bdfcm.1-x86_64-unknown-linux-gnu"
+    }
+  ],
+  "binary": "castle-v26.8.18+dfcm.1-x86_64-unknown-linux-gnu",
+  "binary_sha256": "6e39523d39794028b4544f931188ebbf4f3be599b1e9a7c0d5e6b93b518e5df2",
+  "checksum_manifest_repaired": false,
+  "dfcm_runtime_standing": "ALIVE",
+  "evidence": [
+    "cargo metadata --locked",
+    "cargo build --locked --workspace --all-targets",
+    "cargo test --locked --workspace",
+    "castle deployment qualify exact versioned manifest",
+    "castle dfcm verify real PQC + protocol fence + read-only subprocess",
+    "gh release view/download",
+    "sha256sum -c SHA256SUMS",
+    "git rev-list exact tag",
+    "git rev-parse exact tag tree"
+  ],
+  "kind": "CASTLE_GITHUB_RELEASE_RECEIPT_V2",
+  "manifest": "configs/fortune5-v26.8.18+dfcm.1.json",
+  "release_is_draft": false,
+  "release_is_prerelease": false,
+  "release_url": "https://github.com/seanchatmangpt/castle/releases/tag/v26.8.18%2Bdfcm.1",
+  "sha256sums": "6e39523d39794028b4544f931188ebbf4f3be599b1e9a7c0d5e6b93b518e5df2  castle-v26.8.18+dfcm.1-x86_64-unknown-linux-gnu",
+  "standing": "ALIVE",
+  "tag": "v26.8.18+dfcm.1",
+  "tag_commit": "db4c057e1a8e904148a64a974d16111cc3616980",
+  "tag_tree": "4562c2784b7a6734bcb9968a6213237e24f6c434",
+  "target_commitish": "main",
+  "workflow_run_attempt": "1",
+  "workflow_run_id": "32212981049"
+}
