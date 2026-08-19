@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use super::{ReleaseStanding, RELEASE_VERSION};
 
@@ -67,31 +67,82 @@ pub struct InterfaceAdmission {
 }
 
 /// CLI/API/MCP/A2A/human/planner/replay transports normalize here. SELECT and
-/// CONSTRUCT are inert. A DO-shaped request receives no standing merely from
-/// transport authentication: it must name both the admitted CONSTRUCT and the
-/// BRCE prepare receipt. Actual provider execution still requires the opaque
-/// in-process ConstructAdmission and cannot be reconstructed from these hashes.
+/// CONSTRUCT are inert and can become ALIVE at transport admission. A DO-shaped
+/// request receives no execution standing merely from transport authentication:
+/// even with both named receipt identities it remains PARTIAL_ALIVE until the
+/// in-process opaque ConstructAdmission is re-manufactured and BRCE executes.
 #[must_use]
 pub fn admit_interface_intent(intent: &InterfaceIntent) -> InterfaceAdmission {
     let digest = digest_serializable(intent).unwrap_or_else(|_| "0".repeat(64));
     let reason = if intent.request_id.is_empty() || intent.subject.is_empty() || intent.operation.is_empty() {
-        Some("REFUSED:INCOMPLETE_INTENT")
+        "REFUSED:INCOMPLETE_INTENT"
     } else if intent.mode == IntentMode::Do
         && intent.construct_admission_digest.as_deref().map_or(true, |d| d.len() != 64)
     {
-        Some("REFUSED:DO_WITHOUT_CONSTRUCT_ADMISSION")
+        "REFUSED:DO_WITHOUT_CONSTRUCT_ADMISSION"
     } else if intent.mode == IntentMode::Do
         && intent.prepare_receipt_digest.as_deref().map_or(true, |d| d.len() != 64)
     {
-        Some("REFUSED:DO_WITHOUT_PREPARE_RECEIPT")
+        "REFUSED:DO_WITHOUT_PREPARE_RECEIPT"
+    } else if intent.mode == IntentMode::Do {
+        "PARTIAL_ALIVE:DO_INTENT_REQUIRES_IN_PROCESS_ADMISSION"
     } else {
-        None
+        "ALIVE:INTENT_ADMITTED"
+    };
+    let standing = if reason.starts_with("REFUSED:") {
+        ReleaseStanding::Refused
+    } else if reason.starts_with("PARTIAL_ALIVE:") {
+        ReleaseStanding::PartialAlive
+    } else {
+        ReleaseStanding::Alive
     };
     InterfaceAdmission {
-        standing: if reason.is_some() { ReleaseStanding::Refused } else { ReleaseStanding::Alive },
+        standing,
         request_id: intent.request_id.clone(),
-        reason: reason.unwrap_or("ALIVE:INTENT_ADMITTED").to_string(),
+        reason: reason.to_string(),
         normalized_intent_digest: digest,
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProtocolDispatch {
+    pub standing: ReleaseStanding,
+    pub reason: String,
+    pub request_id: String,
+    pub normalized_intent_digest: String,
+    pub result: Value,
+}
+
+/// Execute only the transport-neutral, non-consequential dispatch layer.
+/// This function never calls a provider adapter. A DO request can at most be
+/// routed to the in-process admission boundary and therefore remains PARTIAL_ALIVE.
+#[must_use]
+pub fn dispatch_interface_intent(intent: &InterfaceIntent) -> ProtocolDispatch {
+    let admission = admit_interface_intent(intent);
+    let result = match admission.standing {
+        ReleaseStanding::Refused => json!({"dispatched": false}),
+        ReleaseStanding::PartialAlive => json!({
+            "dispatched": true,
+            "next_boundary": "execute_runtime_request",
+            "authority": "NONE_FROM_TRANSPORT",
+        }),
+        _ => json!({
+            "dispatched": true,
+            "mode": match intent.mode {
+                IntentMode::Select => "select",
+                IntentMode::Construct => "construct",
+                IntentMode::Do => "do",
+            },
+            "authority": "CONSTRUCT_ONLY",
+            "payload": intent.payload,
+        }),
+    };
+    ProtocolDispatch {
+        standing: admission.standing,
+        reason: admission.reason,
+        request_id: admission.request_id,
+        normalized_intent_digest: admission.normalized_intent_digest,
+        result,
     }
 }
 
