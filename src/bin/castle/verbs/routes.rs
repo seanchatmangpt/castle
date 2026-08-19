@@ -1,5 +1,5 @@
 //! `castle` CLI routes — thin `#[verb]` wrappers with no business logic of
-//! their own; every route delegates to `super::handlers::*`.
+//! their own; every route delegates to a handler module.
 
 use clap_noun_verb::Result;
 use clap_noun_verb_macros::verb;
@@ -32,6 +32,11 @@ fn deployment_qualify(manifest_path: String, now_epoch_ms: i64) -> Result<serde_
 #[verb("adapters", "deployment")]
 fn deployment_adapters() -> Result<serde_json::Value> { super::handlers::deployment_adapters_handler() }
 
+#[verb("bind-policy", "deployment")]
+fn deployment_bind_policy(binding_path: String, policy_path: String) -> Result<serde_json::Value> {
+    super::dfcm_handlers::deployment_bind_policy_handler(binding_path, policy_path)
+}
+
 #[verb("info", "release")]
 fn release_info() -> Result<serde_json::Value> { super::handlers::release_info_handler() }
 
@@ -40,6 +45,11 @@ fn protocol_mcp() -> Result<serde_json::Value> { super::handlers::protocol_mcp_h
 
 #[verb("a2a", "protocol")]
 fn protocol_a2a() -> Result<serde_json::Value> { super::handlers::protocol_a2a_handler() }
+
+#[verb("dispatch", "protocol")]
+fn protocol_dispatch(intent_path: String) -> Result<serde_json::Value> {
+    super::dfcm_handlers::protocol_dispatch_handler(intent_path)
+}
 
 /// Manufacture an inert, deterministic CONSTRUCT checkpoint from a runtime request.
 #[verb("manufacture", "construct")]
@@ -54,10 +64,38 @@ fn do_execute(request_path: String, signing_key_path: String, key_id: String, ex
 }
 
 #[verb("capabilities", "crypto")]
-fn crypto_capabilities() -> Result<serde_json::Value> { super::handlers::crypto_capabilities_handler() }
+fn crypto_capabilities() -> Result<serde_json::Value> { super::dfcm_handlers::crypto_capabilities_handler() }
 
 #[verb("qualify", "chaos")]
 fn chaos_qualify(evidence_path: String) -> Result<serde_json::Value> { super::handlers::chaos_qualify_handler(evidence_path) }
+
+#[verb("plan", "live-check")]
+fn live_check_plan(manifest_path: String) -> Result<serde_json::Value> {
+    super::dfcm_handlers::live_check_plan_handler(manifest_path)
+}
+
+#[verb("run", "live-check")]
+fn live_check_run(spec_path: String, observed_at_epoch_ms: i64) -> Result<serde_json::Value> {
+    super::dfcm_handlers::live_check_run_handler(spec_path, observed_at_epoch_ms)
+}
+
+#[verb("qualify", "live-check")]
+fn live_check_qualify(manifest_path: String, evidence_path: String, now_epoch_ms: i64, max_evidence_age_ms: i64) -> Result<serde_json::Value> {
+    super::dfcm_handlers::live_check_qualify_handler(manifest_path, evidence_path, now_epoch_ms, max_evidence_age_ms)
+}
+
+#[verb("admit", "replication")]
+fn replication_admit(state_path: String, checkpoint_path: String, receiver_id: String) -> Result<serde_json::Value> {
+    super::dfcm_handlers::replication_admit_handler(state_path, checkpoint_path, receiver_id)
+}
+
+#[verb("verify", "dfcm")]
+fn dfcm_verify() -> Result<serde_json::Value> { super::dfcm_handlers::dfcm_verify_handler() }
+
+#[verb("qualify", "dfcm")]
+fn dfcm_qualify(manifest_path: String, evidence_path: String, now_epoch_ms: i64, max_evidence_age_ms: i64) -> Result<serde_json::Value> {
+    super::dfcm_handlers::dfcm_qualify_handler(manifest_path, evidence_path, now_epoch_ms, max_evidence_age_ms)
+}
 
 #[linkme::distributed_slice(::clap_noun_verb::cli::registry::__NOUN_REGISTRY)]
 static REGISTER_FORTUNE5_NOUN: fn() = register_fortune5_noun;
@@ -77,7 +115,7 @@ fn register_inventory_noun() { ::clap_noun_verb::cli::registry::CommandRegistry:
 
 #[linkme::distributed_slice(::clap_noun_verb::cli::registry::__NOUN_REGISTRY)]
 static REGISTER_DEPLOYMENT_NOUN: fn() = register_deployment_noun;
-fn register_deployment_noun() { ::clap_noun_verb::cli::registry::CommandRegistry::register_noun("deployment", "Qualify the cellular Fortune-5 global deployment and inspect provider adapters."); }
+fn register_deployment_noun() { ::clap_noun_verb::cli::registry::CommandRegistry::register_noun("deployment", "Qualify cellular deployment topology and bind provider policies."); }
 
 #[linkme::distributed_slice(::clap_noun_verb::cli::registry::__NOUN_REGISTRY)]
 static REGISTER_RELEASE_NOUN: fn() = register_release_noun;
@@ -85,7 +123,7 @@ fn register_release_noun() { ::clap_noun_verb::cli::registry::CommandRegistry::r
 
 #[linkme::distributed_slice(::clap_noun_verb::cli::registry::__NOUN_REGISTRY)]
 static REGISTER_PROTOCOL_NOUN: fn() = register_protocol_noun;
-fn register_protocol_noun() { ::clap_noun_verb::cli::registry::CommandRegistry::register_noun("protocol", "Inspect MCP and A2A semantic surfaces without granting ambient DO authority."); }
+fn register_protocol_noun() { ::clap_noun_verb::cli::registry::CommandRegistry::register_noun("protocol", "Inspect and dispatch transport-neutral MCP/A2A/API/CLI intents without ambient DO authority."); }
 
 #[linkme::distributed_slice(::clap_noun_verb::cli::registry::__NOUN_REGISTRY)]
 static REGISTER_CONSTRUCT_NOUN: fn() = register_construct_noun;
@@ -97,8 +135,20 @@ fn register_do_noun() { ::clap_noun_verb::cli::registry::CommandRegistry::regist
 
 #[linkme::distributed_slice(::clap_noun_verb::cli::registry::__NOUN_REGISTRY)]
 static REGISTER_CRYPTO_NOUN: fn() = register_crypto_noun;
-fn register_crypto_noun() { ::clap_noun_verb::cli::registry::CommandRegistry::register_noun("crypto", "Inspect cryptographic identity and signature-suite standing."); }
+fn register_crypto_noun() { ::clap_noun_verb::cli::registry::CommandRegistry::register_noun("crypto", "Inspect cryptographic identity, classical/PQC suite standing, and real PQC runtime proof."); }
 
 #[linkme::distributed_slice(::clap_noun_verb::cli::registry::__NOUN_REGISTRY)]
 static REGISTER_CHAOS_NOUN: fn() = register_chaos_noun;
 fn register_chaos_noun() { ::clap_noun_verb::cli::registry::CommandRegistry::register_noun("chaos", "Qualify receipted failure-domain evidence."); }
+
+#[linkme::distributed_slice(::clap_noun_verb::cli::registry::__NOUN_REGISTRY)]
+static REGISTER_LIVE_CHECK_NOUN: fn() = register_live_check_noun;
+fn register_live_check_noun() { ::clap_noun_verb::cli::registry::CommandRegistry::register_noun("live-check", "Manufacture, execute, and qualify typed read-only live-provider observations."); }
+
+#[linkme::distributed_slice(::clap_noun_verb::cli::registry::__NOUN_REGISTRY)]
+static REGISTER_REPLICATION_NOUN: fn() = register_replication_noun;
+fn register_replication_noun() { ::clap_noun_verb::cli::registry::CommandRegistry::register_noun("replication", "Persist monotonic receipt checkpoints and refuse rollback/equivocation across restart."); }
+
+#[linkme::distributed_slice(::clap_noun_verb::cli::registry::__NOUN_REGISTRY)]
+static REGISTER_DFCM_NOUN: fn() = register_dfcm_noun;
+fn register_dfcm_noun() { ::clap_noun_verb::cli::registry::CommandRegistry::register_noun("dfcm", "Execute runtime self-proof or qualify the complete static+live DfCM closure."); }

@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 
 use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use crate::castle::{
     admit_construct_for_do, manufacture_construct_capability, Blake3Provider, ConstructCapability,
@@ -162,6 +162,16 @@ struct ManufacturedRuntimeConstruct {
     verifier: Ed25519RuntimeVerifier,
 }
 
+fn bound_runtime_config(request: &RuntimeExecutionRequest) -> Value {
+    json!({
+        "kind": "CASTLE_BOUND_RUNTIME_CONFIG_V1",
+        "cell_id": request.cell_id,
+        "evidence_store": request.evidence_dir,
+        "caller_config_graph": request.config_graph,
+        "adapter_policy": request.adapter_policy,
+    })
+}
+
 fn manufacture_internal(request: &RuntimeExecutionRequest, key_id: String, seed: [u8; 32]) -> Result<ManufacturedRuntimeConstruct, String> {
     if request.cell_id.is_empty() || request.evidence_dir.is_empty() {
         return Err("REFUSED:RUNTIME_CELL_OR_EVIDENCE_STORE_MISSING".to_string());
@@ -182,7 +192,7 @@ fn manufacture_internal(request: &RuntimeExecutionRequest, key_id: String, seed:
             subject: request.subject.clone(),
             authority: request.authority.clone(),
             o_star: request.o_star.clone(),
-            config_graph: request.config_graph.clone(),
+            config_graph: bound_runtime_config(request),
             ontology: request.ontology.clone(),
             process: process.clone(),
             envelope: envelope.clone(),
