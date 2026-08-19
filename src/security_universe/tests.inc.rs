@@ -143,6 +143,34 @@ mod tests {
     }
 
     #[test]
+    fn federated_crown_requires_base_and_security_universe() {
+        let context = crate::fortune5::QualificationContext {
+            subject: "subject-1".to_string(),
+            now_epoch_ms: None,
+            max_evidence_age_ms: None,
+        };
+        let base = crate::fortune5::qualify_fortune5(&[], &context, &[]);
+        assert_eq!(base.standing, crate::fortune5::Standing::Alive);
+
+        let partial = qualify_federated_fortune5(&base, &[]).unwrap();
+        assert_eq!(partial.standing, SecurityStanding::Unknown);
+
+        let evidence: Vec<_> = FORTUNE5_SECURITY_CORE
+            .iter()
+            .map(|id| CoverageEvidence {
+                source_id: id,
+                source_digest: D,
+                imported_objects: 1,
+                mapped_objects: 1,
+                verified_objects: 1,
+                receipt_digest: Some(D),
+            })
+            .collect();
+        let alive = qualify_federated_fortune5(&base, &evidence).unwrap();
+        assert_eq!(alive.standing, SecurityStanding::Alive);
+    }
+
+    #[test]
     fn future_or_proprietary_tools_can_contribute_receipted_evidence_without_do() {
         let admitted = admit_external_tool_evidence(ExternalToolEvidence {
             tool_id: "future-sec-platform",
