@@ -589,3 +589,110 @@ async fn process_gym_act_adapter_refuses_transitions_outside_its_fixed_allowlist
     let result = gymact.execute(&activity, &state, &permit).await;
     assert_eq!(result.status, GymActStatus::Refused, "a transition_id absent from the fixed verification allowlist must be refused without ever invoking gymact");
 }
+
+// ---------------------------------------------------------------------------
+// `ContainerGymActAdapter`: the crate's third non-test-double `GymActAdapter`,
+// and the first backed directly by a local container runtime (`docker`,
+// colima-backed on this host) rather than Kubernetes. Chicago style: the
+// real `docker` binary talking to the real local daemon is used directly,
+// never mocked. A host without a reachable docker daemon degrades to a
+// named, visible skip rather than a silent mock substitution.
+// ---------------------------------------------------------------------------
+
+fn docker_bin_path() -> String {
+    std::env::var("DOCKER_BIN").unwrap_or_else(|_| "docker".to_string())
+}
+
+fn docker_daemon_is_available() -> bool {
+    std::process::Command::new(docker_bin_path()).args(["info"]).output().map(|out| out.status.success()).unwrap_or(false)
+}
+
+#[tokio::test]
+async fn container_gym_act_adapter_runs_a_real_powl_sequence_against_the_local_docker_daemon_and_yields_a_receipted_ocel_log() {
+    if !docker_daemon_is_available() {
+        eprintln!("SKIPPED: no reachable local docker daemon on this host");
+        return;
+    }
+
+    let fx = fixture();
+    let process = PowlProcess {
+        id: "process:observe-alpine-container".to_string(),
+        goal_id: "goal:observe-alpine-container".to_string(),
+        activities: vec![PowlActivity { id: "activity:observe-alpine-container".to_string(), transition_id: "observe-alpine-container".to_string(), predecessors: vec![] }],
+    };
+    let envelope = TestEnvelope {
+        system_id: "system:local-docker".to_string(),
+        allowed_transition_ids: BTreeSet::from(["observe-alpine-container".to_string()]),
+        max_steps: 1,
+        expires_at_epoch_ms: 60_000,
+    };
+    let state = WorldState { system_id: "system:local-docker".to_string(), facts: BTreeSet::new() };
+    let (_capability, admission) = construct_for(&fx, process.clone(), envelope.clone());
+    let mut gymact = ContainerGymActAdapter::local_docker_default(docker_bin_path());
+    // Match the fixture's injected test-time convention (`now: Box::new(|| 5)`
+    // below) rather than the real wall clock, so the permit's
+    // `expires_at_epoch_ms: 60_000` test-time budget isn't immediately
+    // exceeded by `SystemTime::now()`'s real epoch-ms value.
+    gymact.now_ms = || 5;
+
+    let outcome = execute_powl_with_gym_act(
+        &process,
+        &state,
+        &envelope,
+        &gymact,
+        DoAuthorizationContext { admission: &admission, blake3: &fx.blake3, receipt_signer: &fx.signer, now: Box::new(|| 5) },
+    )
+    .await
+    .expect("a real, allowlisted, network-isolated docker container run+inspect must yield a receipted OCEL log");
+
+    // State-based assertions on the real OCEL log produced from the real
+    // `docker inspect` response, not on "was docker called".
+    assert_eq!(outcome.log.version, "2.0");
+    assert!(outcome.log.objects.iter().any(|o| o.id.starts_with("docker:castle-gymact-observe-alpine-container-")), "expected a real owned throwaway container object, got: {:?}", outcome.log.objects);
+    let observe_event = outcome.log.events.iter().find(|e| e.kind == "observe-alpine-container").expect("expected an OCEL event for the observe-alpine-container transition");
+    assert_eq!(observe_event.attributes.get("epistemic_class").and_then(|v| v.as_str()), Some("OBSERVED"));
+    let digest = observe_event.attributes.get("stdout_blake3").and_then(|v| v.as_str()).expect("expected a real BLAKE3 digest of the captured docker inspect stdout");
+    assert_eq!(digest.len(), 64, "expected a real 32-byte BLAKE3 hex digest, got: {digest}");
+    assert!(!outcome.receipt.receipt_digest.is_empty(), "expected a real, non-empty receipt digest");
+
+    // Confirm the adapter's own teardown actually ran: its owned container
+    // must not still be present on the real daemon after this call returns.
+    let ps_output = std::process::Command::new(docker_bin_path()).args(["ps", "-a", "--filter", "name=castle-gymact-observe-alpine-container-", "--format", "{{.Names}}"]).output().expect("docker ps must run on an available daemon");
+    let remaining = String::from_utf8_lossy(&ps_output.stdout);
+    assert!(remaining.trim().is_empty(), "expected the adapter to have torn down its own owned container, but docker ps still shows: {remaining}");
+}
+
+#[tokio::test]
+async fn container_gym_act_adapter_refuses_transitions_outside_its_fixed_image_allowlist() {
+    let gymact = ContainerGymActAdapter::local_docker_default(docker_bin_path());
+    let activity = PowlActivity { id: "activity:arbitrary-image".to_string(), transition_id: "arbitrary-image".to_string(), predecessors: vec![] };
+    let state = WorldState { system_id: "system:local-docker".to_string(), facts: BTreeSet::new() };
+    let permit = ActuationPermit {
+        construct_digest: "0".repeat(64),
+        process_digest: "0".repeat(64),
+        subject: "system:local-docker".to_string(),
+        authority: "defensive-test".to_string(),
+        transition_id: "arbitrary-image".to_string(),
+        expires_at_epoch_ms: 10_000,
+    };
+    let result = gymact.execute(&activity, &state, &permit).await;
+    assert_eq!(result.status, GymActStatus::Refused, "a transition_id absent from the fixed image allowlist must be refused without ever invoking docker");
+}
+
+#[tokio::test]
+async fn container_gym_act_adapter_refuses_an_already_expired_permit_without_spawning_docker() {
+    let mut gymact = ContainerGymActAdapter::local_docker_default(docker_bin_path());
+    gymact.now_ms = || 999_999;
+    let activity = PowlActivity { id: "activity:observe-alpine-container".to_string(), transition_id: "observe-alpine-container".to_string(), predecessors: vec![] };
+    let state = WorldState { system_id: "system:local-docker".to_string(), facts: BTreeSet::new() };
+    let permit = ActuationPermit {
+        construct_digest: "0".repeat(64),
+        process_digest: "0".repeat(64),
+        subject: "system:local-docker".to_string(),
+        authority: "defensive-test".to_string(),
+        transition_id: "observe-alpine-container".to_string(),
+        expires_at_epoch_ms: 1_000,
+    };
+    let result = gymact.execute(&activity, &state, &permit).await;
+    assert_eq!(result.status, GymActStatus::Refused, "an already-expired permit must be refused before docker is ever spawned, regardless of upstream envelope checks");
+}

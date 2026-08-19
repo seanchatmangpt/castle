@@ -1103,6 +1103,193 @@ fn uuid_like_suffix() -> String {
     format!("{:x}", nanos)
 }
 
+/// Real `GymActAdapter` against the local `docker` (or colima-backed docker)
+/// daemon -- the 2030-horizon `ContainerGymActAdapter` described in
+/// `VISION.md`, now real. It shells out to the real `docker` binary
+/// (`std::process::Command`, same subprocess-bridge pattern as
+/// `KindClusterReadOnlyGymAct`/`ProcessGymActAdapter`), never a Docker API
+/// client crate, and never a mock.
+///
+/// Scoped narrow, matching this crate's other `GymActAdapter`s'
+/// `CONSTRUCT != DO` discipline (`README.md:53` -- "explicit test envelope
+/// over owned or authorized systems, no unbounded actuation"):
+///
+/// - Every `transition_id` this adapter will run is fixed at construction
+///   time in `allowed_images`, mapping to a caller-approved, already-pulled
+///   image reference. There is no code path from a `PowlActivity`'s
+///   `transition_id` to an arbitrary image or command -- anything not
+///   present in the map is refused (`GymActStatus::Refused`) before `docker`
+///   is ever invoked.
+/// - The container this adapter runs is **owned by the adapter itself**: it
+///   names every container it creates `castle-gymact-<transition_id>-<nonce>`
+///   and never operates on any container it did not create. There is no
+///   caller-supplied container name or id anywhere in this type.
+/// - The container is started network-isolated (`--network=none`), with no
+///   host mounts, running only `sleep 5` -- long enough to observe, never
+///   long enough to be a standing liability if teardown fails -- then
+///   observed via a real `docker inspect` on the adapter's own container,
+///   then torn down (`docker rm -f`) by this adapter in the same call. A
+///   teardown failure is logged, not surfaced as a refusal of an otherwise
+///   real, successful run; the observation is the receipted fact, but the
+///   container is always at minimum a bounded, self-expiring `sleep 5`
+///   process even if teardown is skipped.
+/// - `permit.expires_at_epoch_ms` is honored explicitly: if the caller-tracked
+///   wall clock is already past it when `execute` is invoked, this adapter
+///   refuses without spawning `docker` at all, even though
+///   `execute_powl_with_gym_act` already checked the envelope/admission
+///   expiry upstream -- defense in depth, not reliance on the caller alone.
+/// - `execute_powl_with_gym_act`'s own admission/envelope/receipt chain
+///   still gates every call into this adapter; `CONSTRUCT != DO` is
+///   unrelaxed -- this adapter adds no new actuation path and cannot
+///   construct its own `ConstructAdmission` (module-private
+///   `sealed::AdmissionBrand` makes that structurally impossible).
+/// - On any spawn failure or nonzero `docker` exit, this returns
+///   `GymActStatus::Refused` -- never a fabricated `Observed`.
+/// - The real captured stdout of the observing `docker inspect` call is
+///   BLAKE3-digested and attached as the `stdout_blake3` attribute, so the
+///   receipted OCEL event carries a verifiable fingerprint of exactly what
+///   was observed, not just a summary.
+pub struct ContainerGymActAdapter {
+    /// Path to the real `docker` binary (e.g. `"docker"`, resolved via
+    /// `PATH`, or an absolute path).
+    pub docker_bin: String,
+    /// A monotonic wall-clock reader, e.g. `SystemTime::now()` in epoch ms.
+    /// Injected (not `SystemTime::now()` called directly) so tests can pin
+    /// time, matching `DoAuthorizationContext::now`'s pattern.
+    pub now_ms: fn() -> i64,
+    /// transition_id -> already-approved, already-pullable image reference.
+    /// Fixed at construction time; nothing from `PowlActivity` or
+    /// `WorldState` is interpolated into the image reference or command.
+    pub allowed_images: BTreeMap<String, String>,
+}
+
+impl ContainerGymActAdapter {
+    fn real_now_ms() -> i64 {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
+    }
+
+    /// Real default envelope: one transition, `observe-alpine-container`,
+    /// against the small, widely-available `alpine:latest` image. Callers
+    /// must have already pulled the image (this adapter never pulls on the
+    /// caller's behalf) -- `docker pull alpine:latest` once is sufficient.
+    #[must_use]
+    pub fn local_docker_default(docker_bin: impl Into<String>) -> Self {
+        let mut allowed_images = BTreeMap::new();
+        allowed_images.insert("observe-alpine-container".to_string(), "alpine:latest".to_string());
+        Self { docker_bin: docker_bin.into(), now_ms: Self::real_now_ms, allowed_images }
+    }
+
+    fn refused(transition_id: &str) -> GymActResult {
+        GymActResult {
+            transition_id: transition_id.to_string(),
+            status: GymActStatus::Refused,
+            objects: vec![OcelObject { id: format!("object:{}", transition_id), kind: "RefusedObservation".to_string() }],
+            attributes: Default::default(),
+        }
+    }
+
+    fn best_effort_remove_container(&self, container_name: &str) {
+        let outcome = std::process::Command::new(&self.docker_bin).args(["rm", "-f", container_name]).output();
+        match outcome {
+            Ok(out) if out.status.success() => {
+                tracing::info!(container_name, "ContainerGymActAdapter: tore down owned throwaway container");
+            }
+            Ok(out) => {
+                tracing::warn!(container_name, stderr = %String::from_utf8_lossy(&out.stderr), "ContainerGymActAdapter: teardown docker rm exited non-zero");
+            }
+            Err(err) => {
+                tracing::warn!(container_name, error = %err, "ContainerGymActAdapter: failed to spawn teardown docker rm");
+            }
+        }
+    }
+}
+
+#[async_trait]
+impl GymActAdapter for ContainerGymActAdapter {
+    async fn execute(&self, activity: &PowlActivity, _state: &WorldState, permit: &ActuationPermit) -> GymActResult {
+        let _span = tracing::info_span!(
+            "container_gym_act_adapter_execute",
+            transition_id = %activity.transition_id,
+            docker_bin = %self.docker_bin,
+        )
+        .entered();
+
+        let Some(image) = self.allowed_images.get(&activity.transition_id) else {
+            tracing::warn!("ContainerGymActAdapter: transition_id not in the fixed image allowlist, refusing");
+            return Self::refused(&activity.transition_id);
+        };
+
+        if (self.now_ms)() > permit.expires_at_epoch_ms {
+            tracing::warn!("ContainerGymActAdapter: permit already expired, refusing without spawning docker");
+            return Self::refused(&activity.transition_id);
+        }
+
+        let container_name = format!("castle-gymact-{}-{}", activity.transition_id, uuid_like_suffix());
+
+        // Detached (`-d`), network-isolated, no host mounts, running only a
+        // fixed, non-interpolated `sleep 5` -- self-expiring even if the
+        // adapter's own teardown below never runs. We tear it down ourselves
+        // (rather than `--rm`) so we can `docker inspect` it first.
+        let run_output = std::process::Command::new(&self.docker_bin).args(["run", "-d", "--network=none", "--name", &container_name, image, "sleep", "5"]).output();
+        let run_output = match run_output {
+            Ok(out) => out,
+            Err(err) => {
+                tracing::warn!(error = %err, "ContainerGymActAdapter: failed to spawn docker run");
+                return Self::refused(&activity.transition_id);
+            }
+        };
+
+        if !run_output.status.success() {
+            tracing::warn!(status = ?run_output.status, stderr = %String::from_utf8_lossy(&run_output.stderr), "ContainerGymActAdapter: docker run exited non-zero");
+            return Self::refused(&activity.transition_id);
+        }
+
+        let inspect_output = std::process::Command::new(&self.docker_bin).args(["inspect", &container_name]).output();
+
+        // Always attempt teardown of the container this adapter itself
+        // created, whether or not inspect succeeded, so a failed inspect
+        // never leaves an owned container running.
+        self.best_effort_remove_container(&container_name);
+
+        let inspect_output = match inspect_output {
+            Ok(out) => out,
+            Err(err) => {
+                tracing::warn!(error = %err, "ContainerGymActAdapter: failed to spawn docker inspect");
+                return Self::refused(&activity.transition_id);
+            }
+        };
+
+        if !inspect_output.status.success() {
+            tracing::warn!(status = ?inspect_output.status, stderr = %String::from_utf8_lossy(&inspect_output.stderr), "ContainerGymActAdapter: docker inspect exited non-zero");
+            return Self::refused(&activity.transition_id);
+        }
+
+        let parsed: Value = match serde_json::from_slice(&inspect_output.stdout) {
+            Ok(v) => v,
+            Err(err) => {
+                tracing::warn!(error = %err, "ContainerGymActAdapter: docker inspect returned non-JSON stdout");
+                return Self::refused(&activity.transition_id);
+            }
+        };
+
+        let container_id = parsed.get(0).and_then(|v| v.get("Id")).and_then(Value::as_str).unwrap_or("unknown").to_string();
+        let state_status = parsed.get(0).and_then(|v| v.pointer("/State/Status")).and_then(Value::as_str).unwrap_or("unknown").to_string();
+
+        let stdout_digest = blake3::hash(&inspect_output.stdout).to_hex().to_string();
+
+        let objects = vec![OcelObject { id: format!("docker:{}:{}", container_name, container_id), kind: "Container".to_string() }];
+        let mut attributes = BTreeMap::new();
+        attributes.insert("image".to_string(), json!(image));
+        attributes.insert("container_name".to_string(), json!(container_name));
+        attributes.insert("container_state_status".to_string(), json!(state_status));
+        attributes.insert("stdout_blake3".to_string(), json!(stdout_digest));
+        attributes.insert("permit_authority".to_string(), json!(permit.authority));
+
+        GymActResult { transition_id: activity.transition_id.clone(), status: GymActStatus::Observed, objects, attributes }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct OcelEvent {
     pub id: String,

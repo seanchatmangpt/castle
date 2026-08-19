@@ -131,21 +131,68 @@ DO sequence (e.g. `scale_restart` then re-verify) remains open. Selecting this a
 in this repo; callers construct whichever `GymActAdapter` they want directly, same as both existing
 adapters today.
 
+### 2026-08-18/19: `ContainerGymActAdapter` against the local `docker` daemon — gap #1's docker item closed
+
+`ContainerGymActAdapter` in `src/castle.rs` (immediately after `ProcessGymActAdapter`) is the crate's
+third non-test-double `GymActAdapter` implementor, and the first backed directly by a local container
+runtime rather than Kubernetes: it shells out to the real `docker` binary (`std::process::Command`,
+the same subprocess-bridge pattern as `KindClusterReadOnlyGymAct`/`ProcessGymActAdapter`, never a
+Docker API client crate) against the real, already-running colima-backed docker daemon on this host
+(verified live via `docker version` / `docker info` before writing code). A fixed, construction-time
+`allowed_images` map (`transition_id` -> already-approved image reference) plays the same allowlist
+role as the other two adapters: any `transition_id` outside it is refused before `docker` is ever
+invoked, so nothing from `PowlActivity`/`WorldState` is interpolated into the image reference or
+command. The container run is bounded on every axis the 2030-horizon item asked for:
+`--network=none` (no network egress), no host mounts, a fixed non-interpolated `sleep 5` command
+(self-expiring even if teardown fails), a name the adapter generates itself
+(`castle-gymact-<transition_id>-<nonce>`) so it only ever creates and later `docker rm -f`s
+containers it owns — never touching any other running container. `permit.expires_at_epoch_ms` is
+checked explicitly inside the adapter (an injectable `now_ms: fn() -> i64` field, defaulting to the
+real wall clock) before `docker` is spawned at all, independent of `execute_powl_with_gym_act`'s own
+upstream expiry check — defense in depth, not reliance on the caller. On any spawn failure or
+nonzero `docker` exit it returns `GymActStatus::Refused`, never a fabricated `Observed`; it cannot
+construct its own `ConstructAdmission` (module-private `sealed::AdmissionBrand` still makes that
+structurally impossible); `CONSTRUCT != DO` is unrelaxed — no new actuation path bypasses
+`admit_construct_for_do`.
+
+Three new tests in `tests/castle.rs` cover it:
+`container_gym_act_adapter_runs_a_real_powl_sequence_against_the_local_docker_daemon_and_yields_a_receipted_ocel_log`
+runs a real one-activity POWL process through `execute_powl_with_gym_act` against the live docker
+daemon and asserts on the real `ReceiptedOcelLog` state (a real `docker:castle-gymact-...` container
+object with the real container id, a real 64-hex-char BLAKE3 digest of the captured `docker inspect`
+stdout attached as `stdout_blake3`, and a non-empty real receipt digest) — never on "was docker
+called" — then independently confirms via a fresh `docker ps -a --filter name=...` that the adapter's
+owned container is actually gone afterward, i.e. teardown is checked as real state, not assumed;
+`container_gym_act_adapter_refuses_transitions_outside_its_fixed_image_allowlist` confirms an
+unlisted `transition_id` is refused without invoking `docker` at all; and
+`container_gym_act_adapter_refuses_an_already_expired_permit_without_spawning_docker` confirms an
+already-expired `permit.expires_at_epoch_ms` is refused before `docker` is ever spawned. The live-daemon
+test degrades to a named `eprintln!("SKIPPED: ...")` (never a mock) if `docker info` fails, matching
+the other two adapters' contract. Real run: `cargo test --test castle` -> 19 passed, 0 failed, all
+three container tests exercised live (not skipped) against the real colima docker daemon on this
+host; full workspace `cargo test` afterward stays green (`lib.rs` unit tests + `tests/castle.rs` 19 +
+`cli_fortune5.rs` 3 + `cli_replay_impact_inventory.rs` 5 + `fortune5.rs` 9 + `prop_dfcm.rs` 2);
+`grep -rn "unittest.mock|Mock(|MagicMock|patch(|monkeypatch|mockall" src/ tests/` -> zero matches.
+
+Honest scope: this closes the docker/local-container-runtime item of the 2030-horizon entry below —
+not the whole item. It targets `docker` only (not `podman`, though the same subprocess-bridge shape
+would extend to it trivially); it runs one fixed, harmless `sleep 5` per invocation rather than any
+caller-meaningful workload (by design — the crate has no real workload to actuate against a container
+yet, so "observe a container this adapter itself created and tore down" is the honest, bounded
+envelope, same spirit as `KindClusterReadOnlyGymAct`'s read-only kubectl queries); and it does not
+attempt image-pull (callers must have already pulled `alpine:latest`, or whatever image they
+allowlist, themselves). Cloud-API and CI-system `GymActAdapter`s remain fully open, as does wiring
+adapter selection at the `execute_powl_with_gym_act` call site.
+
 ## 2030 horizon (target, not status)
 
 Framed as conditions that would have to hold, each traceable to a file that would need to exist and
 pass tests — not aspirational language:
 
-- **At least one real GymAct adapter, receipt-bound and test-envelope-scoped, ships in-repo** —
-  concretely, a `ContainerGymActAdapter` implementing the existing `GymActAdapter` trait
-  (`src/castle.rs:645-648`) against a local, network-isolated container runtime (`docker`/`podman`
-  via `tokio::process::Command`, `--network=none`, an explicit image allowlist) — no credentials or
-  network egress required to exercise it. It must return `GymActStatus::Refused`, never a
-  fabricated `Observed`, on nonzero exit or spawn failure; it must not construct its own
-  `ConstructAdmission` (module-private `sealed::AdmissionBrand` already makes that impossible); it
-  must honor `permit.expires_at_epoch_ms`. Tested against a real local daemon (a named skip, not a
-  mock, when one isn't running), asserting on the real returned `GymActResult`'s exit-code
-  attribute and a BLAKE3 digest of captured stdout — not on whether the subprocess was called.
+- **At least one real GymAct adapter, receipt-bound and test-envelope-scoped, ships in-repo** — the
+  local-container-runtime instance of this is now real: `ContainerGymActAdapter` (see the dated note
+  above), against `docker` specifically. A `podman` variant, and adapters against a real cloud API or
+  a real CI system, remain open — this item is partially, not fully, closed.
 - **`admit_replay`'s fail-closed discipline has been exercised against real semantic drift** — an
   actual ontology version bump or provider-semantics change that a real replay class survived or was
   correctly refused for, not just the synthetic drift in `tests/fortune5.rs`.
