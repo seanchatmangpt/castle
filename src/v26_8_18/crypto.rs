@@ -129,6 +129,7 @@ pub fn sign_pqc_message(
             })
         }
         SignatureSuite::SlhDsa => {
+            use ml_dsa::Keypair;
             use slh_dsa::signature::Signer;
             use slh_dsa::{Shake128f, SigningKey};
 
