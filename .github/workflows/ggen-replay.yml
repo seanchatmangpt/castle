@@ -1,0 +1,90 @@
+name: ggen replay
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ggen-replay-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  CASTLE_BASE_SHA: 5059c45a8ef007cd1e095213c729c8bfe6db9e79
+  GGEN_SHA: 1e9fcb9679a61460fbd641415cb72511c7e50b33
+  MARKETPLACE_SHA: cbe9076ae87664d23b19d2b2382b7b0a45e87a97
+
+jobs:
+  manufacture:
+    name: Graph → ggen → Rust → verifier
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact CASTLE head
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: castle
+
+      - name: Checkout pinned marketplace supplier
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: seanchatmangpt/ggen-marketplace
+          ref: ${{ env.MARKETPLACE_SHA }}
+          path: ggen-marketplace
+
+      - name: Checkout pinned ggen manufacturer
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: seanchatmangpt/ggen
+          ref: ${{ env.GGEN_SHA }}
+          path: ggen
+
+      - name: Admit exact supplier identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C ggen rev-parse HEAD)" = "$GGEN_SHA"
+          test "$(git -C ggen-marketplace rev-parse HEAD)" = "$MARKETPLACE_SHA"
+          test "$(git -C castle merge-base "$CASTLE_BASE_SHA" HEAD)" = "$CASTLE_BASE_SHA"
+          grep -F "revision = \"$GGEN_SHA\"" castle/ggen.ecosystem.lock.toml
+          grep -F "revision = \"$MARKETPLACE_SHA\"" castle/ggen.ecosystem.lock.toml
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b
+        with:
+          toolchain: stable
+
+      - name: Cache ggen build artifacts
+        uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1
+        with:
+          workspaces: ggen
+
+      - name: Build pinned ggen CLI
+        working-directory: ggen
+        run: cargo build -p ggen-cli-lib --bin ggen
+
+      - name: Manufacture CASTLE projections
+        working-directory: castle
+        run: ../ggen/target/debug/ggen sync run
+
+      # Temporary evidence surface while the new projections are first manufactured.
+      # Once captured into the branch this step is replaced by git diff --exit-code.
+      - name: Emit first-manufacture security projections
+        working-directory: castle
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in src/security_sources_generated.rs src/security_tools_generated.rs src/security_core_generated.rs; do
+            echo "===== BEGIN $file ====="
+            cat "$file"
+            echo "===== END $file ====="
+          done
+
+      - name: Verify Rust consequence
+        working-directory: castle
+        run: cargo test --workspace
