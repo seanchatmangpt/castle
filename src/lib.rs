@@ -4,6 +4,7 @@ pub mod castle;
 pub mod fortune5;
 pub mod fortune5_generated;
 pub mod generated;
+pub mod gymact_container;
 pub mod planner_minimal;
 pub mod reconstitution;
 pub mod refusal_conformance;
@@ -14,6 +15,7 @@ pub use generated::{
     default_adversarial_goals, generated_components, DefaultAdversarialGoal, GeneratedBinding,
     GENERATED_BINDINGS,
 };
+pub use gymact_container::execute_default_container_observation;
 pub use planner_minimal::MinimalActionPlanner;
 pub use reconstitution::{
     admit_empire_reconstitution_for_construct, EmpireReconstitutionAdmission, FinalDisposition,
