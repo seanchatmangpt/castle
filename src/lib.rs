@@ -5,6 +5,7 @@ pub mod fortune5;
 pub mod fortune5_generated;
 pub mod generated;
 pub mod reconstitution;
+pub mod refusal_conformance;
 pub mod v26_8_18;
 
 pub use castle::*;
@@ -16,3 +17,4 @@ pub use reconstitution::{
     admit_empire_reconstitution_for_construct, EmpireReconstitutionAdmission, FinalDisposition,
     ReconstitutedCapability, ReconstitutionRefusal,
 };
+pub use refusal_conformance::{verify_refusal, RefusalObservation};
