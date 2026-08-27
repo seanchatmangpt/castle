@@ -3,7 +3,10 @@ import Config
 config :castle_paas,
   ash_domains: [CastlePaaS.Domain],
   ecto_repos: [CastlePaaS.Repo],
-  kernel_module: CastlePaaS.Kernel.CLI
+  kernel_module: CastlePaaS.Kernel.CLI,
+  admission_provider: CastlePaaS.AdmissionProvider.Refuse,
+  receipt_verifier: CastlePaaS.ReceiptVerifier.Refuse,
+  adapter_profiles: %{}
 
 config :ash,
   redact_sensitive_values_in_errors?: true,
