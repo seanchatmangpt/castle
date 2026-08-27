@@ -14,23 +14,14 @@ defmodule CastlePaaS do
     |> AshR2RML.Ggen.compile_ash_ttl_bundle()
   end
 
-  @spec api_bundle(keyword()) :: {:ok, map()} | {:error, term()}
-  def api_bundle(opts \\ [json_api: true]) do
-    resources = Ash.Domain.Info.resources(CastlePaaS.Domain)
-
-    with {:ok, bundle} <- AshR2RML.Compiler.compile_resources(resources),
-         {:ok, ash_source} <- AshR2RML.Semantic.Ash.render(bundle, opts) do
-      {:ok,
-       %{
-         status: :PARTIAL_ALIVE,
-         standing: :construct_only,
-         files: %{"generated/ash/api_resources.ex" => ash_source}
-       }}
-    end
-  end
-
   @spec kernel() :: module()
   def kernel, do: Application.fetch_env!(:castle_paas, :kernel_module)
+
+  @spec admission_provider() :: module()
+  def admission_provider, do: Application.fetch_env!(:castle_paas, :admission_provider)
+
+  @spec receipt_verifier() :: module()
+  def receipt_verifier, do: Application.fetch_env!(:castle_paas, :receipt_verifier)
 end
 
 defmodule CastlePaaS.Repo do
