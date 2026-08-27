@@ -24,11 +24,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Checkout exact CASTLE head
+      - name: Checkout exact CASTLE head with admitted ancestry
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           path: castle
+          fetch-depth: 0
 
       - name: Checkout pinned marketplace supplier
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -85,6 +86,13 @@ jobs:
             echo "===== END $file ====="
           done
 
-      - name: Verify Rust consequence
+      - name: Prepare owned real container GymAct fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull alpine:3.20
+          docker image inspect alpine:3.20 >/dev/null
+
+      - name: Verify Rust consequence and real bounded GymAct
         working-directory: castle
         run: cargo test --workspace
