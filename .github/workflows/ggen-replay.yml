@@ -17,6 +17,7 @@ env:
   CASTLE_BASE_SHA: 5059c45a8ef007cd1e095213c729c8bfe6db9e79
   GGEN_SHA: 1e9fcb9679a61460fbd641415cb72511c7e50b33
   MARKETPLACE_SHA: cbe9076ae87664d23b19d2b2382b7b0a45e87a97
+  GGEN_RUST_TOOLCHAIN: nightly-2026-06-22
 
 jobs:
   manufacture:
@@ -54,11 +55,13 @@ jobs:
           test "$(git -C castle merge-base "$CASTLE_BASE_SHA" HEAD)" = "$CASTLE_BASE_SHA"
           grep -F "revision = \"$GGEN_SHA\"" castle/ggen.ecosystem.lock.toml
           grep -F "revision = \"$MARKETPLACE_SHA\"" castle/ggen.ecosystem.lock.toml
+          grep -F "channel = \"$GGEN_RUST_TOOLCHAIN\"" ggen/rust-toolchain.toml
 
-      - name: Install Rust toolchain
+      - name: Install ggen pinned Rust toolchain
         uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b
         with:
-          toolchain: stable
+          toolchain: nightly-2026-06-22
+          components: rustfmt,clippy
 
       - name: Cache ggen build artifacts
         uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1
@@ -67,6 +70,8 @@ jobs:
 
       - name: Build pinned ggen CLI
         working-directory: ggen
+        env:
+          RUSTC_WRAPPER: ""
         run: cargo build -p ggen-cli-lib --bin ggen
 
       - name: Manufacture CASTLE projections
