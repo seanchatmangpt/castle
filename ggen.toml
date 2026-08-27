@@ -1,9 +1,89 @@
 [project]
 name = "castle"
 version = "26.8.18+dfcm.1"
-description = "Continuously self-adversarial cloud system generated from ggen-marketplace semantic authority"
+description = "Continuously self-adversarial cloud system generated from pinned ggen-marketplace semantic authority"
 authors = ["Sean Chatman"]
 license = "AGPL-3.0"
 
 [packs]
 castle-pack = { path = "../ggen-marketplace/packs/castle-pack" }
+
+# Consumer-side projection contract. The sibling marketplace revision is pinned
+# by ggen.ecosystem.lock.toml; this manifest intentionally points every semantic
+# input/query/template at that one pack and writes consequences only into CASTLE.
+[ontology]
+source = "../ggen-marketplace/packs/castle-pack/ontology.ttl"
+base_iri = "https://chatmangpt.com/ontology/castle#"
+imports = [
+  "../ggen-marketplace/packs/castle-pack/ggen-rdf-capability.ttl",
+  "../ggen-marketplace/packs/castle-pack/v26.8.18.ttl",
+  "../ggen-marketplace/packs/castle-pack/v26.8.18-dfcm.1.ttl",
+  "../ggen-marketplace/packs/castle-pack/security-universe.ttl",
+  "../ggen-marketplace/packs/castle-pack/security-tools.ttl",
+]
+
+[ontology.prefixes]
+castle = "https://chatmangpt.com/ontology/castle#"
+dcterms = "http://purl.org/dc/terms/"
+prov = "http://www.w3.org/ns/prov#"
+skos = "http://www.w3.org/2004/02/skos/core#"
+odrl = "http://www.w3.org/ns/odrl/2/"
+
+[generation]
+output_dir = "."
+
+[[generation.rules]]
+name = "castle-semantic-bindings"
+query = { file = "../ggen-marketplace/packs/castle-pack/queries/bindings.rq" }
+template = { file = "../ggen-marketplace/packs/castle-pack/templates/src/generated.rs.tmpl" }
+output_file = "src/generated.rs"
+skip_empty = false
+mode = "Overwrite"
+
+[[generation.rules]]
+name = "castle-architecture-reference"
+query = { file = "../ggen-marketplace/packs/castle-pack/queries/bindings.rq" }
+template = { file = "../ggen-marketplace/packs/castle-pack/templates/GENERATED_ARCHITECTURE.md.tmpl" }
+output_file = "docs/GENERATED_ARCHITECTURE.md"
+skip_empty = false
+mode = "Overwrite"
+
+[[generation.rules]]
+name = "castle-fortune5-runtime-profile"
+query = { file = "../ggen-marketplace/packs/castle-pack/queries/fortune5-requirements.rq" }
+template = { file = "../ggen-marketplace/packs/castle-pack/templates/src/fortune5_generated.rs.tmpl" }
+output_file = "src/fortune5_generated.rs"
+skip_empty = false
+mode = "Overwrite"
+
+[[generation.rules]]
+name = "castle-fortune5-reference"
+query = { file = "../ggen-marketplace/packs/castle-pack/queries/fortune5-requirements.rq" }
+template = { file = "../ggen-marketplace/packs/castle-pack/templates/FORTUNE5_REQUIREMENTS.md.tmpl" }
+output_file = "docs/FORTUNE5_REQUIREMENTS.md"
+skip_empty = false
+mode = "Overwrite"
+
+[[generation.rules]]
+name = "castle-security-sources"
+query = { file = "../ggen-marketplace/packs/castle-pack/queries/security-sources.rq" }
+template = { file = "../ggen-marketplace/packs/castle-pack/templates/src/security_sources_generated.rs.tmpl" }
+output_file = "src/security_sources_generated.rs"
+skip_empty = false
+mode = "Overwrite"
+
+[[generation.rules]]
+name = "castle-security-tools"
+query = { file = "../ggen-marketplace/packs/castle-pack/queries/security-tools.rq" }
+template = { file = "../ggen-marketplace/packs/castle-pack/templates/src/security_tools_generated.rs.tmpl" }
+output_file = "src/security_tools_generated.rs"
+skip_empty = false
+mode = "Overwrite"
+
+[[generation.rules]]
+name = "castle-security-core"
+query = { file = "../ggen-marketplace/packs/castle-pack/queries/security-core.rq" }
+template = { file = "../ggen-marketplace/packs/castle-pack/templates/src/security_core_generated.rs.tmpl" }
+output_file = "src/security_core_generated.rs"
+skip_empty = false
+mode = "Overwrite"
