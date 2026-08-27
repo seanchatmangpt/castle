@@ -4,6 +4,7 @@ pub mod castle;
 pub mod fortune5;
 pub mod fortune5_generated;
 pub mod generated;
+pub mod refusal_conformance;
 pub mod reconstitution;
 pub mod v26_8_18;
 
