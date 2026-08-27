@@ -1,3 +1,33 @@
+defmodule CastlePaaS.Canonical do
+  @moduledoc false
+
+  @spec sha256(term()) :: String.t()
+  def sha256(value) do
+    value
+    |> encode()
+    |> then(&:crypto.hash(:sha256, &1))
+    |> Base.encode16(case: :lower)
+  end
+
+  defp encode(%_{} = struct), do: struct |> Map.from_struct() |> encode()
+
+  defp encode(map) when is_map(map) do
+    body =
+      map
+      |> Enum.map(fn {key, value} -> {to_string(key), value} end)
+      |> Enum.sort_by(&elem(&1, 0))
+      |> Enum.map_join(",", fn {key, value} ->
+        Jason.encode!(key) <> ":" <> encode(value)
+      end)
+
+    "{" <> body <> "}"
+  end
+
+  defp encode(list) when is_list(list), do: "[" <> Enum.map_join(list, ",", &encode/1) <> "]"
+  defp encode(value) when is_atom(value) and value not in [true, false, nil], do: Jason.encode!(Atom.to_string(value))
+  defp encode(value), do: Jason.encode!(value)
+end
+
 defmodule CastlePaaS.Persistence do
   @moduledoc false
 
@@ -5,10 +35,9 @@ defmodule CastlePaaS.Persistence do
     changeset = Ash.Changeset.for_create(resource, :record, attrs)
 
     changeset =
-      if Ash.Resource.Info.multitenancy_strategy(resource) do
-        Ash.Changeset.set_tenant(changeset, tenant)
-      else
-        changeset
+      case Ash.Resource.Info.multitenancy_strategy(resource) do
+        nil -> changeset
+        _ -> Ash.Changeset.set_tenant(changeset, tenant)
       end
 
     Ash.create(changeset)
@@ -66,7 +95,15 @@ defmodule CastlePaaS.AdmissionWitness do
 
   defp digest?(_), do: false
 
-  defp get(map, key), do: Map.get(map, key, Map.get(map, String.to_atom(key)))
+  defp get(map, key), do: Map.get(map, key, Map.get(map, atom_key(key)))
+  defp atom_key("admitted"), do: :admitted
+  defp atom_key("standing"), do: :standing
+  defp atom_key("subject"), do: :subject
+  defp atom_key("authority"), do: :authority
+  defp atom_key("expires_at_epoch_ms"), do: :expires_at_epoch_ms
+  defp atom_key("witness_digest"), do: :witness_digest
+  defp atom_key("policy_digest"), do: :policy_digest
+  defp atom_key("evidence_digest"), do: :evidence_digest
 
   defp stringify(value) when is_map(value),
     do: Map.new(value, fn {key, item} -> {to_string(key), stringify(item)} end)
@@ -85,6 +122,27 @@ defmodule CastlePaaS.ReceiptVerifier.Refuse do
 
   @impl true
   def verify(_receipt), do: {:error, :BLOCKED_RECEIPT_VERIFIER_NOT_CONFIGURED}
+end
+
+defmodule CastlePaaS.Standing do
+  @moduledoc false
+
+  @values %{
+    "UNKNOWN" => :UNKNOWN,
+    "PARTIAL_ALIVE" => :PARTIAL_ALIVE,
+    "ALIVE" => :ALIVE,
+    "BLOCKED" => :BLOCKED,
+    "BUILD_BROKEN" => :BUILD_BROKEN,
+    "UNSUPPORTED" => :UNSUPPORTED,
+    "REFUSED" => :REFUSED
+  }
+
+  def parse(value) when is_atom(value) do
+    if value in Map.values(@values), do: {:ok, value}, else: {:error, :REFUSED_INVALID_STANDING}
+  end
+
+  def parse(value) when is_binary(value), do: Map.fetch(@values, value)
+  def parse(_), do: {:error, :REFUSED_INVALID_STANDING}
 end
 
 defmodule CastlePaaS.Reactors.RegisterSubject do
@@ -194,7 +252,7 @@ defmodule CastlePaaS.Reactors.ConstructIntent do
 
     run fn args, _context ->
       process = Map.get(args.intent, :process) || Map.get(args.intent, "process") || %{}
-      digest = :crypto.hash(:sha256, Jason.encode!(process)) |> Base.encode16(case: :lower)
+      digest = CastlePaaS.Canonical.sha256(process)
 
       CastlePaaS.Persistence.record(
         CastlePaaS.Plan,
@@ -218,7 +276,7 @@ defmodule CastlePaaS.Reactors.ConstructIntent do
 
     run fn args, _context ->
       subject = Map.get(args.intent, :subject) || Map.get(args.intent, "subject")
-      digest = :crypto.hash(:sha256, Jason.encode!(args.intent)) |> Base.encode16(case: :lower)
+      digest = CastlePaaS.Canonical.sha256(args.intent)
 
       case CastlePaaS.Persistence.record(
              CastlePaaS.ExecutionIntent,
@@ -296,24 +354,25 @@ defmodule CastlePaaS.Reactors.QualifyEvidence do
       digest = Map.get(evidence, :digest) || Map.get(evidence, "digest")
       standing = Map.get(evidence, :standing) || Map.get(evidence, "standing") || :UNKNOWN
 
-      CastlePaaS.Persistence.record(
-        CastlePaaS.Evidence,
-        %{
-          external_id: Map.get(evidence, :external_id) || Map.get(evidence, "external_id") || "evidence:#{digest}",
-          label: Map.get(evidence, :label) || Map.get(evidence, "label") || "CASTLE evidence",
-          standing: normalize_standing(standing),
-          digest: digest,
-          metadata: evidence
-        },
-        tenant
-      )
+      with {:ok, standing} <- CastlePaaS.Standing.parse(standing) do
+        CastlePaaS.Persistence.record(
+          CastlePaaS.Evidence,
+          %{
+            external_id:
+              Map.get(evidence, :external_id) || Map.get(evidence, "external_id") ||
+                "evidence:#{digest}",
+            label: Map.get(evidence, :label) || Map.get(evidence, "label") || "CASTLE evidence",
+            standing: standing,
+            digest: digest,
+            metadata: evidence
+          },
+          tenant
+        )
+      end
     end
   end
 
   return :persist_evidence
-
-  defp normalize_standing(value) when is_atom(value), do: value
-  defp normalize_standing(value) when is_binary(value), do: String.to_existing_atom(value)
 end
 
 defmodule CastlePaaS.Reactors.ReplayReceipt do
@@ -334,7 +393,9 @@ defmodule CastlePaaS.Reactors.ReplayReceipt do
     argument :verification, result(:verify_receipt)
 
     run fn args, _context ->
-      digest = Map.get(args.verification, :receipt_digest) || Map.get(args.verification, "receipt_digest")
+      digest =
+        Map.get(args.verification, :receipt_digest) ||
+          Map.get(args.verification, "receipt_digest")
 
       CastlePaaS.Persistence.record(
         CastlePaaS.Replay,
