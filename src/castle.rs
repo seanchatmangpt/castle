@@ -6,7 +6,8 @@
 //! candidates. Only `execute_powl_with_gym_act` may actuate, and it refuses unless
 //! given a `ConstructAdmission` manufactured exclusively by `admit_construct_for_do`.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::cmp::{Ordering, Reverse};
+use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet};
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -444,6 +445,139 @@ impl Planner for WitnessPlanner {
         let process = compile_witness_to_powl(&format!("powl:{}:{}", problem.goal.id, set_key(predicate_refs)), problem.vulnerability, problem.rules);
         let score = process.activities.len() as i64 + problem.vulnerability.predicates.len() as i64;
         vec![PlanCandidate { planner_id: self.id.clone(), process, score }]
+    }
+}
+
+/// A second, structurally different ensemble member (VISION.md 2030 horizon:
+/// "A second planner exists and the ensemble's scoring/selection has been shown
+/// to matter"). Where `WitnessPlanner` compiles the vulnerability's own witness
+/// chain, this planner runs a forward uniform-cost search over `problem.rules`
+/// from the vulnerability's base predicates, considering *all* alternative
+/// producers of each effect predicate, and scores the resulting process by
+/// summed `TransitionRule::cost` (rules without a cost count as `1.0`) instead
+/// of activity/predicate count — the `cost` field `WitnessPlanner` never reads.
+///
+/// `planner_hint` remains unrouted in this planner: producers are never
+/// silently pruned on hints, so every alternative stays structurally
+/// represented in the search (routing is future work). Rules with non-finite
+/// or negative cost are refused outright rather than clamped. Score is
+/// `ceil(summed_cost)` as `i64`, keeping cost on the same integer scale as
+/// `WitnessPlanner`'s step-count score so ensemble comparison stays meaningful.
+pub struct CostMinimizingPlanner {
+    pub id: String,
+}
+
+impl Default for CostMinimizingPlanner {
+    fn default() -> Self {
+        Self { id: "cost-minimizing-forward-search".to_string() }
+    }
+}
+
+struct CostSearchState<'a> {
+    cost: f64,
+    facts: BTreeSet<&'a str>,
+    chain: Vec<&'a TransitionRule>,
+}
+
+impl CostSearchState<'_> {
+    fn tie_key(&self) -> String {
+        let ids: Vec<&str> = self.chain.iter().map(|r| r.id.as_str()).collect();
+        format!("{}|{}", set_key(self.facts.iter().copied()), ids.join(","))
+    }
+}
+
+impl Eq for CostSearchState<'_> {}
+impl PartialEq for CostSearchState<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other) == Ordering::Equal
+    }
+}
+impl PartialOrd for CostSearchState<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for CostSearchState<'_> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.cost.total_cmp(&other.cost).then_with(|| self.tie_key().cmp(&other.tie_key()))
+    }
+}
+
+/// Forward uniform-cost (cheapest-first) search: expand every rule whose
+/// preconditions hold in the current fact set, keep each rule's cost, and stop
+/// at the cheapest state whose facts contain the goal predicate. Deterministic:
+/// ties break on (facts, chain) keys, never on heap insertion order.
+fn search_min_cost_chain<'a>(problem: &PlanningProblem<'a>) -> Option<Vec<&'a TransitionRule>> {
+    let goal_predicate = problem.goal.predicate.as_str();
+    let mut initial: BTreeSet<&'a str> = BTreeSet::new();
+    for predicate in &problem.vulnerability.predicates {
+        initial.insert(predicate.as_str());
+    }
+    let max_chain = problem.rules.len();
+    let mut heap: BinaryHeap<Reverse<CostSearchState<'a>>> = BinaryHeap::new();
+    heap.push(Reverse(CostSearchState { cost: 0.0, facts: initial, chain: Vec::new() }));
+    let mut visited: HashSet<String> = HashSet::new();
+    while let Some(Reverse(state)) = heap.pop() {
+        let state_key = set_key(state.facts.iter().copied());
+        if !visited.insert(state_key) {
+            continue;
+        }
+        if state.facts.contains(goal_predicate) {
+            return Some(state.chain);
+        }
+        if state.chain.len() >= max_chain {
+            continue;
+        }
+        for rule in problem.rules {
+            let step_cost = rule.cost.unwrap_or(1.0);
+            if !step_cost.is_finite() || step_cost < 0.0 {
+                continue;
+            }
+            if !rule.preconditions.iter().all(|p| state.facts.contains(p.as_str())) {
+                continue;
+            }
+            let mut facts = state.facts.clone();
+            let before = facts.len();
+            for effect in &rule.effects {
+                facts.insert(effect.as_str());
+            }
+            if facts.len() == before {
+                continue; // rule adds nothing this chain has not already achieved
+            }
+            let mut chain = state.chain.clone();
+            chain.push(rule);
+            heap.push(Reverse(CostSearchState { cost: state.cost + step_cost, facts, chain }));
+        }
+    }
+    None
+}
+
+#[async_trait]
+impl Planner for CostMinimizingPlanner {
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    fn applicable(&self, problem: &PlanningProblem<'_>) -> bool {
+        problem.rules.iter().any(|rule| rule.effects.iter().any(|effect| *effect == problem.goal.predicate))
+    }
+
+    async fn plan(&self, problem: &PlanningProblem<'_>) -> Vec<PlanCandidate> {
+        if !self.applicable(problem) {
+            return Vec::new();
+        }
+        let Some(chain) = search_min_cost_chain(problem) else {
+            return Vec::new();
+        };
+        let total_cost: f64 = chain.iter().map(|rule| rule.cost.unwrap_or(1.0)).sum();
+        let witness = VulnerabilityCondition {
+            goal_id: problem.goal.id.clone(),
+            predicates: problem.vulnerability.predicates.clone(),
+            witness_transitions: chain.iter().map(|rule| rule.id.clone()).collect(),
+        };
+        let chain_ids: Vec<&str> = chain.iter().map(|rule| rule.id.as_str()).collect();
+        let process = compile_witness_to_powl(&format!("powl-cost:{}:{}", problem.goal.id, set_key(chain_ids)), &witness, problem.rules);
+        vec![PlanCandidate { planner_id: self.id.clone(), process, score: total_cost.ceil() as i64 }]
     }
 }
 
