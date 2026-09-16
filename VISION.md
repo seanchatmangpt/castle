@@ -14,7 +14,10 @@ canonical flow in `README.md`:
   `TransitionRule` set (no external fact ingestion yet).
 - Dependency CONSTRUCT (counterfactual compromise + impact closure) over a hand-built
   `DependencyGraph` (no live dependency-graph source yet).
-- A one-planner ensemble (`WitnessPlanner`) — the `Planner` trait supports more, none are written.
+- A two-planner ensemble: `WitnessPlanner` plus `CostMinimizingPlanner` (forward uniform-cost
+  search over all alternative producers, scored by summed `TransitionRule::cost`) —
+  `tests/planner_ensemble.rs` shows the cost planner winning ensemble selection with a
+  structurally different process.
 - POWL partial-order compilation from witness transitions.
 - A fail-closed, cryptographically receipted CONSTRUCT admission chain (BLAKE3 + pluggable
   signer/verifier), with `ConstructAdmission` structurally unforgeable outside
@@ -45,9 +48,10 @@ describes end-to-end:
    and receipt-bound the same way the kernel already is, is the highest-leverage next step —
    everything downstream (real OCEL evidence, real Fortune-5 metrics, real replay classes) depends
    on it existing.
-2. **No planner beyond `WitnessPlanner`.** AutoFDE-Lab's "ensemble" is currently an ensemble of one.
-   A second, structurally different planner (even a simple heuristic-search one) is the first real
-   test of whether `run_planner_ensemble`'s scoring/selection logic generalizes.
+2. **The ensemble has exactly one planner beyond `WitnessPlanner`.** `CostMinimizingPlanner`
+   (added; see `tests/planner_ensemble.rs`) generalizes `run_planner_ensemble`'s
+   scoring/selection to a second scoring family; further structurally different planners
+   (e.g. hint-routed, adversarial-depth-aware) remain unwritten.
 3. **No ontology-driven CLI verbs for CONSTRUCT/DO.** The `castle` binary can query and evaluate but
    not manufacture or actuate — by design, for now: CONSTRUCT manufacture and DO execution both
    require a `Blake3Provider`/`ReceiptSigner`/`GymActAdapter` triple that has no default, safe CLI
@@ -74,15 +78,15 @@ pass tests — not aspirational language:
 - **The Fortune-5 profile has been evaluated against at least one real receipted evidence pipeline**
   end to end — `castle fortune5 qualify` consuming evidence a real system emitted, not a hand-authored
   fixture — with the qualification result independently checkable against that system's own state.
-- **A second planner exists and the ensemble's scoring/selection has been shown to matter.**
-  `TransitionRule` already carries unused `cost`/`planner_hint` fields that `WitnessPlanner::plan`
-  never reads — a `CostMinimizingPlanner` would search `problem.rules` for alternative producers of
-  the same effect predicate (`derive_vulnerabilities`'s `producers: HashMap<&str, Vec<&TransitionRule>>`
-  already exposes them) and score by summed `cost` instead of activity/predicate count. The test:
-  two `TransitionRule` producers for one effect — one cheap-but-longer, one expensive-but-shorter —
-  run through `run_planner_ensemble`, asserting the returned `Vec<PlanCandidate>`'s `score`,
-  `planner_id`, and `process.activities` show the winning planner differs from `WitnessPlanner` and
-  the winning process differs structurally, not just in labeling.
+- **A second planner exists and the ensemble's scoring/selection has been shown to matter — MET
+  (2026-09-15).** `CostMinimizingPlanner` (`src/castle.rs`) searches `problem.rules` for alternative
+  producers of the same effect predicate and scores by summed `TransitionRule::cost` (the `cost`
+  field `WitnessPlanner::plan` never reads; `planner_hint` remains unrouted) instead of
+  activity/predicate count. The prescribed test exists and passes: two `TransitionRule` producers
+  for one effect — one cheap-but-longer, one expensive-but-shorter — run through
+  `run_planner_ensemble`, asserting the returned `Vec<PlanCandidate>`'s `score`, `planner_id`, and
+  `process.activities` show the winning planner differs from `WitnessPlanner` and the winning
+  process differs structurally, not just in labeling (`tests/planner_ensemble.rs`).
 - **castle-pack's ontology has driven at least one real regeneration of
   `src/generated.rs`/`src/fortune5_generated.rs` via `ggen sync run`, gated in CI.** `ggen` is
   installed and runnable today (`ggen 26.8.8`), but `ggen.toml` currently has no rule wiring
