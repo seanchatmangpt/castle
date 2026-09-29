@@ -7,3 +7,4 @@ license = "AGPL-3.0"
 
 [packs]
 castle-pack = { path = "../ggen-marketplace/packs/castle-pack" }
+castle-board-pack = { path = "../ggen-marketplace/packs/castle-board-pack" }
