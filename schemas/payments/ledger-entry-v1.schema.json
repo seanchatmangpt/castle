@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://castle.local/schemas/payments/ledger-entry-v1.schema.json",
+  "title": "LedgerEntryV1",
+  "description": "Ledger entry (src/payments/ledger.rs LedgerEntry). At most one per effect digest.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "seq", "effect_digest", "debit_account", "credit_account", "amount_minor", "currency", "construct_digest"
+  ],
+  "properties": {
+    "seq": { "type": "integer", "minimum": 1 },
+    "effect_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "debit_account": { "type": "string" },
+    "credit_account": { "type": "string" },
+    "amount_minor": { "type": "integer", "minimum": 0 },
+    "currency": { "type": "string", "enum": ["USD", "EUR", "GBP", "JPY", "KWD"] },
+    "construct_digest": { "type": "string" }
+  }
+}

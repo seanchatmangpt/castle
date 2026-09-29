@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://castle.local/schemas/payments/claim-v1.schema.json",
+  "title": "ClaimV1",
+  "description": "Persisted economic-identity claim (src/payments/claim_store.rs Claim), one file per effect digest.",
+  "type": "object",
+  "required": [
+    "effect_digest", "principal", "payer", "payee", "amount_minor", "currency",
+    "generation", "state", "reverses", "construct_digest", "detail"
+  ],
+  "properties": {
+    "effect_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "principal": { "type": "string" },
+    "payer": { "type": "string" },
+    "payee": { "type": "string" },
+    "amount_minor": { "type": "integer", "minimum": 0 },
+    "currency": { "type": "string", "enum": ["USD", "EUR", "GBP", "JPY", "KWD"] },
+    "generation": { "type": "integer", "minimum": 0 },
+    "state": { "type": "string", "enum": ["reserved", "executed", "refused", "unknown_outcome"] },
+    "reverses": { "type": ["string", "null"] },
+    "construct_digest": { "type": ["string", "null"] },
+    "detail": { "type": "string" },
+    "obligation_id": { "type": "string" },
+    "purpose": { "type": "string" },
+    "audience": { "type": "string" },
+    "verified_custodian_ids": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://castle.local/schemas/payments/payment-effect-subject-v1.schema.json",
+  "title": "PaymentEffectSubjectV1",
+  "description": "Subject of a payments.transfer.v1 PreparedEffect (src/payments/effect.rs Subject).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "payer", "payee"],
+  "properties": {
+    "kind": { "type": "string", "const": "account_transfer" },
+    "payer": { "type": "string", "minLength": 1 },
+    "payee": { "type": "string", "minLength": 1 }
+  }
+}

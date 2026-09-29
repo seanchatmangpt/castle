@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://castle.local/schemas/payments/spend-policy-v1.schema.json",
+  "title": "SpendPolicyV1",
+  "description": "SpendPolicy (src/payments/policy.rs). Default-deny: absent principal, account, or currency cap refuses.",
+  "type": "object",
+  "required": ["principals"],
+  "properties": {
+    "principals": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/principalPolicy" }
+    }
+  },
+  "$defs": {
+    "accountSet": { "type": "array", "items": { "type": "string" } },
+    "capMap": {
+      "type": "object",
+      "propertyNames": { "enum": ["USD", "EUR", "GBP", "JPY", "KWD"] },
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "principalPolicy": {
+      "type": "object",
+      "required": ["allowed_payers", "allowed_payees", "per_effect_cap", "epoch_cap"],
+      "properties": {
+        "allowed_payers": { "$ref": "#/$defs/accountSet" },
+        "allowed_payees": { "$ref": "#/$defs/accountSet" },
+        "per_effect_cap": { "$ref": "#/$defs/capMap" },
+        "epoch_cap": { "$ref": "#/$defs/capMap" }
+      }
+    }
+  }
+}

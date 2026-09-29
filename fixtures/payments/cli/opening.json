@@ -1,0 +1,4 @@
+[
+  { "account": "acct:treasury", "currency": "USD", "amount_minor": 1000000 },
+  { "account": "acct:supplier-9821", "currency": "USD", "amount_minor": 0 }
+]

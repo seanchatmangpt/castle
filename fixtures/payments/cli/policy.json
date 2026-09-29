@@ -1,0 +1,10 @@
+{
+  "principals": {
+    "principal:procurement-agent": {
+      "allowed_payers": ["acct:supplier-9821", "acct:treasury"],
+      "allowed_payees": ["acct:supplier-9821", "acct:treasury"],
+      "per_effect_cap": { "USD": 500000 },
+      "epoch_cap": { "USD": 2000000 }
+    }
+  }
+}

@@ -10,3 +10,5 @@ pub mod evidence_handlers;
 pub mod evidence_routes;
 pub mod handlers;
 pub mod routes;
+pub mod payments_handlers;
+pub mod payments_routes;
