@@ -25,6 +25,8 @@ pub use claim_store::{Claim, ClaimState, ClaimStore};
 pub use effect::{PaymentEffect, PAYMENT_CAPABILITY};
 pub use execute::{execute_payment, ExecutionContext, PaymentExecution, PaymentStanding};
 pub use ledger::{FileJournalLedger, LedgerEntry, LedgerError, LedgerPort};
+pub use experience::{ClassRule, ExperienceStore, Knowledge, PaymentClass};
+pub use reconcile::{reconcile, recover_journal, JournalRecovery, ReconcileResolution};
 pub use money::{Currency, Money};
 pub use nonce::DurableNonceFence;
 pub use policy::{PrincipalPolicy, SpendPolicy};

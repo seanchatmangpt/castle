@@ -93,6 +93,10 @@ pub fn admit_payment(
         reverses: effect.reverses().map(str::to_string),
         construct_digest: None,
         detail: "ADMITTED".to_string(),
+        obligation_id: effect.obligation_id().to_string(),
+        purpose: effect.purpose().to_string(),
+        audience: receipt.audience.clone(),
+        verified_custodian_ids: receipt.verified_custodian_ids.clone(),
     };
     ctx.claims.reserve(&claim, epoch_cap)?;
 

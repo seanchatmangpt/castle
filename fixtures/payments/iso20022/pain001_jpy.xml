@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09">
+  <CstmrCdtTrfInitn>
+    <GrpHdr>
+      <MsgId>CASTLE-bd338ce8f6db6198de1125656f8f</MsgId>
+      <CreDtTm>2026-09-29T12:34:56Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <CtrlSum>5000</CtrlSum>
+      <InitgPty><Nm>Acme Treasury</Nm></InitgPty>
+    </GrpHdr>
+    <PmtInf>
+      <PmtInfId>PMT-bd338ce8f6db6198de1125656f8f</PmtInfId>
+      <PmtMtd>TRF</PmtMtd>
+      <ReqdExctnDt><Dt>2026-09-29</Dt></ReqdExctnDt>
+      <Dbtr><Nm>Acme Treasury</Nm></Dbtr>
+      <DbtrAcct><Id><Othr><Id>acct:treasury</Id></Othr></Id></DbtrAcct>
+      <CdtTrfTxInf>
+        <PmtId>
+          <InstrId>sha256:bd338ce8f6db6198de1125656f8fad348a98796b5b921a5e582e93ff8f1873be</InstrId>
+          <EndToEndId>OBL-JPY-1</EndToEndId>
+        </PmtId>
+        <Amt><InstdAmt Ccy="JPY">5000</InstdAmt></Amt>
+        <Cdtr><Nm>Supplier Ltd</Nm></Cdtr>
+        <CdtrAcct><Id><Othr><Id>acct:supplier-9821</Id></Othr></Id></CdtrAcct>
+        <RmtInf><Ustrd>invoice-payment</Ustrd></RmtInf>
+      </CdtTrfTxInf>
+    </PmtInf>
+  </CstmrCdtTrfInitn>
+</Document>

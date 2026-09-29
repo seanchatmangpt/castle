@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>CASTLE-b9f88834c0674f793f13a9d94136</MsgId>
+      <CreDtTm>2026-09-29T12:34:56Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf><SttlmMtd>INDA</SttlmMtd></SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>sha256:b9f88834c0674f793f13a9d94136cefc2e6acc9bb754737f4b8548cd83aed354</InstrId>
+        <EndToEndId>OBL-KWD-1</EndToEndId>
+        <TxId>b9f88834c0674f793f13a9d94136cefc2e6</TxId>
+      </PmtId>
+      <IntrBkSttlmAmt Ccy="KWD">1234.567</IntrBkSttlmAmt>
+      <ChrgBr>SLEV</ChrgBr>
+      <InstgAgt><FinInstnId><BICFI>CASTUS33</BICFI></FinInstnId></InstgAgt>
+      <InstdAgt><FinInstnId><BICFI>SUPPGB2LXXX</BICFI></FinInstnId></InstdAgt>
+      <Dbtr><Nm>acct:treasury</Nm></Dbtr>
+      <DbtrAcct><Id><Othr><Id>acct:treasury</Id></Othr></Id></DbtrAcct>
+      <Cdtr><Nm>acct:supplier-9821</Nm></Cdtr>
+      <CdtrAcct><Id><Othr><Id>acct:supplier-9821</Id></Othr></Id></CdtrAcct>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

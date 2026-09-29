@@ -34,6 +34,15 @@ pub struct Claim {
     pub reverses: Option<String>,
     pub construct_digest: Option<String>,
     pub detail: String,
+    /// Persisted so "why did money move" is answerable from state alone (F10).
+    #[serde(default)]
+    pub obligation_id: String,
+    #[serde(default)]
+    pub purpose: String,
+    #[serde(default)]
+    pub audience: String,
+    #[serde(default)]
+    pub verified_custodian_ids: Vec<String>,
 }
 
 /// Durable economic-identity store: one file per effect digest. It is the
@@ -148,6 +157,18 @@ impl ClaimStore {
     }
 
     fn check_budget(&self, claim: &Claim, epoch_cap: Option<u64>) -> PayResult<()> {
+        if claim.reverses.is_none()
+            && !claim.obligation_id.is_empty()
+            && self.list()?.iter().any(|c| {
+                c.principal == claim.principal
+                    && c.obligation_id == claim.obligation_id
+                    && c.reverses.is_none()
+                    && c.state != ClaimState::Refused
+                    && c.effect_digest != claim.effect_digest
+            })
+        {
+            return refuse(refusal::OBLIGATION_ALREADY_CLAIMED);
+        }
         let Some(cap) = epoch_cap else { return Ok(()) };
         let used: u128 = self
             .list()?
