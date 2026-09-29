@@ -31,7 +31,6 @@ fn claim(digest: &str, obligation: &str, amount: u64) -> Claim {
 /// the same directory (== two processes) both pass check_budget then both
 /// write_new different digests: epoch cap is double-spent.
 #[test]
-#[ignore = "FINDING F1: epoch budget double-spend across ClaimStore handles (in-process lock only)"]
 fn two_handles_cannot_both_reserve_the_whole_epoch_budget() {
     let mut worst = 0;
     for round in 0..40 {
@@ -61,18 +60,18 @@ fn two_handles_cannot_both_reserve_the_whole_epoch_budget() {
 /// the balance check and overdraw the payer, after which balance() errors
 /// NEGATIVE_BALANCE_INVARIANT forever (ledger bricked).
 #[test]
-#[ignore = "FINDING F2: ledger overdraft across handles; negative balance bricks balance()"]
 fn two_ledger_handles_cannot_overdraw_the_payer() {
     let mut overdrawn = 0;
     for round in 0..40 {
         let fx = Fixture::with(&format!("f2-{round}"), 100, 100, 1_000_000);
         let a = fx.admit(fx.effect("100", "obl-a"), "na").unwrap();
         let b = fx.admit(fx.effect("100", "obl-b"), "nb").unwrap();
+        let (ta, tb) = (fx.token_for(&a), fx.token_for(&b));
         let other = FileJournalLedger::open(fx.dir.join("ledger"), &[]).unwrap();
         let barrier = Barrier::new(2);
         let (ra, rb) = std::thread::scope(|s| {
-            let ha = s.spawn(|| { barrier.wait(); fx.ledger.post(&a, "c") });
-            let hb = s.spawn(|| { barrier.wait(); other.post(&b, "c") });
+            let ha = s.spawn(|| { barrier.wait(); fx.ledger.post(&a, &ta) });
+            let hb = s.spawn(|| { barrier.wait(); other.post(&b, &tb) });
             (ha.join().unwrap(), hb.join().unwrap())
         });
         if ra.is_ok() && rb.is_ok() {
@@ -85,18 +84,18 @@ fn two_ledger_handles_cannot_overdraw_the_payer() {
 /// FINDING F3: seq = entries().len()+1 under a per-handle lock -> duplicate seq
 /// across handles.
 #[test]
-#[ignore = "FINDING F3: duplicate ledger seq across handles"]
 fn ledger_seq_is_unique_across_handles() {
     let mut dup = 0;
     for round in 0..40 {
         let fx = Fixture::new(&format!("f3-{round}"));
         let a = fx.admit(fx.effect("10", "obl-a"), "na").unwrap();
         let b = fx.admit(fx.effect("10", "obl-b"), "nb").unwrap();
+        let (ta, tb) = (fx.token_for(&a), fx.token_for(&b));
         let other = FileJournalLedger::open(fx.dir.join("ledger"), &[]).unwrap();
         let barrier = Barrier::new(2);
         std::thread::scope(|s| {
-            s.spawn(|| { barrier.wait(); fx.ledger.post(&a, "c").unwrap(); });
-            s.spawn(|| { barrier.wait(); other.post(&b, "c").unwrap(); });
+            s.spawn(|| { barrier.wait(); fx.ledger.post(&a, &ta).unwrap(); });
+            s.spawn(|| { barrier.wait(); other.post(&b, &tb).unwrap(); });
         });
         let e = fx.ledger.entries().unwrap();
         if e.len() == 2 && e[0].seq == e[1].seq {
@@ -106,44 +105,54 @@ fn ledger_seq_is_unique_across_handles() {
     assert_eq!(dup, 0, "{dup}/40 rounds produced duplicate seq");
 }
 
-/// FINDING F4: one torn/corrupt claim file makes list() fail, so every capped
-/// admission (all principals) is refused CLAIM_STORE_FAILED: single-file DoS.
+/// DECISION (was FINDING F4): a corrupt claim file means the ledger of promises is unknowable, so
+/// admission fails CLOSED with a typed BLOCKED refusal (never skips it, never settles). Torn files
+/// cannot arise from a crash: claims are published atomically (tmp + fsync + hard_link/rename).
 #[test]
-#[ignore = "FINDING F4: one corrupt claim file blocks ALL admissions"]
-fn one_torn_claim_file_does_not_block_unrelated_admissions() {
+fn a_corrupt_claim_file_fails_closed_with_a_typed_block() {
     let fx = Fixture::new("f4");
     std::fs::write(fx.dir.join("claims").join("deadbeef.claim.json"), b"{\"effect_dig").unwrap();
     let r = fx.admit(fx.effect("100", "obl-unrelated"), "n1");
-    assert!(r.is_ok(), "unrelated admission blocked by torn file: {:?}", r.err());
+    assert!(r.as_ref().unwrap_err().starts_with("BLOCKED:PAYMENT_CLAIM_STORE_FAILED"), "{r:?}");
+    assert!(fx.ledger.entries().unwrap().is_empty());
 }
 
-/// FINDING F5: a torn ledger entry file makes balance() (hence every post)
-/// fail, including for unrelated accounts.
+/// Regression: atomic publish leaves no partially written claim/entry files behind.
 #[test]
-#[ignore = "FINDING F5: one corrupt ledger entry file bricks all posts/balances"]
-fn one_torn_ledger_entry_does_not_brick_balance() {
+fn published_files_are_complete_and_no_tmp_files_remain() {
+    let fx = Fixture::new("f4b");
+    let _a = fx.admit(fx.effect("100", "obl-atomic"), "n1").unwrap();
+    for e in std::fs::read_dir(fx.dir.join("claims")).unwrap() {
+        let name = e.unwrap().file_name().to_string_lossy().to_string();
+        assert!(!name.ends_with(".tmp"), "leftover tmp file {name}");
+        assert!(!name.starts_with(".lock"), "lock not released: {name}");
+    }
+    let claims = fx.claims.list().unwrap();
+    assert_eq!(claims.len(), 1);
+}
+
+/// DECISION (was FINDING F5): a corrupt ledger entry fails closed (typed error), never bypassed.
+#[test]
+fn a_corrupt_ledger_entry_fails_closed() {
     let fx = Fixture::new("f5");
     std::fs::write(fx.dir.join("ledger").join("ffff.entry.json"), b"{\"seq\":").unwrap();
-    assert!(fx.ledger.balance(PAYER, Currency::USD).is_ok());
+    assert!(fx.ledger.balance(PAYER, Currency::USD).is_err());
 }
 
-/// FINDING F6: nonce is burned before budget reservation; a budget refusal
-/// (retryable once budget frees) makes the same signed certificate unusable.
+/// DECISION (was FINDING F6): a signed certificate is one-shot. A refusal after nonce claim
+/// (budget) spends it; the fix path is a fresh certificate with a fresh nonce, not a replay.
 #[test]
-#[ignore = "FINDING F6: nonce burned when reserve refuses (BUDGET_EXCEEDED); cert cannot be retried"]
-fn budget_refusal_does_not_burn_the_certificate_nonce() {
+fn budget_refusal_spends_the_certificate_and_a_fresh_one_succeeds() {
     let fx = Fixture::with("f6", 1_000_000, 500_000, 1_000);
-    let e1 = fx.effect("1000", "obl-1");
-    let _a1 = fx.admit(e1, "n1").unwrap(); // reserves whole budget
+    let _a1 = fx.admit(fx.effect("1000", "obl-1"), "n1").unwrap(); // reserves whole budget
     let e2 = fx.effect("500", "obl-2");
     let cert = fx.cert(&e2, "n2", &["mac", "phone"]);
-    let first = admit_payment(e2.clone(), &cert, &fx.admission_ctx());
-    assert_eq!(first.unwrap_err(), "REFUSED:PAYMENT_BUDGET_EXCEEDED");
-    // free budget
+    assert_eq!(admit_payment(e2.clone(), &cert, &fx.admission_ctx()).unwrap_err(), "REFUSED:PAYMENT_BUDGET_EXCEEDED");
     let d1 = fx.claims.list().unwrap()[0].effect_digest.clone();
     fx.claims.transition(&d1, &[ClaimState::Reserved], ClaimState::Refused, None, "x").unwrap();
-    let second = admit_payment(e2, &cert, &fx.admission_ctx());
-    assert!(second.is_ok(), "same cert now refused: {:?}", second.err());
+    assert_eq!(admit_payment(e2.clone(), &cert, &fx.admission_ctx()).unwrap_err(), "REFUSED:NonceReplay");
+    let fresh = fx.cert(&e2, "n3", &["mac", "phone"]);
+    assert!(admit_payment(e2, &fresh, &fx.admission_ctx()).is_ok());
 }
 
 /// Regression (passes): crash after ledger post, before claim transition,
@@ -153,7 +162,8 @@ fn crash_after_post_before_transition_is_recoverable_by_reconcile() {
     let fx = Fixture::new("c1");
     let a = fx.admit(fx.effect("100", "obl-1"), "n1").unwrap();
     let d = a.effect().digest().to_string();
-    fx.ledger.post(&a, "c").unwrap();
+    let ta = fx.token_for(&a);
+    fx.ledger.post(&a, &ta).unwrap();
     assert_eq!(fx.claims.get(&d).unwrap().unwrap().state, ClaimState::Reserved);
     assert_eq!(fx.admit(fx.effect("100", "obl-1"), "n2").unwrap_err(), "REFUSED:PAYMENT_IN_FLIGHT");
     assert!(matches!(reconcile(&d, &fx.claims, &fx.ledger).unwrap(), ReconcileResolution::Settled(_)));

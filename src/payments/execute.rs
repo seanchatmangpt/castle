@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use serde_json::json;
 
 use crate::castle::{
-    admit_construct_for_do, execute_powl_with_gym_act, manufacture_construct_capability, Blake3Provider,
+    admit_construct_for_do, ConstructAdmission, execute_powl_with_gym_act, manufacture_construct_capability, Blake3Provider,
     ConstructRequest, ConstructTrustPolicy, DoAuthorizationContext, PowlActivity, PowlProcess, ReceiptSigner,
     ReceiptVerifier, TestEnvelope, WorldState,
 };
@@ -13,7 +13,7 @@ use crate::v26_8_18::{BrceGymActAdapter, ReleaseStanding};
 use super::adapter::{PaymentGymActAdapter, StepOutcome, T_POST, T_RESERVE};
 use super::admission::PaymentAdmission;
 use super::claim_store::{ClaimState, ClaimStore};
-use super::ledger::{LedgerEntry, LedgerPort};
+use super::ledger::{ActuationToken, LedgerEntry, LedgerPort};
 use super::policy::SpendPolicy;
 use super::refusal::{self, PayResult};
 
@@ -80,9 +80,6 @@ fn envelope_of(admission: &PaymentAdmission, now_epoch_ms: i64) -> TestEnvelope 
 pub async fn execute_payment(admission: PaymentAdmission, ctx: &ExecutionContext<'_>) -> PayResult<PaymentExecution> {
     let digest = admission.effect().digest().to_string();
     let subject = subject_of(&admission);
-    let process = process_of(&admission);
-    let envelope = envelope_of(&admission, ctx.now_epoch_ms);
-    let authority = admission.verification().audience.clone();
 
     let refuse_before_do = |detail: String| -> PayResult<PaymentExecution> {
         ctx.claims.transition(&digest, &[ClaimState::Reserved], ClaimState::Refused, None, &detail)?;
@@ -98,41 +95,22 @@ pub async fn execute_payment(admission: PaymentAdmission, ctx: &ExecutionContext
         })
     };
 
-    let request = ConstructRequest {
-        subject: subject.clone(),
-        authority: authority.clone(),
-        o_star: json!({
-            "kind": "CASTLE_PAYMENT_O_STAR_V1",
-            "effect_digest": digest,
-            "principal": admission.effect().principal(),
-            "verified_key_ids": admission.verification().verified_key_ids,
-            "verified_custodian_ids": admission.verification().verified_custodian_ids,
-            "policy_epoch": admission.verification().policy_epoch,
-            "revocation_epoch": admission.verification().revocation_epoch,
-            "generation": admission.generation(),
-        }),
-        config_graph: json!({ "spend_policy": ctx.policy.to_json() }),
-        ontology: json!({ "kind": "CASTLE_PAYMENT_ONTOLOGY_V1", "capability": super::PAYMENT_CAPABILITY }),
-        process: process.clone(),
-        envelope: envelope.clone(),
-    };
-    let capability = match manufacture_construct_capability(request, ctx.blake3, ctx.signer) {
-        Ok(c) => c,
+    // Single-use + freshness: DO may only start while this exact admission still
+    // owns a Reserved claim in the caller's store (no stale/foreign admissions).
+    match ctx.claims.get(&digest)? {
+        Some(c) if c.state == ClaimState::Reserved && c.generation == admission.generation() => {}
+        _ => return Err(refusal::CLAIM_NOT_RESERVED.to_string()),
+    }
+
+    let (construct_admission, process, envelope) = match build_construct(&admission, ctx) {
+        Ok(v) => v,
         Err(e) => return refuse_before_do(e),
     };
-    let policy = ConstructTrustPolicy {
-        trusted_origin_key_ids: BTreeSet::from([ctx.signer.key_id().to_string()]),
-        allowed_authorities: ctx.allowed_authorities.clone(),
-    };
     let now = ctx.now_epoch_ms;
-    let construct_admission =
-        match admit_construct_for_do(&capability, &process, &envelope, ctx.blake3, ctx.verifier, &policy, || now) {
-            Ok(a) => a,
-            Err(e) => return refuse_before_do(e),
-        };
-    let construct_digest = capability.receipt.artifact_digest.clone();
+    let construct_digest = construct_admission.construct_digest.clone();
+    let token = ActuationToken::from_construct(&construct_admission);
 
-    let inner = PaymentGymActAdapter::new(ctx.ledger, &admission, subject.clone());
+    let inner = PaymentGymActAdapter::new(ctx.ledger, &admission, subject.clone(), token);
     let brce = BrceGymActAdapter::new_durable(&inner, ctx.blake3, ctx.signer, ctx.journal_root.clone());
     let state = WorldState { system_id: subject, facts: BTreeSet::new() };
     let result = execute_powl_with_gym_act(
@@ -185,4 +163,51 @@ pub async fn execute_payment(admission: PaymentAdmission, ctx: &ExecutionContext
         ledger_entry: posted,
         detail,
     })
+}
+
+/// CONSTRUCT step alone: manufacture the receipted capability and admit it. Inert
+/// (`CONSTRUCT != DO`): it only yields the sealed `ConstructAdmission` plus the
+/// exact process/envelope that admission binds.
+pub fn build_construct(
+    admission: &PaymentAdmission,
+    ctx: &ExecutionContext<'_>,
+) -> PayResult<(ConstructAdmission, PowlProcess, TestEnvelope)> {
+    let digest = admission.effect().digest().to_string();
+    let subject = subject_of(admission);
+    let process = process_of(admission);
+    let envelope = envelope_of(admission, ctx.now_epoch_ms);
+    let authority = admission.verification().audience.clone();
+    let request = ConstructRequest {
+        subject: subject.clone(),
+        authority: authority.clone(),
+        o_star: json!({
+            "kind": "CASTLE_PAYMENT_O_STAR_V1",
+            "effect_digest": digest,
+            "principal": admission.effect().principal(),
+            "verified_key_ids": admission.verification().verified_key_ids,
+            "verified_custodian_ids": admission.verification().verified_custodian_ids,
+            "policy_epoch": admission.verification().policy_epoch,
+            "revocation_epoch": admission.verification().revocation_epoch,
+            "generation": admission.generation(),
+        }),
+        config_graph: json!({ "spend_policy": ctx.policy.to_json() }),
+        ontology: json!({ "kind": "CASTLE_PAYMENT_ONTOLOGY_V1", "capability": super::PAYMENT_CAPABILITY }),
+        process: process.clone(),
+        envelope: envelope.clone(),
+    };
+    let capability = match manufacture_construct_capability(request, ctx.blake3, ctx.signer) {
+        Ok(c) => c,
+        Err(e) => return Err(e),
+    };
+    let policy = ConstructTrustPolicy {
+        trusted_origin_key_ids: BTreeSet::from([ctx.signer.key_id().to_string()]),
+        allowed_authorities: ctx.allowed_authorities.clone(),
+    };
+    let now = ctx.now_epoch_ms;
+    let construct_admission =
+        match admit_construct_for_do(&capability, &process, &envelope, ctx.blake3, ctx.verifier, &policy, || now) {
+            Ok(a) => a,
+            Err(e) => return Err(e),
+        };
+    Ok((construct_admission, process, envelope))
 }

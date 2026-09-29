@@ -37,9 +37,7 @@ impl DurableNonceFence {
                 file.write_all(nonce.as_bytes())
                     .and_then(|()| file.sync_all())
                     .map_err(|e| format!("{}:{e}", refusal::CLAIM_STORE_FAILED))?;
-                if let Ok(dir) = OpenOptions::new().read(true).open(&self.root) {
-                    let _ = dir.sync_all();
-                }
+                super::dirlock::sync_dir(&self.root)?;
                 Ok(())
             }
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {

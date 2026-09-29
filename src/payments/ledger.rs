@@ -6,7 +6,10 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
+use crate::castle::ConstructAdmission;
+
 use super::admission::PaymentAdmission;
+use super::dirlock::{publish_new, DirLock};
 use super::money::Currency;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,13 +30,32 @@ pub struct LedgerEntry {
     pub construct_digest: String,
 }
 
+/// Proof that a real CONSTRUCT admission exists for the DO in progress. It can
+/// only be minted from a genuine `ConstructAdmission`, so a ledger `post` cannot
+/// be reached with a forged or absent CONSTRUCT chain.
+#[derive(Debug, Clone)]
+pub struct ActuationToken {
+    construct_digest: String,
+}
+
+impl ActuationToken {
+    #[must_use]
+    pub fn from_construct(admission: &ConstructAdmission) -> Self {
+        Self { construct_digest: admission.construct_digest.clone() }
+    }
+    #[must_use]
+    pub fn construct_digest(&self) -> &str {
+        &self.construct_digest
+    }
+}
+
 /// Settlement surface. `post` demands a sealed `PaymentAdmission`, so a ledger
 /// entry cannot be written without an admitted effect. Implementations must
 /// make `post` atomic and idempotent per `effect_digest`.
 pub trait LedgerPort: Send + Sync {
     fn balance(&self, account: &str, currency: Currency) -> Result<u64, LedgerError>;
     fn lookup(&self, effect_digest: &str) -> Result<Option<LedgerEntry>, LedgerError>;
-    fn post(&self, admission: &PaymentAdmission, construct_digest: &str) -> Result<LedgerEntry, LedgerError>;
+    fn post(&self, admission: &PaymentAdmission, token: &ActuationToken) -> Result<LedgerEntry, LedgerError>;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -86,7 +108,7 @@ impl FileJournalLedger {
         let mut out: Vec<LedgerEntry> = Vec::new();
         for e in fs::read_dir(&self.root).map_err(unavailable)? {
             let path = e.map_err(unavailable)?.path();
-            if path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.ends_with(".entry.json")) {
+            if path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.ends_with(".entry.json") && !n.starts_with('.')) {
                 let bytes = fs::read(&path).map_err(unavailable)?;
                 out.push(serde_json::from_slice(&bytes).map_err(unavailable)?);
             }
@@ -140,8 +162,9 @@ impl LedgerPort for FileJournalLedger {
         }
     }
 
-    fn post(&self, admission: &PaymentAdmission, construct_digest: &str) -> Result<LedgerEntry, LedgerError> {
+    fn post(&self, admission: &PaymentAdmission, token: &ActuationToken) -> Result<LedgerEntry, LedgerError> {
         let _guard = self.lock.lock().map_err(|_| unavailable("LOCK_POISONED"))?;
+        let _dir = DirLock::acquire(&self.root).map_err(unavailable)?;
         let effect = admission.effect();
         if let Some(existing) = self.lookup(effect.digest())? {
             return Ok(existing); // idempotent replay: at most one entry per digest
@@ -151,19 +174,17 @@ impl LedgerPort for FileJournalLedger {
             return Err(LedgerError::InsufficientFunds);
         }
         let entry = LedgerEntry {
-            seq: self.entries()?.len() as u64 + 1,
+            seq: self.entries()?.iter().map(|e| e.seq).max().unwrap_or(0) + 1,
             effect_digest: effect.digest().to_string(),
             debit_account: effect.payer().to_string(),
             credit_account: effect.payee().to_string(),
             amount_minor: money.minor,
             currency: money.currency,
-            construct_digest: construct_digest.to_string(),
+            construct_digest: token.construct_digest().to_string(),
         };
         let bytes = serde_json::to_vec(&entry).map_err(unavailable)?;
-        let mut f = OpenOptions::new().write(true).create_new(true).open(self.entry_path(effect.digest())).map_err(unavailable)?;
-        f.write_all(&bytes).and_then(|()| f.sync_all()).map_err(unavailable)?;
-        if let Ok(dir) = OpenOptions::new().read(true).open(&self.root) {
-            let _ = dir.sync_all();
+        if !publish_new(&self.root, &self.entry_path(effect.digest()), &bytes).map_err(unavailable)? {
+            return self.lookup(effect.digest())?.ok_or_else(|| unavailable("ENTRY_VANISHED"));
         }
         Ok(entry)
     }

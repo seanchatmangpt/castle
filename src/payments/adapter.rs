@@ -9,7 +9,7 @@ use crate::castle::{
 };
 
 use super::admission::PaymentAdmission;
-use super::ledger::{LedgerEntry, LedgerError, LedgerPort};
+use super::ledger::{ActuationToken, LedgerEntry, LedgerError, LedgerPort};
 use super::refusal;
 
 pub const T_RESERVE: &str = "payments.reserve";
@@ -30,12 +30,18 @@ pub struct PaymentGymActAdapter<'a> {
     ledger: &'a dyn LedgerPort,
     admission: &'a PaymentAdmission,
     subject: String,
+    token: ActuationToken,
     outcomes: Mutex<Vec<StepOutcome>>,
 }
 
 impl<'a> PaymentGymActAdapter<'a> {
-    pub(crate) fn new(ledger: &'a dyn LedgerPort, admission: &'a PaymentAdmission, subject: String) -> Self {
-        Self { ledger, admission, subject, outcomes: Mutex::new(Vec::new()) }
+    pub(crate) fn new(
+        ledger: &'a dyn LedgerPort,
+        admission: &'a PaymentAdmission,
+        subject: String,
+        token: ActuationToken,
+    ) -> Self {
+        Self { ledger, admission, subject, token, outcomes: Mutex::new(Vec::new()) }
     }
 
     #[must_use]
@@ -90,6 +96,7 @@ impl<'a> PaymentGymActAdapter<'a> {
 impl GymActAdapter for PaymentGymActAdapter<'_> {
     async fn execute(&self, activity: &PowlActivity, state: &WorldState, permit: &ActuationPermit) -> GymActResult {
         if permit.transition_id != activity.transition_id
+            || permit.construct_digest != self.token.construct_digest()
             || permit.subject != self.subject
             || state.system_id != self.subject
         {
@@ -109,7 +116,7 @@ impl GymActAdapter for PaymentGymActAdapter<'_> {
                     Err(_) => self.refused(activity, refusal::LEDGER_UNAVAILABLE, true),
                 },
             },
-            T_POST => match self.ledger.post(self.admission, &permit.construct_digest) {
+            T_POST => match self.ledger.post(self.admission, &self.token) {
                 Ok(entry) => {
                     let seq = entry.seq;
                     self.record(StepOutcome::Posted(entry));

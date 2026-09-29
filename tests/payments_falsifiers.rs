@@ -25,8 +25,8 @@ impl LedgerPort for PostThenFail<'_> {
     fn lookup(&self, d: &str) -> Result<Option<LedgerEntry>, LedgerError> {
         self.0.lookup(d)
     }
-    fn post(&self, a: &PaymentAdmission, c: &str) -> Result<LedgerEntry, LedgerError> {
-        self.0.post(a, c)?;
+    fn post(&self, a: &PaymentAdmission, tok: &ActuationToken) -> Result<LedgerEntry, LedgerError> {
+        self.0.post(a, tok)?;
         Err(LedgerError::Unavailable("connection reset after commit".into()))
     }
 }

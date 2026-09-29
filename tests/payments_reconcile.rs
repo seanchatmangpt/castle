@@ -18,9 +18,9 @@ impl LedgerPort for FlakyPost<'_> {
     fn lookup(&self, d: &str) -> Result<Option<LedgerEntry>, LedgerError> {
         self.inner.lookup(d)
     }
-    fn post(&self, adm: &PaymentAdmission, cd: &str) -> Result<LedgerEntry, LedgerError> {
+    fn post(&self, adm: &PaymentAdmission, tok: &ActuationToken) -> Result<LedgerEntry, LedgerError> {
         if self.write_first {
-            self.inner.post(adm, cd)?;
+            self.inner.post(adm, tok)?;
         }
         Err(LedgerError::Unavailable("connection reset after commit".into()))
     }
@@ -35,7 +35,7 @@ impl LedgerPort for Down {
     fn lookup(&self, _: &str) -> Result<Option<LedgerEntry>, LedgerError> {
         Err(LedgerError::Unavailable("down".into()))
     }
-    fn post(&self, _: &PaymentAdmission, _: &str) -> Result<LedgerEntry, LedgerError> {
+    fn post(&self, _: &PaymentAdmission, _: &ActuationToken) -> Result<LedgerEntry, LedgerError> {
         Err(LedgerError::Unavailable("down".into()))
     }
 }

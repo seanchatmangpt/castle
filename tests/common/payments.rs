@@ -182,6 +182,12 @@ impl Fixture {
         }
     }
 
+    /// Inert CONSTRUCT step only (no DO): yields the token a ledger `post` requires.
+    pub fn token_for(&self, admission: &PaymentAdmission) -> ActuationToken {
+        let (construct, _, _) = build_construct(admission, &self.exec_ctx()).expect("construct admits");
+        ActuationToken::from_construct(&construct)
+    }
+
     pub fn exec_ctx(&self) -> ExecutionContext<'_> {
         ExecutionContext {
             blake3: &RealBlake3,

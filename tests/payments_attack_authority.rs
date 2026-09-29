@@ -6,44 +6,41 @@ use common::payments::*;
 
 use castle::payments::*;
 
-/// FINDING-1: `LedgerPort::post` is `pub` and takes only `&PaymentAdmission` plus a
-/// caller-chosen `construct_digest` string, so any holder of an admission can write a
-/// ledger entry with NO CONSTRUCT admission, NO BRCE journal, and a forged construct digest.
+/// FIXED (was FINDING-1): `LedgerPort::post` now requires an `ActuationToken`, mintable only
+/// from a genuine castle `ConstructAdmission`; the recorded construct digest is that token's.
 #[test]
-#[ignore = "FINDING: ledger.post reachable directly with admission + forged construct digest"]
-fn direct_ledger_post_without_construct_chain_is_refused() {
+fn ledger_post_requires_a_real_construct_admission_token() {
     let fx = Fixture::new("atk-direct-post");
     let adm = fx.admit(fx.effect("100", "inv-direct"), "n-1").unwrap();
-    let r = fx.ledger.post(&adm, "forged-construct-digest");
-    assert!(r.is_err(), "value moved with no CONSTRUCT/BRCE chain: {r:?}");
-    assert!(fx.ledger.entries().unwrap().is_empty());
+    let tok = fx.token_for(&adm);
+    let entry = fx.ledger.post(&adm, &tok).unwrap();
+    assert_eq!(entry.construct_digest, tok.construct_digest());
+    assert_ne!(entry.construct_digest, "forged-construct-digest");
+    // No struct-literal / alternate constructor for the token outside its module.
+    let root = env!("CARGO_MANIFEST_DIR");
+    for f in ["admission", "adapter", "execute", "claim_store", "reconcile", "experience", "iso20022"] {
+        let src = std::fs::read_to_string(format!("{root}/src/payments/{f}.rs")).unwrap();
+        assert!(!src.contains("ActuationToken {"), "{f}.rs must not fabricate a token");
+    }
 }
 
-/// FINDING-2: `execute_payment` never checks the claim is still `Reserved` BEFORE DO.
-/// A cloned admission whose claim was Refused (budget released) still actuates when the
-/// ledger later has funds; the claim transition then fails AFTER value has moved.
+/// FIXED (was FINDING-2): `PaymentAdmission` is no longer `Clone`, and `execute_payment`
+/// requires the admission's claim to still be `Reserved`. A claim moved out of `Reserved`
+/// (here: refused/released) makes the admission inert: no value moves.
 #[tokio::test]
-#[ignore = "FINDING: stale cloned admission actuates after claim Refused/budget released"]
-async fn stale_cloned_admission_cannot_actuate_after_claim_refused() {
-    let fx = Fixture::with("atk-stale", 50, 500_000, 1_000);
+async fn admission_whose_claim_left_reserved_cannot_actuate() {
+    let fx = Fixture::new("atk-stale");
     let adm = fx.admit(fx.effect("100", "inv-stale"), "n-1").unwrap();
-    let clone = adm.clone();
-    let first = execute_payment(adm, &fx.exec_ctx()).await.unwrap();
-    assert_eq!(first.standing, PaymentStanding::Refused);
-    assert_eq!(fx.claims.get(first.effect_digest.as_str()).unwrap().unwrap().state, ClaimState::Refused);
-
-    // Ledger later funded (a different, funded ledger instance stands in for top-up).
-    let funded = FileJournalLedger::open(fx.dir.join("ledger2"), &[(PAYER, Currency::USD, 10_000), (PAYEE, Currency::USD, 0)]).unwrap();
-    let mut ctx = fx.exec_ctx();
-    ctx.ledger = &funded;
-    let _ = execute_payment(clone, &ctx).await;
-    assert!(funded.entries().unwrap().is_empty(), "value moved under a Refused claim (budget already released)");
+    let d = adm.effect().digest().to_string();
+    fx.claims.transition(&d, &[ClaimState::Reserved], ClaimState::Refused, None, "released").unwrap();
+    let r = execute_payment(adm, &fx.exec_ctx()).await;
+    assert_eq!(r.unwrap_err(), "REFUSED:PAYMENT_CLAIM_NOT_RESERVED");
+    assert!(fx.ledger.entries().unwrap().is_empty());
 }
 
 /// FINDING-2b: same root cause; claim store on the execute side is caller-supplied and
 /// not tied to the admission, so DO runs before the claim transition can fail.
 #[tokio::test]
-#[ignore = "FINDING: execute with foreign ClaimStore moves value then errors"]
 async fn execute_with_foreign_claim_store_moves_no_value() {
     let fx = Fixture::new("atk-foreign");
     let adm = fx.admit(fx.effect("100", "inv-foreign"), "n-1").unwrap();
@@ -51,14 +48,13 @@ async fn execute_with_foreign_claim_store_moves_no_value() {
     let mut ctx = fx.exec_ctx();
     ctx.claims = &other;
     let r = execute_payment(adm, &ctx).await;
-    assert!(r.is_err());
+    assert_eq!(r.as_ref().unwrap_err(), "REFUSED:PAYMENT_CLAIM_NOT_RESERVED");
     assert!(fx.ledger.entries().unwrap().is_empty(), "ledger moved value although claim transition failed: {r:?}");
 }
 
 /// FINDING-3: reversal cap check (`check_reversal`) runs outside the ClaimStore lock, so
 /// concurrent reversals can each pass and jointly exceed the original amount.
 #[test]
-#[ignore = "FINDING: check_reversal TOCTOU; concurrent reversals exceed original"]
 fn concurrent_reversals_cannot_exceed_original() {
     let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
     for i in 0..40 {
@@ -95,14 +91,14 @@ fn reserved_never_executed_claim_is_releasable_by_reconcile() {
     assert!(fx.admit(fx.effect("1", "inv-x"), "n-3").is_ok());
 }
 
-/// Evidence (passes): cloned admission of an already-settled effect cannot double-post.
+/// Evidence: an admission is single-use (moved into `execute_payment`, not `Clone`); after
+/// settlement a fresh certificate for the same effect cannot post again.
 #[tokio::test]
-async fn cloned_admission_after_settlement_cannot_double_post() {
+async fn settled_admission_is_consumed_and_cannot_repost() {
     let fx = Fixture::new("atk-clone-settled");
     let adm = fx.admit(fx.effect("100", "inv-c"), "n-1").unwrap();
-    let clone = adm.clone();
     assert_eq!(execute_payment(adm, &fx.exec_ctx()).await.unwrap().standing, PaymentStanding::Settled);
-    let _ = execute_payment(clone, &fx.exec_ctx()).await;
+    assert_eq!(fx.admit(fx.effect("100", "inv-c"), "n-2").unwrap_err(), "REFUSED:PAYMENT_ALREADY_SETTLED");
     assert_eq!(fx.ledger.entries().unwrap().len(), 1);
     assert_eq!(fx.ledger.balance(PAYEE, Currency::USD).unwrap(), 100);
 }

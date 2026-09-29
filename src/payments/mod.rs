@@ -9,6 +9,7 @@
 pub mod admission;
 pub mod adapter;
 pub mod claim_store;
+pub mod dirlock;
 pub mod effect;
 pub mod execute;
 pub mod experience;
@@ -23,8 +24,8 @@ pub mod refusal;
 pub use admission::{admit_payment, AdmissionContext, PaymentAdmission};
 pub use claim_store::{Claim, ClaimState, ClaimStore};
 pub use effect::{PaymentEffect, PAYMENT_CAPABILITY};
-pub use execute::{execute_payment, ExecutionContext, PaymentExecution, PaymentStanding};
-pub use ledger::{FileJournalLedger, LedgerEntry, LedgerError, LedgerPort};
+pub use execute::{build_construct, execute_payment, ExecutionContext, PaymentExecution, PaymentStanding};
+pub use ledger::{ActuationToken, FileJournalLedger, LedgerEntry, LedgerError, LedgerPort};
 pub use experience::{ClassRule, ExperienceStore, Knowledge, PaymentClass};
 pub use reconcile::{reconcile, recover_journal, JournalRecovery, ReconcileResolution};
 pub use money::{Currency, Money};

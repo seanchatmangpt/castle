@@ -14,7 +14,7 @@ use super::refusal::{self, refuse, PayResult};
 ///
 /// It is *not* DO authority: DO additionally requires the castle
 /// `ConstructAdmission` chain (`execute_payment`).
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PaymentAdmission {
     effect: PaymentEffect,
     receipt: VerificationReceipt,

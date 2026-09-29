@@ -1,10 +1,10 @@
-use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
+use super::dirlock::{publish_new, publish_replace, DirLock};
 use super::money::Currency;
 use super::refusal::{self, refuse, PayResult};
 
@@ -74,28 +74,16 @@ impl ClaimStore {
 
     fn write_new(&self, claim: &Claim) -> PayResult<()> {
         let bytes = serde_json::to_vec(claim).map_err(|e| format!("{}:{e}", refusal::CLAIM_STORE_FAILED))?;
-        let mut file = io(OpenOptions::new().write(true).create_new(true).open(self.path(&claim.effect_digest)))?;
-        io(file.write_all(&bytes))?;
-        io(file.sync_all())?;
-        if let Ok(dir) = OpenOptions::new().read(true).open(&self.root) {
-            let _ = dir.sync_all();
+        if publish_new(&self.root, &self.path(&claim.effect_digest), &bytes)? {
+            Ok(())
+        } else {
+            refuse(refusal::IN_FLIGHT)
         }
-        Ok(())
     }
 
     fn write_replace(&self, claim: &Claim) -> PayResult<()> {
         let bytes = serde_json::to_vec(claim).map_err(|e| format!("{}:{e}", refusal::CLAIM_STORE_FAILED))?;
-        let tmp = self.root.join(format!("{}.tmp", claim.effect_digest.trim_start_matches("sha256:")));
-        {
-            let mut file = io(OpenOptions::new().write(true).create(true).truncate(true).open(&tmp))?;
-            io(file.write_all(&bytes))?;
-            io(file.sync_all())?;
-        }
-        io(fs::rename(&tmp, self.path(&claim.effect_digest)))?;
-        if let Ok(dir) = OpenOptions::new().read(true).open(&self.root) {
-            let _ = dir.sync_all();
-        }
-        Ok(())
+        publish_replace(&self.root, &self.path(&claim.effect_digest), &bytes)
     }
 
     pub fn get(&self, digest: &str) -> PayResult<Option<Claim>> {
@@ -113,7 +101,7 @@ impl ClaimStore {
         for entry in io(fs::read_dir(&self.root))? {
             let path = io(entry)?.path();
             if path.extension().and_then(|e| e.to_str()) == Some("json")
-                && path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.ends_with(".claim.json"))
+                && path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.ends_with(".claim.json") && !n.starts_with('.'))
             {
                 let bytes = io(fs::read(&path))?;
                 out.push(serde_json::from_slice(&bytes).map_err(|e| format!("{}:{e}", refusal::CLAIM_STORE_FAILED))?);
@@ -141,6 +129,7 @@ impl ClaimStore {
     /// re-reserved; every other existing state refuses with its own reason.
     pub fn reserve(&self, claim: &Claim, epoch_cap: Option<u64>) -> PayResult<()> {
         let _guard = self.lock.lock().map_err(|_| refusal::CLAIM_STORE_FAILED.to_string())?;
+        let _dir = DirLock::acquire(&self.root)?;
         if let Some(existing) = self.get(&claim.effect_digest)? {
             return match existing.state {
                 ClaimState::Executed => refuse(refusal::ALREADY_SETTLED),
@@ -157,6 +146,25 @@ impl ClaimStore {
     }
 
     fn check_budget(&self, claim: &Claim, epoch_cap: Option<u64>) -> PayResult<()> {
+        if let Some(original) = claim.reverses.as_deref() {
+            // Atomic with the reservation: original must be Executed and the live
+            // reversal total (excluding this digest) plus this amount must fit.
+            let Some(orig) = self.get(original)? else {
+                return refuse(refusal::REVERSAL_ORIGINAL_NOT_EXECUTED);
+            };
+            if orig.state != ClaimState::Executed {
+                return refuse(refusal::REVERSAL_ORIGINAL_NOT_EXECUTED);
+            }
+            let already: u128 = self
+                .list()?
+                .iter()
+                .filter(|c| c.reverses.as_deref() == Some(original) && c.state != ClaimState::Refused && c.effect_digest != claim.effect_digest)
+                .map(|c| u128::from(c.amount_minor))
+                .sum();
+            if already + u128::from(claim.amount_minor) > u128::from(orig.amount_minor) {
+                return refuse(refusal::REVERSAL_EXCEEDS_ORIGINAL);
+            }
+        }
         if claim.reverses.is_none()
             && !claim.obligation_id.is_empty()
             && self.list()?.iter().any(|c| {
@@ -198,6 +206,7 @@ impl ClaimStore {
         detail: &str,
     ) -> PayResult<Claim> {
         let _guard = self.lock.lock().map_err(|_| refusal::CLAIM_STORE_FAILED.to_string())?;
+        let _dir = DirLock::acquire(&self.root)?;
         let Some(mut claim) = self.get(digest)? else {
             return Err(format!("{}:MISSING_CLAIM", refusal::CLAIM_STORE_FAILED));
         };
