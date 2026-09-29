@@ -1,0 +1,26 @@
+version: dfcm-dd-ui/2
+scope: presentation-to-authority-boundary
+rules:
+  - id: UI-SELECT-REVERSIBLE
+    require: irreversibleSelections == 0
+    on_failure: REFUSED_IRREVERSIBLE_PRESENTATION_SELECTION
+  - id: UI-RENDER-NO-DO
+    require: renderedControl.actuationAuthority == false
+    on_failure: REFUSED_RENDER_AUTHORITY_ESCALATION
+  - id: UI-INTENT-ONLY
+    require: renderedControl.outputKind == intent
+    on_failure: REFUSED_DIRECT_DO_FROM_UI
+  - id: UI-CONSTRUCT-ADMISSION
+    require: constructIntent.admitted == true
+    on_failure: REFUSED_UNADMITTED_CONSTRUCT
+  - id: UI-DO-BRCE
+    require: doIntent.route == BRCE
+    on_failure: REFUSED_NON_BRCE_DO
+  - id: UI-RECEIPT-BINDING
+    require_all: [grammarDigest, worldDigest, frontierDigest, screenDigest]
+    on_failure: REFUSED_UNREPLAYABLE_PRESENTATION
+standing:
+  presentation_selection: reversible
+  render: no_authority
+  intent: no_actuation
+  do: receipt_required
