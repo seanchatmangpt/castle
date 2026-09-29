@@ -457,6 +457,89 @@ fn board_cannot_select_a_refused_campaign_even_if_it_prefers_it() {
 }
 
 #[test]
+fn board_selection_refuses_a_stale_verdict_after_same_id_candidate_mutation() {
+    let constitution = constitution();
+    let doctrine = doctrine();
+    let partitions = partitions(&doctrine);
+    let current = current_local(&partitions);
+    let original = candidate(
+        &constitution,
+        &doctrine,
+        &partitions[0],
+        "campaign:stable-id",
+        "counterexample",
+        1_000_000_000,
+    );
+    let verdict =
+        judge_campaign_candidate(&constitution, &doctrine, &partitions[0], &original, &current);
+    assert_eq!(verdict.standing, StrategicStanding::Alive);
+
+    let mut mutated = original;
+    mutated.objectives.insert("option-value-bps".to_string(), 9999);
+
+    let err = admit_board_selection(
+        &constitution,
+        &[mutated],
+        &[verdict],
+        BoardSelectionRequest {
+            candidate_id: "campaign:stable-id".to_string(),
+            selection_authority_digest: digest('5'),
+            selected_by: "board:independent-directors".to_string(),
+            selected_at: "2026-09-28T21:03:00-07:00".to_string(),
+        },
+    )
+    .expect_err("same ID must not let a changed candidate reuse earlier standing");
+
+    assert_eq!(err, "REFUSED:STALE_CAMPAIGN_VERDICT");
+}
+
+#[test]
+fn board_selection_refuses_ambiguous_candidate_identity() {
+    let constitution = constitution();
+    let doctrine = doctrine();
+    let partitions = partitions(&doctrine);
+    let current = current_local(&partitions);
+    let candidate_a = candidate(
+        &constitution,
+        &doctrine,
+        &partitions[0],
+        "campaign:duplicate",
+        "counterexample:a",
+        1_000_000_000,
+    );
+    let candidate_b = candidate(
+        &constitution,
+        &doctrine,
+        &partitions[1],
+        "campaign:duplicate",
+        "counterexample:b",
+        1_000_000_000,
+    );
+    let verdict = judge_campaign_candidate(
+        &constitution,
+        &doctrine,
+        &partitions[0],
+        &candidate_a,
+        &current,
+    );
+
+    let err = admit_board_selection(
+        &constitution,
+        &[candidate_a, candidate_b],
+        &[verdict],
+        BoardSelectionRequest {
+            candidate_id: "campaign:duplicate".to_string(),
+            selection_authority_digest: digest('4'),
+            selected_by: "board:independent-directors".to_string(),
+            selected_at: "2026-09-28T21:04:00-07:00".to_string(),
+        },
+    )
+    .expect_err("candidate identity must be unique");
+
+    assert_eq!(err, "REFUSED:AMBIGUOUS_CAMPAIGN_CANDIDATE");
+}
+
+#[test]
 fn replanning_escalates_only_as_far_as_observed_divergence_requires() {
     assert_eq!(
         route_replan(DivergenceEvidence {
