@@ -1,0 +1,17 @@
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix ex: <https://castle.chatmangpt.com/system/> .
+
+ex:crypto a prov:Entity ;
+    dcterms:type "package" .
+
+ex:identity-api a prov:Entity ;
+    dcterms:type "service" ;
+    dcterms:requires ex:crypto .
+
+ex:control-plane a prov:Entity ;
+    dcterms:type "service" ;
+    dcterms:requires ex:identity-api .
+
+ex:reporting a prov:Entity ;
+    dcterms:type "service" .

@@ -5,3 +5,4 @@ export * from "./fortune5.ts";
 export * from "./board.generated.ts";
 export * from "./board-goals.generated.ts";
 export * from "./board.ts";
+export * from "./ggen-rdf.ts";
