@@ -266,3 +266,72 @@ fn ecosystem_witness_cannot_cross_construct_subject_boundary() {
         "REFUSED:EXTERNAL_WITNESS_SUBJECT_MISMATCH"
     );
 }
+
+
+#[test]
+fn sa2a_portable_envelope_is_consumed_without_rederiving_policy() {
+    use serde_json::json;
+
+    let mut envelope = PortableReplanEnvelope {
+        schema: SA2A_REPLAN_SCHEMA_ID.to_string(),
+        contract_digest: SA2A_REPLAN_CONTRACT_DIGEST.to_string(),
+        exact_subject: json!("subject:payments"),
+        receipt_id: "receipt:42".to_string(),
+        consequence: "failed".to_string(),
+        decision: PortableReplanDecision {
+            kind: "replan".to_string(),
+            reason: "recoverable_failure".to_string(),
+            authority: "none".to_string(),
+        },
+        provider: Some("p1".to_string()),
+        projection_digest: Some(digest('a')),
+        source_replay_key: Some("replay:42".to_string()),
+    };
+    assert!(admit_sa2a_replan_envelope("subject:payments", &envelope).is_alive());
+
+    // CASTLE validates the published envelope but does not recreate SA2A's
+    // consequence->decision algebra. Terminal/unknown examples are accepted
+    // when the upstream contract and no-authority fence are intact.
+    envelope.consequence = "reconciled".to_string();
+    envelope.decision.kind = "stop".to_string();
+    envelope.decision.reason = "terminal_reconciled".to_string();
+    assert!(admit_sa2a_replan_envelope("subject:payments", &envelope).is_alive());
+
+    envelope.consequence = "unknown_outcome".to_string();
+    envelope.decision.kind = "replan".to_string();
+    envelope.decision.reason = "reconcile_unknown".to_string();
+    assert!(admit_sa2a_replan_envelope("subject:payments", &envelope).is_alive());
+}
+
+#[test]
+fn sa2a_portable_envelope_refuses_subject_or_authority_drift() {
+    use serde_json::json;
+
+    let mut envelope = PortableReplanEnvelope {
+        schema: SA2A_REPLAN_SCHEMA_ID.to_string(),
+        contract_digest: SA2A_REPLAN_CONTRACT_DIGEST.to_string(),
+        exact_subject: json!("subject:a"),
+        receipt_id: "receipt:1".to_string(),
+        consequence: "refused".to_string(),
+        decision: PortableReplanDecision {
+            kind: "stop".to_string(),
+            reason: "typed_refusal".to_string(),
+            authority: "none".to_string(),
+        },
+        provider: None,
+        projection_digest: None,
+        source_replay_key: None,
+    };
+
+    assert_eq!(
+        admit_sa2a_replan_envelope("subject:b", &envelope),
+        EvidenceStanding::Refused("REFUSED:SA2A_EXACT_SUBJECT_MISMATCH".to_string())
+    );
+
+    envelope.exact_subject = json!("subject:a");
+    envelope.decision.authority = "do".to_string();
+    assert_eq!(
+        admit_sa2a_replan_envelope("subject:a", &envelope),
+        EvidenceStanding::Refused("REFUSED:SA2A_AUTHORITY_ESCALATION".to_string())
+    );
+}
