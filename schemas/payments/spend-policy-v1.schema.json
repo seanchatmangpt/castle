@@ -9,6 +9,14 @@
     "principals": {
       "type": "object",
       "additionalProperties": { "$ref": "#/$defs/principalPolicy" }
+    },
+    "require_derived_obligation": {
+      "type": "boolean",
+      "description": "Obligation ids must derive from (payer, payee, purpose, invoice_ref). Default false."
+    },
+    "require_screening": {
+      "type": "boolean",
+      "description": "Unscreened admit_payment refuses PAYMENT_SCREENING_REQUIRED. Default false."
     }
   },
   "$defs": {

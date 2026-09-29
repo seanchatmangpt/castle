@@ -2,6 +2,8 @@ use crate::sa2a_security::epoch::SecurityEpochs;
 use crate::sa2a_security::verifier::VerificationReceipt;
 use crate::sa2a_security::{ActuationCertificate, CertificateVerifier, KeyRegistry, PreparedEffect};
 
+use super::compliance::{run_controls, ComplianceControl};
+use super::counterparty::CounterpartyRegistry;
 use super::claim_store::{Claim, ClaimState, ClaimStore};
 use super::effect::PaymentEffect;
 use super::nonce::DurableNonceFence;
@@ -61,7 +63,59 @@ pub fn admit_payment(
     certificate: &ActuationCertificate,
     ctx: &AdmissionContext<'_>,
 ) -> PayResult<PaymentAdmission> {
+    admit_inner(prepared, certificate, ctx, false)
+}
+
+/// Refusal when policy demands screening but the unscreened admission path was used.
+pub const PAYMENT_SCREENING_REQUIRED: &str = "REFUSED:PAYMENT_SCREENING_REQUIRED";
+
+/// Screening inputs: compliance controls plus the counterparty registry that must
+/// resolve both payer and payee accounts.
+pub struct Screening<'a> {
+    pub controls: &'a [&'a dyn ComplianceControl],
+    pub counterparties: &'a CounterpartyRegistry,
+}
+
+/// Digests of the screening evidence. Callers feed these into
+/// `EffectBindings.counterparty_evidence_digest` (`counterparty_evidence_digest`)
+/// and their law/compliance binding (`compliance_bundle_digest`) so the sealed
+/// `PreparedEconomicEffect` identity depends on the exact screening outcome.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScreeningEvidence {
+    pub compliance_bundle_digest: String,
+    pub counterparty_evidence_digest: String,
+}
+
+/// strict parse -> screening -> the normal admission path. A sanctions hit or an
+/// unresolved counterparty refuses BEFORE the nonce is burned or budget reserved.
+pub fn admit_payment_screened(
+    prepared: PreparedEffect,
+    certificate: &ActuationCertificate,
+    ctx: &AdmissionContext<'_>,
+    screening: &Screening<'_>,
+) -> PayResult<(PaymentAdmission, ScreeningEvidence)> {
+    let effect = PaymentEffect::from_prepared(prepared.clone())?;
+    let bundle = run_controls(screening.controls, &effect)?;
+    let payer = screening.counterparties.resolve(effect.payer())?;
+    let payee = screening.counterparties.resolve(effect.payee())?;
+    let evidence = ScreeningEvidence {
+        compliance_bundle_digest: bundle.bundle_digest,
+        counterparty_evidence_digest: screening.counterparties.evidence_digest(payer, payee),
+    };
+    let admission = admit_inner(prepared, certificate, ctx, true)?;
+    Ok((admission, evidence))
+}
+
+fn admit_inner(
+    prepared: PreparedEffect,
+    certificate: &ActuationCertificate,
+    ctx: &AdmissionContext<'_>,
+    screened: bool,
+) -> PayResult<PaymentAdmission> {
     let effect = PaymentEffect::from_prepared(prepared)?;
+    if ctx.policy.require_screening && !screened {
+        return refuse(PAYMENT_SCREENING_REQUIRED);
+    }
 
     let verifier = CertificateVerifier {
         registry: ctx.registry,

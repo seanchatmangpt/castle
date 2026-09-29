@@ -16,7 +16,7 @@
     "amount_minor": { "type": "integer", "minimum": 0 },
     "currency": { "type": "string", "enum": ["USD", "EUR", "GBP", "JPY", "KWD"] },
     "generation": { "type": "integer", "minimum": 0 },
-    "state": { "type": "string", "enum": ["reserved", "executed", "refused", "unknown_outcome"] },
+    "state": { "type": "string", "enum": ["reserved", "submitted", "final", "returned", "executed", "refused", "unknown_outcome"] },
     "reverses": { "type": ["string", "null"] },
     "construct_digest": { "type": ["string", "null"] },
     "detail": { "type": "string" },

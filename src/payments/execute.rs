@@ -51,7 +51,7 @@ pub struct ExecutionContext<'a> {
     pub policy: &'a SpendPolicy,
 }
 
-fn subject_of(admission: &PaymentAdmission) -> String {
+pub(crate) fn subject_of(admission: &PaymentAdmission) -> String {
     format!("payment:{}", admission.effect().digest())
 }
 
@@ -66,11 +66,11 @@ fn process_of(admission: &PaymentAdmission) -> PowlProcess {
     }
 }
 
-fn envelope_of(admission: &PaymentAdmission, now_epoch_ms: i64) -> TestEnvelope {
+fn envelope_of(admission: &PaymentAdmission, now_epoch_ms: i64, allowed: BTreeSet<String>) -> TestEnvelope {
     TestEnvelope {
         system_id: subject_of(admission),
-        allowed_transition_ids: BTreeSet::from([T_RESERVE.to_string(), T_POST.to_string()]),
-        max_steps: 4,
+        max_steps: u32::try_from(allowed.len().max(1)).unwrap_or(u32::MAX - 2).saturating_add(2),
+        allowed_transition_ids: allowed,
         expires_at_epoch_ms: now_epoch_ms + 60_000,
     }
 }
@@ -172,10 +172,26 @@ pub fn build_construct(
     admission: &PaymentAdmission,
     ctx: &ExecutionContext<'_>,
 ) -> PayResult<(ConstructAdmission, PowlProcess, TestEnvelope)> {
+    build_construct_with(
+        admission,
+        ctx,
+        process_of(admission),
+        BTreeSet::from([T_RESERVE.to_string(), T_POST.to_string()]),
+    )
+}
+
+/// Generalized CONSTRUCT: the caller supplies the POWL process and the exact set of
+/// transitions the envelope allows (e.g. the rail-mediated hold/submit process).
+/// Still inert; the returned admission binds precisely this process and envelope.
+pub fn build_construct_with(
+    admission: &PaymentAdmission,
+    ctx: &ExecutionContext<'_>,
+    process: PowlProcess,
+    allowed_transitions: BTreeSet<String>,
+) -> PayResult<(ConstructAdmission, PowlProcess, TestEnvelope)> {
     let digest = admission.effect().digest().to_string();
     let subject = subject_of(admission);
-    let process = process_of(admission);
-    let envelope = envelope_of(admission, ctx.now_epoch_ms);
+    let envelope = envelope_of(admission, ctx.now_epoch_ms, allowed_transitions);
     let authority = admission.verification().audience.clone();
     let request = ConstructRequest {
         subject: subject.clone(),

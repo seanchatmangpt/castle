@@ -23,6 +23,10 @@ pub struct SpendPolicy {
     /// invoice_ref) via `obligation::derive_obligation_id`. Default false = v1.
     #[serde(default)]
     pub require_derived_obligation: bool,
+    /// When set, the unscreened `admit_payment` path refuses with
+    /// `PAYMENT_SCREENING_REQUIRED`; only `admit_payment_screened` admits.
+    #[serde(default)]
+    pub require_screening: bool,
 }
 
 impl SpendPolicy {

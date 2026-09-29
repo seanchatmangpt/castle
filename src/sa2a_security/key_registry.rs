@@ -52,4 +52,10 @@ impl KeyRegistry {
         }
         Ok(record)
     }
+
+    /// Read-only snapshot of all records, sorted by `key_id`.
+    #[must_use]
+    pub fn records(&self) -> Vec<KeyRecord> {
+        self.keys.values().cloned().collect()
+    }
 }

@@ -1,0 +1,7 @@
+{
+  "require_lei": false,
+  "parties": [
+    { "party_id": "party:treasury", "legal_name": "Treasury Ltd", "accounts": ["acct:treasury"] },
+    { "party_id": "party:supplier-9821", "legal_name": "Supplier 9821 GmbH", "accounts": ["acct:supplier-9821"] }
+  ]
+}

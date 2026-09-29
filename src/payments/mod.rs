@@ -40,6 +40,10 @@ pub use execute::{build_construct, execute_payment, ExecutionContext, PaymentExe
 pub use ledger::{ActuationToken, FileJournalLedger, LedgerEntry, LedgerError, LedgerHold, LedgerPort};
 pub use settlement::{apply_finality, FinalityEvidence, FinalityKind, FinalityOutcome};
 pub use pee::{EffectBindings, PreparedEconomicEffect};
+pub use execute_rail::{finalize_via_rail, submit_via_rail, FinalizeResult, RailExecutionParams, RailStandingAfterSubmit, RailSubmission};
+pub use admission::{admit_payment_screened, Screening, ScreeningEvidence};
+pub use replay::{admit_payment_journaled, replay_admission, AdmissionJournal, AdmissionRecord, ReplayVerdict};
+pub use event_receipt::{explain, seal_event_receipt, verify_event_receipt, EventInputs, EventReceipt};
 pub use rail::{RailAck, RailActuator, RailError, RailInstruction, RailStatus};
 pub use rail_sim::{SimMode, SimRail};
 pub use experience::{ClassRule, ExperienceStore, Knowledge, PaymentClass};
