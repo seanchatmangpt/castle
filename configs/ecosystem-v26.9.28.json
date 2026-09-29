@@ -1,0 +1,193 @@
+{
+  "kind": "CASTLE_ECOSYSTEM_REVIEW_V1",
+  "release_epoch": "v26.9.28",
+  "reviewed_local_date": "2026-09-28",
+  "timezone": "America/Los_Angeles",
+  "castle_base_sha": "5059c45a8ef007cd1e095213c729c8bfe6db9e79",
+  "marketplace_pack": {
+    "repo": "seanchatmangpt/ggen-marketplace",
+    "ref": "v26.9.29",
+    "commit_sha": "637b561cc6384fc9ac0e4282d048cc7624256258",
+    "path": "packs/castle-pack",
+    "ontology_sha": "18cd57330b64a35fac33dc7f5c8f1cb48f4c15e9",
+    "security_universe_sha": "670c4743b5a8eb31d191585d970e950ac5b14a17",
+    "security_tools_sha": "12b56078a822a55230dad090ebecb6cc1f24e594"
+  },
+  "subjects": [
+    {
+      "id": "ggen-marketplace-v26.9.29",
+      "repo": "seanchatmangpt/ggen-marketplace",
+      "source_kind": "github_release",
+      "reference": "v26.9.29",
+      "sha": "637b561cc6384fc9ac0e4282d048cc7624256258",
+      "role": "semantic-authority",
+      "authority_ceiling": "NO_DO"
+    },
+    {
+      "id": "ggen-marketplace-v26.9.28",
+      "repo": "seanchatmangpt/ggen-marketplace",
+      "source_kind": "github_release",
+      "reference": "v26.9.28",
+      "sha": "d94fb4b6fa7345f988a758e3e63ab1ae669e3885",
+      "role": "prior-marketplace-release",
+      "authority_ceiling": "NO_DO"
+    },
+    {
+      "id": "graphlaw-v26.9.28",
+      "repo": "seanchatmangpt/graphlaw",
+      "source_kind": "github_release",
+      "reference": "v26.9.28",
+      "sha": "74c039f258d3e2941be4e29e4715d400bbd774fe",
+      "pr": 10,
+      "role": "semantic-court-and-wasi",
+      "authority_ceiling": "COMPUTE_ONLY"
+    },
+    {
+      "id": "ggen-v26.9.28",
+      "repo": "seanchatmangpt/ggen",
+      "source_kind": "github_release",
+      "reference": "v26.9.28",
+      "sha": "ff96f04e8c7b851e5cca53f3faf5ce1d5f43ce6e",
+      "pr": 779,
+      "role": "generator",
+      "authority_ceiling": "CONSTRUCT_ONLY"
+    },
+    {
+      "id": "ash-r2rml-v26.9.28",
+      "repo": "seanchatmangpt/ash_r2rml",
+      "source_kind": "github_release",
+      "reference": "v26.9.28",
+      "sha": "40d181fffdefbb65ee4a83486eae86534690c4d5",
+      "pr": 47,
+      "role": "exact-source-vkg-federation",
+      "authority_ceiling": "EVIDENCE_ONLY"
+    },
+    {
+      "id": "affidavit-pr89",
+      "repo": "seanchatmangpt/affidavit",
+      "source_kind": "merged_pr",
+      "reference": "merge:89",
+      "sha": "7eaf86b796fccec4fe1c1c1c81d221501401a24d",
+      "pr": 89,
+      "role": "receipt-verifier-wasi",
+      "authority_ceiling": "EVIDENCE_ONLY"
+    },
+    {
+      "id": "wasm4pm-pr642",
+      "repo": "seanchatmangpt/wasm4pm",
+      "source_kind": "merged_pr",
+      "reference": "merge:642",
+      "sha": "c321251bba8613528dd1f2018560c37e180cfdcf",
+      "pr": 642,
+      "role": "portable-process-qualification",
+      "authority_ceiling": "COMPUTE_ONLY"
+    },
+    {
+      "id": "dspy-wasm-pr8",
+      "repo": "seanchatmangpt/dspy-wasm",
+      "source_kind": "merged_pr",
+      "reference": "merge:8",
+      "sha": "336482ce19464a3a752936f9c866ff6fea2780d3",
+      "pr": 8,
+      "role": "bounded-model-compute",
+      "authority_ceiling": "ADVICE_ONLY"
+    },
+    {
+      "id": "autofde-lab-pr207",
+      "repo": "seanchatmangpt/autofde-lab",
+      "source_kind": "merged_pr",
+      "reference": "merge:207",
+      "sha": "d42a5af94481a3128bf3e35d5f2a0a9a70f22e41",
+      "pr": 207,
+      "role": "independent-plan-verification",
+      "authority_ceiling": "SELECT_ONLY"
+    },
+    {
+      "id": "ash-a2a-pr56",
+      "repo": "seanchatmangpt/ash_a2a",
+      "source_kind": "merged_pr",
+      "reference": "merge:56",
+      "sha": "0da2e1588166d455368a655b12faa24bf8b876a2",
+      "pr": 56,
+      "role": "canonical-gall-closure",
+      "authority_ceiling": "EVIDENCE_ONLY"
+    },
+    {
+      "id": "beam4pm-pr102",
+      "repo": "seanchatmangpt/beam4pm",
+      "source_kind": "merged_pr",
+      "reference": "merge:102",
+      "sha": "43994bd7b72e14657627d1415d2e8b5c2be928f0",
+      "pr": 102,
+      "role": "provider-recovery-router",
+      "authority_ceiling": "SELECT_ONLY"
+    },
+    {
+      "id": "ferroplan-pr49",
+      "repo": "seanchatmangpt/ferroplan",
+      "source_kind": "merged_pr",
+      "reference": "merge:49",
+      "sha": "f5300ee6935c3aa0fb8bb4da413e314bce9d7000",
+      "pr": 49,
+      "role": "multi-plan-provider-recovery",
+      "authority_ceiling": "SELECT_ONLY"
+    },
+    {
+      "id": "ash-pplan-pr8",
+      "repo": "seanchatmangpt/ash_pplan",
+      "source_kind": "merged_pr",
+      "reference": "merge:8",
+      "sha": "385d05792baa4dd0121ba24b7786f764e92aab85",
+      "pr": 8,
+      "role": "fond-tla-differential",
+      "authority_ceiling": "COMPUTE_ONLY"
+    },
+    {
+      "id": "xaas-pr95",
+      "repo": "seanchatmangpt/xaas",
+      "source_kind": "merged_pr",
+      "reference": "merge:95",
+      "sha": "69ff991a960009da602b67c2c1290fb25b69a96a",
+      "pr": 95,
+      "role": "execution-closure-reference",
+      "authority_ceiling": "NO_CASTLE_DO"
+    }
+  ],
+  "excluded_open_prs": [
+    {
+      "repo": "seanchatmangpt/gymact",
+      "pr": 152,
+      "reason": "open/unreleased"
+    },
+    {
+      "repo": "seanchatmangpt/gymact",
+      "pr": 153,
+      "reason": "open/unreleased"
+    },
+    {
+      "repo": "seanchatmangpt/ferroplan",
+      "pr": 50,
+      "reason": "open/unreleased"
+    },
+    {
+      "repo": "seanchatmangpt/ash_ex4pm",
+      "pr": 4,
+      "reason": "open draft"
+    },
+    {
+      "repo": "seanchatmangpt/ggen_igniter",
+      "pr": 45,
+      "reason": "open draft"
+    },
+    {
+      "repo": "seanchatmangpt/ggen-marketplace",
+      "pr": 516,
+      "reason": "open draft"
+    },
+    {
+      "repo": "seanchatmangpt/ggen-marketplace",
+      "pr": 518,
+      "reason": "open draft"
+    }
+  ]
+}
