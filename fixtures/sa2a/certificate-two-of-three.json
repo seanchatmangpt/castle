@@ -1,0 +1,1 @@
+{"version":1,"effect_digest":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","principal":"principal:alice","policy_epoch":7,"revocation_epoch":9,"generation":11,"nonce":"n-001","not_before_ms":100,"expires_at_ms":200,"audience":"actuator:payments","threshold":2,"signatures":[]}
