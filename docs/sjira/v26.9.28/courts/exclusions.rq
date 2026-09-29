@@ -1,0 +1,16 @@
+PREFIX sj: <https://ggen-igniter.dev/ontology/semantic-jira#>
+
+# Evaluate over goal.ttl alone.
+# Violation query. Zero rows is the only admitted result.
+SELECT ?subject ?forbiddenType
+WHERE {
+  {
+    ?subject a sj:WorkOrder .
+    BIND("AUTHORED_WORK_ORDER" AS ?forbiddenType)
+  }
+  UNION
+  {
+    ?subject a sj:Receipt .
+    BIND("AUTHORED_RECEIPT" AS ?forbiddenType)
+  }
+}
