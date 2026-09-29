@@ -12,7 +12,7 @@ fn strip_triple_quoted(input: &str) -> String {
     let mut rest = input;
     let mut inside = false;
 
-    while let Some(index) = rest.find(""""") {
+    while let Some(index) = rest.find("\"\"\"") {
         if !inside {
             out.push_str(&rest[..index]);
         }
@@ -45,17 +45,17 @@ fn goal_graph_is_a_goal_graph_not_a_hand_written_backlog() {
         "goal.ttl must never author Receipt instances"
     );
     assert!(
-        !graph.contains("sj:standing "ALIVE""),
+        !graph.contains("sj:standing \"ALIVE\""),
         "standing is observed by courts, never declared by goal.ttl"
     );
 
     assert_eq!(
-        graph.matches("sj:authorityCeiling "CONSTRUCT"").count(),
+        graph.matches("sj:authorityCeiling \"CONSTRUCT\"").count(),
         16,
         "root + successor + fourteen gates must all stop at CONSTRUCT"
     );
     assert!(
-        !graph.contains("sj:authorityCeiling "DO""),
+        !graph.contains("sj:authorityCeiling \"DO\""),
         "sJira may not mint consequential DO authority"
     );
 }
@@ -65,12 +65,12 @@ fn crown_has_exactly_fourteen_required_gates() {
     let graph = strip_triple_quoted(GOAL);
 
     for gate in 0..14 {
-        let id = format!("dcterms:identifier "CASTLE-28-{gate}"");
+        let id = format!("dcterms:identifier \"CASTLE-28-{gate}\"");
         assert!(graph.contains(&id), "missing crown gate CASTLE-28-{gate}");
     }
 
     assert_eq!(
-        graph.matches("dcterms:identifier "CASTLE-28-").count(),
+        graph.matches("dcterms:identifier \"CASTLE-28-").count(),
         14,
         "unexpected crown-gate cardinality"
     );
@@ -129,7 +129,7 @@ fn retained_irreducible_capabilities_have_exactly_one_owner() {
         if !block.contains("a c:RepositorySubject") {
             continue;
         }
-        if !block.contains("c:disposition "KEEP" ;") {
+        if !block.contains("c:disposition \"KEEP\" ;") {
             continue;
         }
 
@@ -169,7 +169,7 @@ fn supporting_candidates_are_non_sovereign_until_dispositioned() {
     let mut supporting = 0usize;
 
     for block in REPOS.split("\n\n") {
-        if !block.contains("c:disposition "SUPPORTING_CANDIDATE"") {
+        if !block.contains("c:disposition \"SUPPORTING_CANDIDATE\"") {
             continue;
         }
         supporting += 1;
@@ -185,21 +185,21 @@ fn supporting_candidates_are_non_sovereign_until_dispositioned() {
 #[test]
 fn live_crown_subjects_are_pinned_to_observed_heads() {
     assert!(REPOS.contains(
-        "sj:repository "seanchatmangpt/castle" ;\n    sj:baseSha "d854333ead2b5f47cc38bbf5680dd7db13fbf009""
+        "sj:repository \"seanchatmangpt/castle\" ;\n    sj:baseSha \"d854333ead2b5f47cc38bbf5680dd7db13fbf009\""
     ));
     assert!(REPOS.contains(
-        "sj:repository "seanchatmangpt/xaas" ;\n    sj:baseSha "f8ea07db9c588633ea6a2453dfd133977aa7a0d3""
+        "sj:repository \"seanchatmangpt/xaas\" ;\n    sj:baseSha \"f8ea07db9c588633ea6a2453dfd133977aa7a0d3\""
     ));
 }
 
 #[test]
 fn stop_court_is_receipt_driven_and_anti_vacuous() {
     for gate in 0..14 {
-        let id = format!(""CASTLE-28-{gate}"");
+        let id = format!("\"CASTLE-28-{gate}\"");
         assert!(STOP.contains(&id), "stop court omits {id}");
     }
     assert!(STOP.contains("sj:receipt ?receipt"));
-    assert!(STOP.contains("sj:standing "ALIVE""));
+    assert!(STOP.contains("sj:standing \"ALIVE\""));
     assert!(STOP.contains("FILTER NOT EXISTS"));
     assert!(STOP.contains("?order a sj:WorkOrder"));
 }
@@ -207,10 +207,10 @@ fn stop_court_is_receipt_driven_and_anti_vacuous() {
 #[test]
 fn supporting_courts_encode_the_architectural_laws() {
     assert!(OWNERSHIP.contains("HAVING(COUNT(?repo) != 1)"));
-    assert!(RUNTIME_CROWN.contains(""RUNTIME_EXISTENCE""));
-    assert!(RUNTIME_CROWN.contains(""seanchatmangpt/xaas""));
-    assert!(RUNTIME_CROWN.contains(""CONSEQUENTIAL_ADMISSIBILITY""));
-    assert!(RUNTIME_CROWN.contains(""seanchatmangpt/castle""));
+    assert!(RUNTIME_CROWN.contains("\"RUNTIME_EXISTENCE\""));
+    assert!(RUNTIME_CROWN.contains("\"seanchatmangpt/xaas\""));
+    assert!(RUNTIME_CROWN.contains("\"CONSEQUENTIAL_ADMISSIBILITY\""));
+    assert!(RUNTIME_CROWN.contains("\"seanchatmangpt/castle\""));
     assert!(EXCLUSIONS.contains("?subject a sj:WorkOrder"));
     assert!(EXCLUSIONS.contains("?subject a sj:Receipt"));
 }

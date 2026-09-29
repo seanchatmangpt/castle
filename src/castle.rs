@@ -892,6 +892,7 @@ pub struct ConstructCapability {
     pub receipt: Receipt,
 }
 
+#[derive(Debug, Clone)]
 pub struct ConstructRequest {
     pub subject: String,
     pub authority: String,
