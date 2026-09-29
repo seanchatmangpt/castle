@@ -1111,3 +1111,668 @@ pub fn compile_board_strategic_receipt(
     receipt.receipt_digest = canonical_digest(&receipt.core_json())?;
     Ok(receipt)
 }
+
+
+// ---------------------------------------------------------------------------
+// Board operating loop: counterstrategy, capital, materiality, twin, package.
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CounterstrategyScenario {
+    pub scenario_id: String,
+    pub local_premise_mutations: BTreeMap<String, String>,
+    pub falsifier_triggered: bool,
+    pub prohibited_outcomes_reached: Vec<String>,
+    pub authority_expansion_attempts: Vec<String>,
+    pub additional_capital_required: u64,
+    pub remaining_options: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CounterstrategyVerdict {
+    pub scenario_id: String,
+    pub standing: StrategicStanding,
+    pub refusals: Vec<String>,
+    pub verdict_digest: String,
+}
+
+impl CounterstrategyVerdict {
+    fn core_json(&self) -> Value {
+        json!({
+            "scenario_id": self.scenario_id,
+            "standing": self.standing.as_str(),
+            "refusals": self.refusals,
+        })
+    }
+}
+
+pub fn judge_counterstrategy(
+    constitution: &BoardConstitution,
+    partition: &StrategyPartition,
+    candidate: &CampaignCandidate,
+    scenario: &CounterstrategyScenario,
+) -> Result<CounterstrategyVerdict, String> {
+    let scenario_id = scenario.scenario_id.trim();
+    if scenario_id.is_empty() {
+        return Err("REFUSED:EMPTY_COUNTERSTRATEGY_SCENARIO".to_string());
+    }
+    if candidate.partition_digest != partition.partition_digest
+        || candidate.strategy_id != partition.strategy_id
+    {
+        return Err("REFUSED:COUNTERSTRATEGY_PARTITION_DRIFT".to_string());
+    }
+    for (premise, digest) in &scenario.local_premise_mutations {
+        if premise.trim().is_empty() || !lowercase_hex_64(digest) {
+            return Err("REFUSED:INVALID_COUNTERSTRATEGY_PREMISE".to_string());
+        }
+    }
+
+    let mut refusals = Vec::new();
+    if scenario.falsifier_triggered {
+        refusals.push("REFUSED:CAMPAIGN_FALSIFIER_TRIGGERED".to_string());
+    }
+    for (premise, compiled) in &partition.local_premise_digests {
+        if let Some(mutated) = scenario.local_premise_mutations.get(premise) {
+            if mutated != compiled {
+                refusals.push(format!("REFUSED:COUNTERSTRATEGY_FALSIFIED_PREMISE:{premise}"));
+            }
+        }
+    }
+    if scenario.prohibited_outcomes_reached.iter().any(|outcome| {
+        constitution
+            .prohibited_outcomes
+            .iter()
+            .any(|prohibited| prohibited == outcome)
+    }) {
+        refusals.push("REFUSED:COUNTERSTRATEGY_REACHES_PROHIBITED_OUTCOME".to_string());
+    }
+    if !scenario.authority_expansion_attempts.is_empty() {
+        refusals.push("REFUSED:COUNTERSTRATEGY_REQUIRES_AUTHORITY_EXPANSION".to_string());
+    }
+    let projected_capital = candidate
+        .capital_committed
+        .checked_add(scenario.additional_capital_required)
+        .ok_or_else(|| "REFUSED:COUNTERSTRATEGY_CAPITAL_OVERFLOW".to_string())?;
+    if projected_capital > constitution.capital_at_risk_limit {
+        refusals.push("REFUSED:COUNTERSTRATEGY_EXCEEDS_CAPITAL_BOUND".to_string());
+    }
+    if scenario.remaining_options == 0 {
+        refusals.push("REFUSED:COUNTERSTRATEGY_EXHAUSTS_OPTION_SPACE".to_string());
+    }
+
+    refusals.sort();
+    refusals.dedup();
+    let mut verdict = CounterstrategyVerdict {
+        scenario_id: scenario_id.to_string(),
+        standing: if refusals.is_empty() {
+            StrategicStanding::Alive
+        } else {
+            StrategicStanding::Refused
+        },
+        refusals,
+        verdict_digest: String::new(),
+    };
+    verdict.verdict_digest = canonical_digest(&verdict.core_json())?;
+    Ok(verdict)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CounterstrategyAssessment {
+    pub campaign_id: String,
+    pub campaign_digest: String,
+    pub standing: StrategicStanding,
+    pub verdicts: Vec<CounterstrategyVerdict>,
+    pub assessment_digest: String,
+}
+
+impl CounterstrategyAssessment {
+    fn core_json(&self) -> Value {
+        json!({
+            "campaign_id": self.campaign_id,
+            "campaign_digest": self.campaign_digest,
+            "standing": self.standing.as_str(),
+            "verdicts": self.verdicts.iter().map(|v| json!({
+                "scenario_id": v.scenario_id,
+                "standing": v.standing.as_str(),
+                "refusals": v.refusals,
+                "verdict_digest": v.verdict_digest,
+            })).collect::<Vec<_>>(),
+        })
+    }
+}
+
+pub fn assess_counterstrategies(
+    constitution: &BoardConstitution,
+    partition: &StrategyPartition,
+    candidate: &CampaignCandidate,
+    scenarios: &[CounterstrategyScenario],
+) -> Result<CounterstrategyAssessment, String> {
+    if scenarios.is_empty() {
+        return Err("REFUSED:MISSING_COUNTERSTRATEGY_SCENARIOS".to_string());
+    }
+    let mut seen = BTreeSet::new();
+    let mut verdicts = Vec::with_capacity(scenarios.len());
+    for scenario in scenarios {
+        let id = scenario.scenario_id.trim().to_string();
+        if !seen.insert(id) {
+            return Err("REFUSED:AMBIGUOUS_COUNTERSTRATEGY_SCENARIO".to_string());
+        }
+        verdicts.push(judge_counterstrategy(
+            constitution,
+            partition,
+            candidate,
+            scenario,
+        )?);
+    }
+    verdicts.sort_by(|a, b| a.scenario_id.cmp(&b.scenario_id));
+    let standing = if verdicts
+        .iter()
+        .all(|verdict| verdict.standing == StrategicStanding::Alive)
+    {
+        StrategicStanding::Alive
+    } else {
+        StrategicStanding::Refused
+    };
+    let mut assessment = CounterstrategyAssessment {
+        campaign_id: candidate.candidate_id.clone(),
+        campaign_digest: candidate.candidate_digest()?,
+        standing,
+        verdicts,
+        assessment_digest: String::new(),
+    };
+    assessment.assessment_digest = canonical_digest(&assessment.core_json())?;
+    Ok(assessment)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CampaignPortfolioPolicy {
+    pub aggregate_capital_at_risk_limit: u64,
+    pub max_single_campaign_concentration_bps: u64,
+    pub min_reversible_capital_bps: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CampaignPortfolioAnalysis {
+    pub standing: StrategicStanding,
+    pub campaign_ids: Vec<String>,
+    pub aggregate_capital_committed: u64,
+    pub aggregate_reversible_capital: u64,
+    pub reversible_capital_bps: u64,
+    pub max_single_campaign_concentration_bps: u64,
+    pub reasons: Vec<String>,
+    pub analysis_digest: String,
+}
+
+impl CampaignPortfolioAnalysis {
+    fn core_json(&self) -> Value {
+        json!({
+            "standing": self.standing.as_str(),
+            "campaign_ids": self.campaign_ids,
+            "aggregate_capital_committed": self.aggregate_capital_committed,
+            "aggregate_reversible_capital": self.aggregate_reversible_capital,
+            "reversible_capital_bps": self.reversible_capital_bps,
+            "max_single_campaign_concentration_bps": self.max_single_campaign_concentration_bps,
+            "reasons": self.reasons,
+        })
+    }
+}
+
+pub fn qualify_campaign_portfolio(
+    candidates: &[CampaignCandidate],
+    verdicts: &[CampaignVerdict],
+    policy: &CampaignPortfolioPolicy,
+) -> Result<CampaignPortfolioAnalysis, String> {
+    if candidates.is_empty() {
+        return Err("REFUSED:EMPTY_CAMPAIGN_PORTFOLIO".to_string());
+    }
+    if policy.aggregate_capital_at_risk_limit == 0
+        || policy.max_single_campaign_concentration_bps > 10_000
+        || policy.min_reversible_capital_bps > 10_000
+    {
+        return Err("REFUSED:INVALID_CAMPAIGN_PORTFOLIO_POLICY".to_string());
+    }
+
+    let mut ids = BTreeSet::new();
+    let mut reasons = Vec::new();
+    let mut aggregate_capital: u64 = 0;
+    let mut aggregate_reversible: u64 = 0;
+    let mut max_single: u64 = 0;
+
+    for candidate in candidates {
+        if !ids.insert(candidate.candidate_id.clone()) {
+            return Err("REFUSED:AMBIGUOUS_CAMPAIGN_CANDIDATE".to_string());
+        }
+        let matching: Vec<&CampaignVerdict> = verdicts
+            .iter()
+            .filter(|verdict| verdict.candidate_id == candidate.candidate_id)
+            .collect();
+        if matching.len() != 1 {
+            return Err(if matching.is_empty() {
+                "REFUSED:MISSING_CAMPAIGN_VERDICT".to_string()
+            } else {
+                "REFUSED:AMBIGUOUS_CAMPAIGN_VERDICT".to_string()
+            });
+        }
+        let verdict = matching[0];
+        let digest = candidate.candidate_digest()?;
+        if verdict.candidate_digest != digest {
+            return Err("REFUSED:STALE_CAMPAIGN_VERDICT".to_string());
+        }
+        if verdict.standing != StrategicStanding::Alive {
+            reasons.push(format!(
+                "REFUSED:PORTFOLIO_CONTAINS_REFUSED_CAMPAIGN:{}",
+                candidate.candidate_id
+            ));
+        }
+        aggregate_capital = aggregate_capital
+            .checked_add(candidate.capital_committed)
+            .ok_or_else(|| "REFUSED:PORTFOLIO_CAPITAL_OVERFLOW".to_string())?;
+        aggregate_reversible = aggregate_reversible
+            .checked_add(candidate.reversible_capital)
+            .ok_or_else(|| "REFUSED:PORTFOLIO_CAPITAL_OVERFLOW".to_string())?;
+        max_single = max_single.max(candidate.capital_committed);
+    }
+
+    if aggregate_capital > policy.aggregate_capital_at_risk_limit {
+        reasons.push("REFUSED:PORTFOLIO_CAPITAL_BOUND_EXCEEDED".to_string());
+    }
+
+    let reversible_bps = if aggregate_capital == 0 {
+        10_000
+    } else {
+        ((u128::from(aggregate_reversible) * 10_000) / u128::from(aggregate_capital)) as u64
+    };
+    let concentration_bps = if aggregate_capital == 0 {
+        0
+    } else {
+        ((u128::from(max_single) * 10_000) / u128::from(aggregate_capital)) as u64
+    };
+
+    if reversible_bps < policy.min_reversible_capital_bps {
+        reasons.push("REFUSED:PORTFOLIO_REVERSIBILITY_BELOW_BOUND".to_string());
+    }
+    if concentration_bps > policy.max_single_campaign_concentration_bps {
+        reasons.push("REFUSED:PORTFOLIO_CONCENTRATION_BOUND_EXCEEDED".to_string());
+    }
+
+    reasons.sort();
+    reasons.dedup();
+    let mut analysis = CampaignPortfolioAnalysis {
+        standing: if reasons.is_empty() {
+            StrategicStanding::Alive
+        } else {
+            StrategicStanding::Refused
+        },
+        campaign_ids: ids.into_iter().collect(),
+        aggregate_capital_committed: aggregate_capital,
+        aggregate_reversible_capital: aggregate_reversible,
+        reversible_capital_bps: reversible_bps,
+        max_single_campaign_concentration_bps: concentration_bps,
+        reasons,
+        analysis_digest: String::new(),
+    };
+    analysis.analysis_digest = canonical_digest(&analysis.core_json())?;
+    Ok(analysis)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BoardReentryDecision {
+    pub required: bool,
+    pub reasons: Vec<String>,
+    pub escalate_by_epoch_ms: Option<i64>,
+    pub materiality_score_bps: i64,
+    pub triggering_dimensions: Vec<crate::board::MaterialityDimension>,
+}
+
+pub fn assess_board_reentry(
+    constitution: &BoardConstitution,
+    strategic_receipt: &BoardStrategicReceipt,
+    event: &crate::board::MaterialityEvent,
+    policy: &crate::board::MaterialityPolicy,
+) -> Result<BoardReentryDecision, String> {
+    if event.subject != constitution.subject
+        || strategic_receipt.constitution_digest != constitution.constitution_digest
+        || strategic_receipt.mandate_id != constitution.mandate_id
+    {
+        return Err("REFUSED:BOARD_REENTRY_SUBJECT_DRIFT".to_string());
+    }
+    let materiality = crate::board::assess_materiality(event, policy)?;
+    let mut reasons = Vec::new();
+    if materiality.material {
+        reasons.push("MATERIALITY_THRESHOLD_CROSSED".to_string());
+    }
+    if strategic_receipt.standing == StrategicStanding::Refused {
+        reasons.push("STRATEGIC_RECEIPT_REFUSED".to_string());
+    }
+    if !strategic_receipt.falsified_premises.is_empty() {
+        reasons.push("STRATEGIC_PREMISE_FALSIFIED".to_string());
+    }
+    if !strategic_receipt.material_exceptions.is_empty() {
+        reasons.push("MATERIAL_EXCEPTION_RECORDED".to_string());
+    }
+    if strategic_receipt.options_remaining == 0 {
+        reasons.push("OPTION_SPACE_EXHAUSTED".to_string());
+    }
+    reasons.sort();
+    reasons.dedup();
+    let required = !reasons.is_empty();
+    Ok(BoardReentryDecision {
+        required,
+        reasons,
+        escalate_by_epoch_ms: if required {
+            materiality
+                .escalate_by_epoch_ms
+                .or(Some(event.occurred_at_epoch_ms))
+        } else {
+            None
+        },
+        materiality_score_bps: materiality.score_bps,
+        triggering_dimensions: materiality.triggering_dimensions,
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StrategicTwinSnapshot {
+    pub subject: String,
+    pub mandate_id: String,
+    pub campaign_id: String,
+    pub standing: StrategicStanding,
+    pub aggregate_capital_committed: u64,
+    pub aggregate_reversible_capital: u64,
+    pub options_remaining: u32,
+    pub falsified_premises: Vec<String>,
+    pub failed_counterstrategy_scenarios: Vec<String>,
+    pub prohibited_outcome_witnesses: Vec<String>,
+    pub authority_expansions: Vec<String>,
+    pub snapshot_digest: String,
+}
+
+impl StrategicTwinSnapshot {
+    fn core_json(&self) -> Value {
+        json!({
+            "subject": self.subject,
+            "mandate_id": self.mandate_id,
+            "campaign_id": self.campaign_id,
+            "standing": self.standing.as_str(),
+            "aggregate_capital_committed": self.aggregate_capital_committed,
+            "aggregate_reversible_capital": self.aggregate_reversible_capital,
+            "options_remaining": self.options_remaining,
+            "falsified_premises": self.falsified_premises,
+            "failed_counterstrategy_scenarios": self.failed_counterstrategy_scenarios,
+            "prohibited_outcome_witnesses": self.prohibited_outcome_witnesses,
+            "authority_expansions": self.authority_expansions,
+        })
+    }
+}
+
+pub fn build_strategic_twin_snapshot(
+    constitution: &BoardConstitution,
+    mandate: &StrategicMandatePacket,
+    receipt: &BoardStrategicReceipt,
+    portfolio: &CampaignPortfolioAnalysis,
+    counterstrategy: &CounterstrategyAssessment,
+) -> Result<StrategicTwinSnapshot, String> {
+    if mandate.subject != constitution.subject
+        || mandate.constitution_digest != constitution.constitution_digest
+        || receipt.constitution_digest != constitution.constitution_digest
+        || receipt.mandate_id != constitution.mandate_id
+        || receipt.campaign_id != mandate.candidate_id
+        || counterstrategy.campaign_id != mandate.candidate_id
+        || counterstrategy.campaign_digest != mandate.candidate_digest
+    {
+        return Err("REFUSED:STRATEGIC_TWIN_SUBJECT_DRIFT".to_string());
+    }
+    let failed_counterstrategy_scenarios = counterstrategy
+        .verdicts
+        .iter()
+        .filter(|verdict| verdict.standing == StrategicStanding::Refused)
+        .map(|verdict| verdict.scenario_id.clone())
+        .collect::<Vec<_>>();
+    let standing = if receipt.standing == StrategicStanding::Alive
+        && portfolio.standing == StrategicStanding::Alive
+        && counterstrategy.standing == StrategicStanding::Alive
+    {
+        StrategicStanding::Alive
+    } else {
+        StrategicStanding::Refused
+    };
+    let mut twin = StrategicTwinSnapshot {
+        subject: constitution.subject.clone(),
+        mandate_id: constitution.mandate_id.clone(),
+        campaign_id: mandate.candidate_id.clone(),
+        standing,
+        aggregate_capital_committed: portfolio.aggregate_capital_committed,
+        aggregate_reversible_capital: portfolio.aggregate_reversible_capital,
+        options_remaining: receipt.options_remaining,
+        falsified_premises: receipt.falsified_premises.clone(),
+        failed_counterstrategy_scenarios,
+        prohibited_outcome_witnesses: receipt.prohibited_outcome_witnesses.clone(),
+        authority_expansions: receipt.authority_expansions.clone(),
+        snapshot_digest: String::new(),
+    };
+    twin.snapshot_digest = canonical_digest(&twin.core_json())?;
+    Ok(twin)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StrategicBoardDelta {
+    pub subject: String,
+    pub mandate_id: String,
+    pub changed_dimensions: Vec<String>,
+    pub requires_board_attention: bool,
+    pub previous_snapshot_digest: String,
+    pub current_snapshot_digest: String,
+}
+
+pub fn diff_strategic_twins(
+    previous: &StrategicTwinSnapshot,
+    current: &StrategicTwinSnapshot,
+) -> Result<StrategicBoardDelta, String> {
+    if previous.subject != current.subject || previous.mandate_id != current.mandate_id {
+        return Err("REFUSED:STRATEGIC_TWIN_LINEAGE_DRIFT".to_string());
+    }
+    let mut changes = Vec::new();
+    if previous.campaign_id != current.campaign_id {
+        changes.push("campaign".to_string());
+    }
+    if previous.standing != current.standing {
+        changes.push("standing".to_string());
+    }
+    if previous.aggregate_capital_committed != current.aggregate_capital_committed {
+        changes.push("capital-committed".to_string());
+    }
+    if previous.aggregate_reversible_capital != current.aggregate_reversible_capital {
+        changes.push("capital-reversible".to_string());
+    }
+    if previous.options_remaining != current.options_remaining {
+        changes.push("options-remaining".to_string());
+    }
+    if previous.falsified_premises != current.falsified_premises {
+        changes.push("falsified-premises".to_string());
+    }
+    if previous.failed_counterstrategy_scenarios != current.failed_counterstrategy_scenarios {
+        changes.push("counterstrategy".to_string());
+    }
+    if previous.prohibited_outcome_witnesses != current.prohibited_outcome_witnesses {
+        changes.push("prohibited-outcomes".to_string());
+    }
+    if previous.authority_expansions != current.authority_expansions {
+        changes.push("authority".to_string());
+    }
+    changes.sort();
+    changes.dedup();
+
+    let requires_board_attention = current.standing == StrategicStanding::Refused
+        || current.options_remaining < previous.options_remaining
+        || current.aggregate_capital_committed > previous.aggregate_capital_committed
+        || current.falsified_premises.len() > previous.falsified_premises.len()
+        || current.failed_counterstrategy_scenarios.len()
+            > previous.failed_counterstrategy_scenarios.len()
+        || current.prohibited_outcome_witnesses.len()
+            > previous.prohibited_outcome_witnesses.len()
+        || current.authority_expansions.len() > previous.authority_expansions.len();
+
+    Ok(StrategicBoardDelta {
+        subject: current.subject.clone(),
+        mandate_id: current.mandate_id.clone(),
+        changed_dimensions: changes,
+        requires_board_attention,
+        previous_snapshot_digest: previous.snapshot_digest.clone(),
+        current_snapshot_digest: current.snapshot_digest.clone(),
+    })
+}
+
+fn fortune5_board_package_digest(package: &crate::board::BoardPackage) -> Result<String, String> {
+    canonical_digest(&json!({
+        "profile": package.profile,
+        "enterprise_subject": package.enterprise_subject,
+        "castle_subject": package.castle_subject,
+        "generated_at": package.generated_at,
+        "enterprise_standing": package.enterprise_standing.as_str(),
+        "castle_standing": package.castle_standing.as_str(),
+        "material_refused_subjects": package.material_refused_subjects,
+        "risk_appetite_breaches": package.risk_appetite_breaches,
+        "control_count": package.control_count,
+        "evidence_digest": package.evidence_digest,
+    }))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StrategicBoardPackage {
+    pub profile: &'static str,
+    pub subject: String,
+    pub generated_at: String,
+    pub fortune5_board_package_digest: String,
+    pub constitution_digest: String,
+    pub mandate_packet_digest: String,
+    pub strategic_receipt_digest: String,
+    pub portfolio_analysis_digest: String,
+    pub counterstrategy_assessment_digest: String,
+    pub twin_snapshot_digest: String,
+    pub board_reentry_required: bool,
+    pub authority_ceiling: &'static str,
+    pub actuation: &'static str,
+    pub package_digest: String,
+}
+
+impl StrategicBoardPackage {
+    fn core_json(&self) -> Value {
+        json!({
+            "profile": self.profile,
+            "subject": self.subject,
+            "generated_at": self.generated_at,
+            "fortune5_board_package_digest": self.fortune5_board_package_digest,
+            "constitution_digest": self.constitution_digest,
+            "mandate_packet_digest": self.mandate_packet_digest,
+            "strategic_receipt_digest": self.strategic_receipt_digest,
+            "portfolio_analysis_digest": self.portfolio_analysis_digest,
+            "counterstrategy_assessment_digest": self.counterstrategy_assessment_digest,
+            "twin_snapshot_digest": self.twin_snapshot_digest,
+            "board_reentry_required": self.board_reentry_required,
+            "authority_ceiling": self.authority_ceiling,
+            "actuation": self.actuation,
+        })
+    }
+}
+
+pub fn build_strategic_board_package(
+    base: &crate::board::BoardPackage,
+    constitution: &BoardConstitution,
+    mandate: &StrategicMandatePacket,
+    receipt: &BoardStrategicReceipt,
+    portfolio: &CampaignPortfolioAnalysis,
+    counterstrategy: &CounterstrategyAssessment,
+    twin: &StrategicTwinSnapshot,
+    reentry: &BoardReentryDecision,
+    generated_at: &str,
+) -> Result<StrategicBoardPackage, String> {
+    if generated_at.trim().is_empty() {
+        return Err("REFUSED:EMPTY_BOARD_PACKAGE_TIME".to_string());
+    }
+    if base.enterprise_subject != constitution.subject
+        || mandate.subject != constitution.subject
+        || mandate.constitution_digest != constitution.constitution_digest
+        || receipt.constitution_digest != constitution.constitution_digest
+        || receipt.campaign_id != mandate.candidate_id
+        || twin.subject != constitution.subject
+        || twin.mandate_id != constitution.mandate_id
+    {
+        return Err("REFUSED:STRATEGIC_BOARD_PACKAGE_SUBJECT_DRIFT".to_string());
+    }
+    if !lowercase_hex_64(&mandate.packet_digest)
+        || !lowercase_hex_64(&receipt.receipt_digest)
+        || !lowercase_hex_64(&portfolio.analysis_digest)
+        || !lowercase_hex_64(&counterstrategy.assessment_digest)
+        || !lowercase_hex_64(&twin.snapshot_digest)
+    {
+        return Err("REFUSED:INVALID_STRATEGIC_BOARD_PACKAGE_DIGEST".to_string());
+    }
+
+    let mut package = StrategicBoardPackage {
+        profile: "CASTLE_STRATEGIC_BOARD_V1",
+        subject: constitution.subject.clone(),
+        generated_at: generated_at.trim().to_string(),
+        fortune5_board_package_digest: fortune5_board_package_digest(base)?,
+        constitution_digest: constitution.constitution_digest.clone(),
+        mandate_packet_digest: mandate.packet_digest.clone(),
+        strategic_receipt_digest: receipt.receipt_digest.clone(),
+        portfolio_analysis_digest: portfolio.analysis_digest.clone(),
+        counterstrategy_assessment_digest: counterstrategy.assessment_digest.clone(),
+        twin_snapshot_digest: twin.snapshot_digest.clone(),
+        board_reentry_required: reentry.required,
+        authority_ceiling: STRATEGIC_AUTHORITY_CEILING,
+        actuation: STRATEGIC_ACTUATION,
+        package_digest: String::new(),
+    };
+    package.package_digest = canonical_digest(&package.core_json())?;
+    Ok(package)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OfflineBoardPackageVerification {
+    pub standing: StrategicStanding,
+    pub reasons: Vec<String>,
+}
+
+pub fn verify_strategic_board_package_offline(
+    package: &StrategicBoardPackage,
+) -> OfflineBoardPackageVerification {
+    let mut reasons = Vec::new();
+    if package.profile != "CASTLE_STRATEGIC_BOARD_V1" {
+        reasons.push("REFUSED:UNSUPPORTED_STRATEGIC_BOARD_PACKAGE".to_string());
+    }
+    if package.authority_ceiling != STRATEGIC_AUTHORITY_CEILING
+        || package.actuation != STRATEGIC_ACTUATION
+    {
+        reasons.push("REFUSED:STRATEGIC_BOARD_PACKAGE_AUTHORITY_DRIFT".to_string());
+    }
+    for digest in [
+        &package.fortune5_board_package_digest,
+        &package.constitution_digest,
+        &package.mandate_packet_digest,
+        &package.strategic_receipt_digest,
+        &package.portfolio_analysis_digest,
+        &package.counterstrategy_assessment_digest,
+        &package.twin_snapshot_digest,
+        &package.package_digest,
+    ] {
+        if !lowercase_hex_64(digest) {
+            reasons.push("REFUSED:INVALID_STRATEGIC_BOARD_PACKAGE_DIGEST".to_string());
+            break;
+        }
+    }
+    match canonical_digest(&package.core_json()) {
+        Ok(expected) if expected == package.package_digest => {}
+        _ => reasons.push("REFUSED:STRATEGIC_BOARD_PACKAGE_CONTENT_MISMATCH".to_string()),
+    }
+    reasons.sort();
+    reasons.dedup();
+    OfflineBoardPackageVerification {
+        standing: if reasons.is_empty() {
+            StrategicStanding::Alive
+        } else {
+            StrategicStanding::Refused
+        },
+        reasons,
+    }
+}
