@@ -14,15 +14,17 @@
       <ReqdExctnDt><Dt>2026-09-29</Dt></ReqdExctnDt>
       <Dbtr><Nm>Acme Treasury</Nm></Dbtr>
       <DbtrAcct><Id><Othr><Id>acct:treasury</Id></Othr></Id></DbtrAcct>
+      <DbtrAgt><FinInstnId><BICFI>CASTUS33</BICFI></FinInstnId></DbtrAgt>
       <CdtTrfTxInf>
         <PmtId>
-          <InstrId>sha256:b9f88834c0674f793f13a9d94136cefc2e6acc9bb754737f4b8548cd83aed354</InstrId>
+          <InstrId>sha256:b9f88834c0674f793f13a9d94136</InstrId>
           <EndToEndId>OBL-KWD-1</EndToEndId>
         </PmtId>
         <Amt><InstdAmt Ccy="KWD">1234.567</InstdAmt></Amt>
+        <CdtrAgt><FinInstnId><BICFI>SUPPGB2LXXX</BICFI></FinInstnId></CdtrAgt>
         <Cdtr><Nm>Supplier Ltd</Nm></Cdtr>
         <CdtrAcct><Id><Othr><Id>acct:supplier-9821</Id></Othr></Id></CdtrAcct>
-        <RmtInf><Ustrd>invoice-payment</Ustrd></RmtInf>
+        <RmtInf><Ustrd>invoice-payment</Ustrd><Ustrd>castle:effect-digest=sha256:b9f88834c0674f793f13a9d94136cefc2e6acc9bb754737f4b8548cd83aed354</Ustrd></RmtInf>
       </CdtTrfTxInf>
     </PmtInf>
   </CstmrCdtTrfInitn>

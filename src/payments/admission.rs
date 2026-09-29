@@ -19,6 +19,7 @@ pub struct PaymentAdmission {
     effect: PaymentEffect,
     receipt: VerificationReceipt,
     generation: u64,
+    nonce: String,
     _seal: (),
 }
 
@@ -34,6 +35,11 @@ impl PaymentAdmission {
     #[must_use]
     pub const fn generation(&self) -> u64 {
         self.generation
+    }
+    /// Certificate nonce consumed by this admission.
+    #[must_use]
+    pub fn nonce(&self) -> &str {
+        &self.nonce
     }
 }
 
@@ -69,6 +75,15 @@ pub fn admit_payment(
 
     let policy = ctx.policy.check_static(&effect)?;
 
+    if ctx.policy.require_derived_obligation {
+        let derived = effect.invoice_ref().map(|inv| {
+            super::obligation::derive_obligation_id(effect.payer(), effect.payee(), effect.purpose(), inv)
+        });
+        if derived.as_deref() != Some(effect.obligation_id()) {
+            return refuse(super::obligation::OBLIGATION_ID_NOT_DERIVED);
+        }
+    }
+
     if let Some(original) = effect.reverses() {
         check_reversal(&effect, original, ctx.claims)?;
     }
@@ -100,14 +115,14 @@ pub fn admit_payment(
     };
     ctx.claims.reserve(&claim, epoch_cap)?;
 
-    Ok(PaymentAdmission { effect, receipt, generation: certificate.generation, _seal: () })
+    Ok(PaymentAdmission { effect, receipt, generation: certificate.generation, nonce: certificate.nonce.clone(), _seal: () })
 }
 
 fn check_reversal(effect: &PaymentEffect, original: &str, claims: &ClaimStore) -> PayResult<()> {
     let Some(orig) = claims.get(original)? else {
         return refuse(refusal::REVERSAL_ORIGINAL_NOT_EXECUTED);
     };
-    if orig.state != ClaimState::Executed {
+    if !matches!(orig.state, ClaimState::Executed | ClaimState::Final) {
         return refuse(refusal::REVERSAL_ORIGINAL_NOT_EXECUTED);
     }
     if orig.reverses.is_some()

@@ -19,6 +19,12 @@ pub enum ClaimState {
     Refused,
     /// DO ambiguous. Never retried blindly; only `reconcile` resolves it.
     UnknownOutcome,
+    /// Handed to the rail; funds are held, finality not yet observed.
+    Submitted,
+    /// Rail finality observed and ledger settled from that observation.
+    Final,
+    /// Settled funds later returned. Still counts as settled: re-paying needs a new obligation.
+    Returned,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -111,6 +117,9 @@ impl ClaimStore {
         Ok(out)
     }
 
+    /// Budget note: every state except `Refused` counts against budget, including
+    /// `Returned` (a returned payment still consumed its obligation and epoch budget).
+    ///
     /// Sum of minor units already committed against `original` by live
     /// (non-refused) reversal claims.
     pub fn reversed_total(&self, original: &str) -> PayResult<u64> {
@@ -134,7 +143,8 @@ impl ClaimStore {
             return match existing.state {
                 ClaimState::Executed => refuse(refusal::ALREADY_SETTLED),
                 ClaimState::UnknownOutcome => refuse(refusal::OUTCOME_UNKNOWN),
-                ClaimState::Reserved => refuse(refusal::IN_FLIGHT),
+                ClaimState::Reserved | ClaimState::Submitted => refuse(refusal::IN_FLIGHT),
+                ClaimState::Final | ClaimState::Returned => refuse(refusal::ALREADY_SETTLED),
                 ClaimState::Refused => {
                     self.check_budget(claim, epoch_cap)?;
                     self.write_replace(claim)
@@ -152,7 +162,7 @@ impl ClaimStore {
             let Some(orig) = self.get(original)? else {
                 return refuse(refusal::REVERSAL_ORIGINAL_NOT_EXECUTED);
             };
-            if orig.state != ClaimState::Executed {
+            if !matches!(orig.state, ClaimState::Executed | ClaimState::Final) {
                 return refuse(refusal::REVERSAL_ORIGINAL_NOT_EXECUTED);
             }
             let already: u128 = self

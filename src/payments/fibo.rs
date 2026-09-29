@@ -50,7 +50,7 @@ pub fn monetary_amount_json(money: &Money) -> Value {
 /// Only a settled (Executed) claim is a FIBO `Payment`; everything else stays a castle effect.
 #[must_use]
 pub fn claim_type_iri(claim: &Claim) -> &'static str {
-    if claim.state == ClaimState::Executed {
+    if matches!(claim.state, ClaimState::Executed | ClaimState::Final) {
         IRI_PAYMENT
     } else {
         CASTLE_PAYMENT_EFFECT
@@ -77,7 +77,7 @@ pub fn claim_jsonld(claim: &Claim, entry: Option<&LedgerEntry>) -> Value {
             CASTLE_OBLIGATION_ID: claim.obligation_id,
         });
     }
-    if let (ClaimState::Executed, Some(e)) = (claim.state, entry) {
+    if let (ClaimState::Executed | ClaimState::Final, Some(e)) = (claim.state, entry) {
         node[CASTLE_CONSTRUCT_DIGEST] = json!(e.construct_digest);
     }
     node

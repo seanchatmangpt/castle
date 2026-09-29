@@ -9,6 +9,36 @@ use super::refusal::{refuse, PayResult};
 
 pub const PROJECTION_FIELD_INVALID: &str = "REFUSED:PROJECTION_FIELD_INVALID";
 
+/// Official message profile this projection targets. `status` is `CONFORMANCE_CHECKED_AGAINST_XSD`
+/// only when `tests/payments_iso20022_official.rs` validated real output with `xmllint` against
+/// the version-pinned XSDs listed in `fixtures/payments/iso20022/xsd/PINS.json`.
+pub const ISO20022_PROFILE: &str = concat!(
+    "{\"messages\":[",
+    "{\"id\":\"pain.001.001.09\",\"version\":\"09\",",
+    "\"xsd_target_namespace\":\"urn:iso:std:iso:20022:tech:xsd:pain.001.001.09\"},",
+    "{\"id\":\"pacs.008.001.08\",\"version\":\"08\",",
+    "\"xsd_target_namespace\":\"urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08\"}],",
+    "\"status\":\"CONFORMANCE_CHECKED_AGAINST_XSD\"}"
+);
+
+/// Profile version tag: changes whenever the emitted element set changes.
+#[must_use]
+pub const fn message_profile_version() -> &'static str {
+    "castle-iso20022-profile/2:pain.001.001.09+pacs.008.001.08:xsd-validated"
+}
+
+/// Marker prefix of the `Ustrd` remittance line that carries the full effect digest
+/// (`InstrId` is Max35Text in the XSD and can only hold a digest prefix).
+const DIGEST_MARKER: &str = "castle:effect-digest=";
+
+fn check_max(s: &str, max: usize) -> PayResult<()> {
+    check_text(s)?;
+    if s.chars().count() > max {
+        return invalid();
+    }
+    Ok(())
+}
+
 fn invalid<T>() -> PayResult<T> {
     refuse(PROJECTION_FIELD_INVALID)
 }
@@ -88,21 +118,26 @@ fn id_prefix(digest: &str, n: usize) -> &str {
     &bare[..end]
 }
 
-/// pain.001.001.09 (CustomerCreditTransferInitiation) subset.
+/// pain.001.001.09 (CustomerCreditTransferInitiation), XSD-mandatory elements included.
+/// Agent BICs are caller-supplied; nothing is invented.
 pub fn pain001_customer_credit_transfer(
     admission: &PaymentAdmission,
     created_at_iso: &str,
     debtor_name: &str,
     creditor_name: &str,
+    debtor_agent_bic: &str,
+    creditor_agent_bic: &str,
 ) -> PayResult<String> {
     check_timestamp(created_at_iso)?;
-    check_text(debtor_name)?;
-    check_text(creditor_name)?;
+    check_max(debtor_name, 140)?;
+    check_max(creditor_name, 140)?;
+    check_bic(debtor_agent_bic)?;
+    check_bic(creditor_agent_bic)?;
     let e = admission.effect();
-    check_text(e.payer())?;
-    check_text(e.payee())?;
-    check_text(e.obligation_id())?;
-    check_text(e.purpose())?;
+    check_max(e.payer(), 34)?;
+    check_max(e.payee(), 34)?;
+    check_max(e.obligation_id(), 35)?;
+    check_max(e.purpose(), 140)?;
 
     let digest = e.digest();
     let money = e.money();
@@ -111,6 +146,7 @@ pub fn pain001_customer_credit_transfer(
     let date = &created_at_iso[..10];
     let msg_id = format!("CASTLE-{}", id_prefix(digest, 28));
     let pmt_inf_id = format!("PMT-{}", id_prefix(digest, 28));
+    let instr_id = digest.chars().take(35).collect::<String>();
 
     let mut x = String::new();
     x.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
@@ -132,18 +168,28 @@ pub fn pain001_customer_credit_transfer(
         "      <DbtrAcct><Id><Othr><Id>{}</Id></Othr></Id></DbtrAcct>\n",
         esc(e.payer())
     ));
+    x.push_str(&format!(
+        "      <DbtrAgt><FinInstnId><BICFI>{debtor_agent_bic}</BICFI></FinInstnId></DbtrAgt>\n"
+    ));
     x.push_str("      <CdtTrfTxInf>\n");
     x.push_str("        <PmtId>\n");
-    x.push_str(&format!("          <InstrId>{}</InstrId>\n", esc(digest)));
+    x.push_str(&format!("          <InstrId>{}</InstrId>\n", esc(&instr_id)));
     x.push_str(&format!("          <EndToEndId>{}</EndToEndId>\n", esc(e.obligation_id())));
     x.push_str("        </PmtId>\n");
     x.push_str(&format!("        <Amt><InstdAmt Ccy=\"{ccy}\">{amt}</InstdAmt></Amt>\n"));
+    x.push_str(&format!(
+        "        <CdtrAgt><FinInstnId><BICFI>{creditor_agent_bic}</BICFI></FinInstnId></CdtrAgt>\n"
+    ));
     x.push_str(&format!("        <Cdtr><Nm>{}</Nm></Cdtr>\n", esc(creditor_name)));
     x.push_str(&format!(
         "        <CdtrAcct><Id><Othr><Id>{}</Id></Othr></Id></CdtrAcct>\n",
         esc(e.payee())
     ));
-    x.push_str(&format!("        <RmtInf><Ustrd>{}</Ustrd></RmtInf>\n", esc(e.purpose())));
+    x.push_str(&format!(
+        "        <RmtInf><Ustrd>{}</Ustrd><Ustrd>{DIGEST_MARKER}{}</Ustrd></RmtInf>\n",
+        esc(e.purpose()),
+        esc(digest)
+    ));
     x.push_str("      </CdtTrfTxInf>\n");
     x.push_str("    </PmtInf>\n");
     x.push_str("  </CstmrCdtTrfInitn>\n");
@@ -151,20 +197,24 @@ pub fn pain001_customer_credit_transfer(
     Ok(x)
 }
 
-/// pacs.008.001.08 (FIToFICustomerCreditTransfer) subset.
+/// pacs.008.001.08 (FIToFICustomerCreditTransfer), XSD-mandatory elements included.
 pub fn pacs008_fi_credit_transfer(
     admission: &PaymentAdmission,
     created_at_iso: &str,
     instructing_agent_bic: &str,
     instructed_agent_bic: &str,
+    debtor_agent_bic: &str,
+    creditor_agent_bic: &str,
 ) -> PayResult<String> {
     check_timestamp(created_at_iso)?;
     check_bic(instructing_agent_bic)?;
     check_bic(instructed_agent_bic)?;
+    check_bic(debtor_agent_bic)?;
+    check_bic(creditor_agent_bic)?;
     let e = admission.effect();
-    check_text(e.payer())?;
-    check_text(e.payee())?;
-    check_text(e.obligation_id())?;
+    check_max(e.payer(), 34)?;
+    check_max(e.payee(), 34)?;
+    check_max(e.obligation_id(), 35)?;
 
     let digest = e.digest();
     let money = e.money();
@@ -172,6 +222,7 @@ pub fn pacs008_fi_credit_transfer(
     let ccy = money.currency.code();
     let msg_id = format!("CASTLE-{}", id_prefix(digest, 28));
     let tx_id = id_prefix(digest, 35);
+    let instr_id = digest.chars().take(35).collect::<String>();
 
     let mut x = String::new();
     x.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
@@ -185,7 +236,7 @@ pub fn pacs008_fi_credit_transfer(
     x.push_str("    </GrpHdr>\n");
     x.push_str("    <CdtTrfTxInf>\n");
     x.push_str("      <PmtId>\n");
-    x.push_str(&format!("        <InstrId>{}</InstrId>\n", esc(digest)));
+    x.push_str(&format!("        <InstrId>{}</InstrId>\n", esc(&instr_id)));
     x.push_str(&format!("        <EndToEndId>{}</EndToEndId>\n", esc(e.obligation_id())));
     x.push_str(&format!("        <TxId>{}</TxId>\n", esc(tx_id)));
     x.push_str("      </PmtId>\n");
@@ -202,10 +253,20 @@ pub fn pacs008_fi_credit_transfer(
         "      <DbtrAcct><Id><Othr><Id>{}</Id></Othr></Id></DbtrAcct>\n",
         esc(e.payer())
     ));
+    x.push_str(&format!(
+        "      <DbtrAgt><FinInstnId><BICFI>{debtor_agent_bic}</BICFI></FinInstnId></DbtrAgt>\n"
+    ));
+    x.push_str(&format!(
+        "      <CdtrAgt><FinInstnId><BICFI>{creditor_agent_bic}</BICFI></FinInstnId></CdtrAgt>\n"
+    ));
     x.push_str(&format!("      <Cdtr><Nm>{}</Nm></Cdtr>\n", esc(e.payee())));
     x.push_str(&format!(
         "      <CdtrAcct><Id><Othr><Id>{}</Id></Othr></Id></CdtrAcct>\n",
         esc(e.payee())
+    ));
+    x.push_str(&format!(
+        "      <RmtInf><Ustrd>{DIGEST_MARKER}{}</Ustrd></RmtInf>\n",
+        esc(digest)
     ));
     x.push_str("    </CdtTrfTxInf>\n");
     x.push_str("  </FIToFICstmrCdtTrf>\n");
@@ -213,11 +274,12 @@ pub fn pacs008_fi_credit_transfer(
     Ok(x)
 }
 
-/// Extract the `InstrId` (effect digest) from a pain.001 projection.
+/// Extract the full effect digest from a projection (carried in a `Ustrd` remittance line,
+/// since `InstrId` is length-bounded by the XSD).
 #[must_use]
 pub fn project_effect_digest_from_pain001(xml: &str) -> Option<String> {
-    let open = "<InstrId>";
-    let start = xml.find(open)? + open.len();
-    let end = xml[start..].find("</InstrId>")? + start;
+    let open = format!("<Ustrd>{DIGEST_MARKER}");
+    let start = xml.find(&open)? + open.len();
+    let end = xml[start..].find("</Ustrd>")? + start;
     Some(xml[start..end].to_string())
 }

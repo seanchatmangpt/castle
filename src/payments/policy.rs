@@ -19,6 +19,10 @@ pub struct PrincipalPolicy {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpendPolicy {
     pub principals: BTreeMap<String, PrincipalPolicy>,
+    /// When set, obligation ids must be derived from (payer, payee, purpose,
+    /// invoice_ref) via `obligation::derive_obligation_id`. Default false = v1.
+    #[serde(default)]
+    pub require_derived_obligation: bool,
 }
 
 impl SpendPolicy {

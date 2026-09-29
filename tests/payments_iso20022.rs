@@ -7,6 +7,8 @@ use std::collections::BTreeSet;
 
 const PAYEE2: &str = "acct:supplier-2";
 const TS: &str = "2026-09-29T12:34:56Z";
+const DAGT: &str = "CASTUS33";
+const CAGT: &str = "SUPPGB2LXXX";
 
 fn multi_fx(tag: &str) -> Fixture {
     let mut fx = Fixture::new(tag);
@@ -39,7 +41,7 @@ fn check_golden(name: &str, actual: &str) {
 }
 
 fn pain(a: &PaymentAdmission) -> String {
-    pain001_customer_credit_transfer(a, TS, "Acme Treasury", "Supplier Ltd").unwrap()
+    pain001_customer_credit_transfer(a, TS, "Acme Treasury", "Supplier Ltd", DAGT, CAGT).unwrap()
 }
 
 #[test]
@@ -52,7 +54,7 @@ fn golden_usd_jpy_kwd() {
         check_golden(&format!("pain001_{tag}.xml"), &pain(a));
         check_golden(
             &format!("pacs008_{tag}.xml"),
-            &pacs008_fi_credit_transfer(a, TS, "CASTUS33", "SUPPGB2LXXX").unwrap(),
+            &pacs008_fi_credit_transfer(a, TS, "CASTUS33", "SUPPGB2LXXX", DAGT, CAGT).unwrap(),
         );
     }
     assert!(pain(&usd).contains("<InstdAmt Ccy=\"USD\">1234.56</InstdAmt>"));
@@ -95,7 +97,7 @@ fn xml_injection_is_escaped() {
     let fx = multi_fx("inj");
     let a = admit_ccy(&fx, "100", Currency::USD, "OBL-1", PAYEE, "n1");
     let evil = "</Nm><Injected a=\"1\">&'x";
-    let xml = pain001_customer_credit_transfer(&a, TS, evil, evil).unwrap();
+    let xml = pain001_customer_credit_transfer(&a, TS, evil, evil, DAGT, CAGT).unwrap();
     assert!(!xml.contains("<Injected"));
     assert!(xml.contains("&lt;/Nm&gt;&lt;Injected a=&quot;1&quot;&gt;&amp;&apos;x"));
     assert_eq!(xml.matches("<Dbtr>").count(), 1);
@@ -109,26 +111,47 @@ fn invalid_fields_refused() {
     let a = admit_ccy(&fx, "100", Currency::USD, "OBL-1", PAYEE, "n1");
     let refused = "REFUSED:PROJECTION_FIELD_INVALID";
     for name in ["", "bad\nname", "tab\tname", "nul\0"] {
-        assert_eq!(pain001_customer_credit_transfer(&a, TS, name, "ok").unwrap_err(), refused);
-        assert_eq!(pain001_customer_credit_transfer(&a, TS, "ok", name).unwrap_err(), refused);
+        assert_eq!(pain001_customer_credit_transfer(&a, TS, name, "ok", DAGT, CAGT).unwrap_err(), refused);
+        assert_eq!(pain001_customer_credit_transfer(&a, TS, "ok", name, DAGT, CAGT).unwrap_err(), refused);
     }
     for ts in [
         "", "2026-09-29 12:34:56Z", "2026-09-29T12:34:56", "2026-13-29T12:34:56Z", "2026-09-32T12:34:56Z",
         "2026-09-29T24:34:56Z", "2026-09-29T12:60:56Z", "2026-09-29T12:34:60Z", "2026-09-29T12:34:56+00:00",
         "2026-09-29T12:34:5aZ", "2026-00-29T12:34:56Z",
     ] {
-        assert_eq!(pain001_customer_credit_transfer(&a, ts, "a", "b").unwrap_err(), refused, "{ts}");
-        assert_eq!(pacs008_fi_credit_transfer(&a, ts, "CASTUS33", "SUPPGB2L").unwrap_err(), refused, "{ts}");
+        assert_eq!(pain001_customer_credit_transfer(&a, ts, "a", "b", DAGT, CAGT).unwrap_err(), refused, "{ts}");
+        assert_eq!(pacs008_fi_credit_transfer(&a, ts, "CASTUS33", "SUPPGB2L", DAGT, CAGT).unwrap_err(), refused, "{ts}");
     }
     for bic in ["", "CASTUS3", "castus33", "CASTUS33X", "CAST1S33", "CASTUS33XX", "CASTUS3!", "CASTUS33 XX"] {
-        assert_eq!(pacs008_fi_credit_transfer(&a, TS, bic, "SUPPGB2L").unwrap_err(), refused, "{bic}");
-        assert_eq!(pacs008_fi_credit_transfer(&a, TS, "CASTUS33", bic).unwrap_err(), refused, "{bic}");
+        assert_eq!(pacs008_fi_credit_transfer(&a, TS, bic, "SUPPGB2L", DAGT, CAGT).unwrap_err(), refused, "{bic}");
+        assert_eq!(pacs008_fi_credit_transfer(&a, TS, "CASTUS33", "SUPPGB2L", bic, CAGT).unwrap_err(), refused, "{bic}");
     }
-    assert!(pacs008_fi_credit_transfer(&a, TS, "CASTUS33", "SUPPGB2LXXX").is_ok());
-    assert!(pacs008_fi_credit_transfer(&a, TS, "CASTUS33", "SUPPGB2L").is_ok());
+    assert!(pacs008_fi_credit_transfer(&a, TS, "CASTUS33", "SUPPGB2LXXX", DAGT, CAGT).is_ok());
+    assert!(pacs008_fi_credit_transfer(&a, TS, "CASTUS33", "SUPPGB2L", DAGT, CAGT).is_ok());
 }
 
 #[test]
 fn extract_returns_none_without_instrid() {
     assert_eq!(project_effect_digest_from_pain001("<Document/>"), None);
+}
+
+#[test]
+fn pain001_agent_bics_and_length_bounds_refused() {
+    let fx = multi_fx("pain-bic");
+    let a = admit_ccy(&fx, "100", Currency::USD, "OBL-1", PAYEE, "n1");
+    let refused = "REFUSED:PROJECTION_FIELD_INVALID";
+    for bic in ["", "castus33", "CASTUS3", "CASTUS33X"] {
+        assert_eq!(pain001_customer_credit_transfer(&a, TS, "a", "b", bic, CAGT).unwrap_err(), refused, "{bic}");
+        assert_eq!(pain001_customer_credit_transfer(&a, TS, "a", "b", DAGT, bic).unwrap_err(), refused, "{bic}");
+    }
+    let long = "x".repeat(141);
+    assert_eq!(pain001_customer_credit_transfer(&a, TS, &long, "b", DAGT, CAGT).unwrap_err(), refused);
+    assert!(pain001_customer_credit_transfer(&a, TS, &"x".repeat(140), "b", DAGT, CAGT).is_ok());
+}
+
+#[test]
+fn profile_pins_official_namespaces() {
+    assert!(ISO20022_PROFILE.contains("urn:iso:std:iso:20022:tech:xsd:pain.001.001.09"));
+    assert!(ISO20022_PROFILE.contains("urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08"));
+    assert!(message_profile_version().contains("pain.001.001.09"));
 }

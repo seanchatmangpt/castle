@@ -9,7 +9,7 @@
     </GrpHdr>
     <CdtTrfTxInf>
       <PmtId>
-        <InstrId>sha256:b9f88834c0674f793f13a9d94136cefc2e6acc9bb754737f4b8548cd83aed354</InstrId>
+        <InstrId>sha256:b9f88834c0674f793f13a9d94136</InstrId>
         <EndToEndId>OBL-KWD-1</EndToEndId>
         <TxId>b9f88834c0674f793f13a9d94136cefc2e6</TxId>
       </PmtId>
@@ -19,8 +19,11 @@
       <InstdAgt><FinInstnId><BICFI>SUPPGB2LXXX</BICFI></FinInstnId></InstdAgt>
       <Dbtr><Nm>acct:treasury</Nm></Dbtr>
       <DbtrAcct><Id><Othr><Id>acct:treasury</Id></Othr></Id></DbtrAcct>
+      <DbtrAgt><FinInstnId><BICFI>CASTUS33</BICFI></FinInstnId></DbtrAgt>
+      <CdtrAgt><FinInstnId><BICFI>SUPPGB2LXXX</BICFI></FinInstnId></CdtrAgt>
       <Cdtr><Nm>acct:supplier-9821</Nm></Cdtr>
       <CdtrAcct><Id><Othr><Id>acct:supplier-9821</Id></Othr></Id></CdtrAcct>
+      <RmtInf><Ustrd>castle:effect-digest=sha256:b9f88834c0674f793f13a9d94136cefc2e6acc9bb754737f4b8548cd83aed354</Ustrd></RmtInf>
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>

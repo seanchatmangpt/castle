@@ -25,6 +25,8 @@ struct Payload {
     purpose: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     reverses: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    invoice_ref: Option<String>,
 }
 
 /// A strictly parsed payment view of an SA2A `PreparedEffect`. Holding one
@@ -39,6 +41,7 @@ pub struct PaymentEffect {
     obligation_id: String,
     purpose: String,
     reverses: Option<String>,
+    invoice_ref: Option<String>,
 }
 
 impl PaymentEffect {
@@ -53,6 +56,22 @@ impl PaymentEffect {
         purpose: &str,
         reverses: Option<&str>,
     ) -> PayResult<PreparedEffect> {
+        Self::prepare_with_invoice(principal, payer, payee, amount_minor, currency, obligation_id, purpose, None, reverses)
+    }
+
+    /// Like `prepare`, additionally carrying an invoice reference (omitted from
+    /// the payload, hence from the digest, when `None`).
+    pub fn prepare_with_invoice(
+        principal: &str,
+        payer: &str,
+        payee: &str,
+        amount_minor: &str,
+        currency: Currency,
+        obligation_id: &str,
+        purpose: &str,
+        invoice_ref: Option<&str>,
+        reverses: Option<&str>,
+    ) -> PayResult<PreparedEffect> {
         let subject = serde_json::to_value(Subject {
             kind: SUBJECT_KIND.into(),
             payer: payer.into(),
@@ -65,6 +84,7 @@ impl PaymentEffect {
             obligation_id: obligation_id.into(),
             purpose: purpose.into(),
             reverses: reverses.map(str::to_string),
+            invoice_ref: invoice_ref.map(str::to_string),
         })
         .map_err(|_| refusal::PAYLOAD_INVALID.to_string())?;
         Ok(PreparedEffect {
@@ -89,6 +109,7 @@ impl PaymentEffect {
             || subject.payee.is_empty()
             || payload.obligation_id.is_empty()
             || payload.purpose.is_empty()
+            || payload.invoice_ref.as_deref() == Some("")
         {
             return refuse(refusal::PAYLOAD_INVALID);
         }
@@ -106,6 +127,7 @@ impl PaymentEffect {
             obligation_id: payload.obligation_id,
             purpose: payload.purpose,
             reverses: payload.reverses,
+            invoice_ref: payload.invoice_ref,
         })
     }
 
@@ -145,5 +167,9 @@ impl PaymentEffect {
     #[must_use]
     pub fn reverses(&self) -> Option<&str> {
         self.reverses.as_deref()
+    }
+    #[must_use]
+    pub fn invoice_ref(&self) -> Option<&str> {
+        self.invoice_ref.as_deref()
     }
 }
