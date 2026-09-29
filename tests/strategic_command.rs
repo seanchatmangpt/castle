@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use castle::strategic_command::{
     admit_board_selection, compile_board_constitution, compile_board_strategic_receipt,
@@ -537,6 +537,143 @@ fn board_selection_refuses_ambiguous_candidate_identity() {
     .expect_err("candidate identity must be unique");
 
     assert_eq!(err, "REFUSED:AMBIGUOUS_CAMPAIGN_CANDIDATE");
+}
+
+#[test]
+fn strategic_mandate_is_bound_into_existing_construct_identity_without_gaining_do() {
+    use castle::castle::{ConstructRequest, PowlProcess, TestEnvelope};
+    use castle::strategic_command::bind_strategic_mandate_construct_request;
+    use serde_json::json;
+
+    let constitution = constitution();
+    let doctrine = doctrine();
+    let partitions = partitions(&doctrine);
+    let current = current_local(&partitions);
+    let campaign = candidate(
+        &constitution,
+        &doctrine,
+        &partitions[0],
+        "campaign:bind",
+        "counterexample",
+        1_000_000_000,
+    );
+    let verdict =
+        judge_campaign_candidate(&constitution, &doctrine, &partitions[0], &campaign, &current);
+    let mandate = admit_board_selection(
+        &constitution,
+        std::slice::from_ref(&campaign),
+        std::slice::from_ref(&verdict),
+        BoardSelectionRequest {
+            candidate_id: campaign.candidate_id.clone(),
+            selection_authority_digest: digest('3'),
+            selected_by: "board:independent-directors".to_string(),
+            selected_at: "2026-09-28T21:05:00-07:00".to_string(),
+        },
+    )
+    .expect("board mandate");
+
+    let request = ConstructRequest {
+        subject: constitution.subject.clone(),
+        authority: "bounded-test".to_string(),
+        o_star: json!({"subject": constitution.subject}),
+        config_graph: json!({"zeroUnreceiptedActuation": true}),
+        ontology: json!({"version": "castle-board-v26.9.28"}),
+        process: PowlProcess {
+            id: "powl:board".to_string(),
+            goal_id: "goal:board".to_string(),
+            activities: vec![],
+        },
+        envelope: TestEnvelope {
+            system_id: constitution.subject.clone(),
+            allowed_transition_ids: BTreeSet::new(),
+            max_steps: 0,
+            expires_at_epoch_ms: 100,
+        },
+    };
+
+    let bound = bind_strategic_mandate_construct_request(request, &mandate)
+        .expect("inert mandate binds into config receipt identity");
+    let marker = &bound.config_graph["_castle_board_mandate"];
+    assert_eq!(marker["packet_digest"], mandate.packet_digest);
+    assert_eq!(marker["candidate_digest"], mandate.candidate_digest);
+    assert_eq!(marker["authority_ceiling"], STRATEGIC_AUTHORITY_CEILING);
+    assert_eq!(marker["actuation"], STRATEGIC_ACTUATION);
+    assert_eq!(marker["successor_boundary"], STRATEGIC_SUCCESSOR_BOUNDARY);
+}
+
+#[test]
+fn strategic_mandate_binding_refuses_subject_content_or_authority_drift() {
+    use castle::castle::{ConstructRequest, PowlProcess, TestEnvelope};
+    use castle::strategic_command::bind_strategic_mandate_construct_request;
+    use serde_json::json;
+
+    let constitution = constitution();
+    let doctrine = doctrine();
+    let partitions = partitions(&doctrine);
+    let current = current_local(&partitions);
+    let campaign = candidate(
+        &constitution,
+        &doctrine,
+        &partitions[0],
+        "campaign:bind-refusal",
+        "counterexample",
+        1_000_000_000,
+    );
+    let verdict =
+        judge_campaign_candidate(&constitution, &doctrine, &partitions[0], &campaign, &current);
+    let mandate = admit_board_selection(
+        &constitution,
+        std::slice::from_ref(&campaign),
+        std::slice::from_ref(&verdict),
+        BoardSelectionRequest {
+            candidate_id: campaign.candidate_id.clone(),
+            selection_authority_digest: digest('2'),
+            selected_by: "board:independent-directors".to_string(),
+            selected_at: "2026-09-28T21:06:00-07:00".to_string(),
+        },
+    )
+    .expect("board mandate");
+
+    let request = |subject: &str| ConstructRequest {
+        subject: subject.to_string(),
+        authority: "bounded-test".to_string(),
+        o_star: json!({}),
+        config_graph: json!({}),
+        ontology: json!({}),
+        process: PowlProcess {
+            id: "p".to_string(),
+            goal_id: "g".to_string(),
+            activities: vec![],
+        },
+        envelope: TestEnvelope {
+            system_id: subject.to_string(),
+            allowed_transition_ids: BTreeSet::new(),
+            max_steps: 0,
+            expires_at_epoch_ms: 100,
+        },
+    };
+
+    assert_eq!(
+        bind_strategic_mandate_construct_request(request("enterprise:other"), &mandate)
+            .expect_err("wrong subject must refuse"),
+        "REFUSED:STRATEGIC_MANDATE_SUBJECT_MISMATCH"
+    );
+
+    let mut tampered = mandate.clone();
+    tampered.candidate_id = "campaign:tampered".to_string();
+    assert_eq!(
+        bind_strategic_mandate_construct_request(request(&constitution.subject), &tampered)
+            .expect_err("changed content must invalidate packet digest"),
+        "REFUSED:STRATEGIC_MANDATE_CONTENT_MISMATCH"
+    );
+
+    let mut escalated = mandate;
+    escalated.authority_ceiling = "DO";
+    assert_eq!(
+        bind_strategic_mandate_construct_request(request(&constitution.subject), &escalated)
+            .expect_err("strategy cannot gain DO at binding"),
+        "REFUSED:STRATEGIC_MANDATE_AUTHORITY_DRIFT"
+    );
 }
 
 #[test]
