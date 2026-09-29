@@ -1111,3 +1111,15 @@ pub fn compile_board_strategic_receipt(
     receipt.receipt_digest = canonical_digest(&receipt.core_json())?;
     Ok(receipt)
 }
+
+// Board operating-loop capabilities live in the adjacent module so the
+// strategic compiler/authority core stays small and separately auditable.
+pub use crate::strategic_board::{
+    assess_board_reentry, assess_counterstrategies, build_strategic_board_package,
+    build_strategic_twin_snapshot, diff_strategic_twins, judge_counterstrategy,
+    qualify_campaign_portfolio, verify_strategic_board_package_offline,
+    BoardReentryDecision, CampaignPortfolioAnalysis, CampaignPortfolioPolicy,
+    CounterstrategyAssessment, CounterstrategyScenario, CounterstrategyVerdict,
+    OfflineBoardPackageVerification, StrategicBoardDelta, StrategicBoardPackage,
+    StrategicTwinSnapshot,
+};
