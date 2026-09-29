@@ -12,6 +12,10 @@ fn manifest_binds_exact_review_subjects() {
     assert_eq!(manifest.release_epoch, "v26.9.28");
     assert_eq!(manifest.castle_base_sha, "5059c45a8ef007cd1e095213c729c8bfe6db9e79");
     assert_eq!(manifest.marketplace_pack.r#ref, "v26.9.29");
+    assert_eq!(manifest.review_window.pr_count, 66);
+    assert_eq!(manifest.review_window.merged_pr_count, 57);
+    assert_eq!(manifest.review_window.open_pr_count, 8);
+    assert_eq!(manifest.review_window.closed_unmerged_pr_count, 1);
     assert_eq!(manifest.marketplace_pack.commit_sha, "637b561cc6384fc9ac0e4282d048cc7624256258");
     assert!(qualify_v26_9_28_upgrade(&manifest).standing.is_alive());
 }
