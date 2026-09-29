@@ -1,0 +1,16 @@
+PREFIX c: <https://ggen-igniter.dev/sjira/castle-26.9.28#>
+PREFIX sj: <https://ggen-igniter.dev/ontology/semantic-jira#>
+
+# Violation query. Zero rows is the only admitted result.
+# A retained irreducible capability may have exactly one repository owner.
+SELECT ?capability (COUNT(?repo) AS ?ownerCount)
+WHERE {
+  ?subject a c:RepositorySubject ;
+           sj:repository ?repo ;
+           c:ownsCapability ?capability ;
+           c:disposition ?disposition .
+  FILTER(?disposition = "KEEP")
+}
+GROUP BY ?capability
+HAVING(COUNT(?repo) != 1)
+ORDER BY ?capability

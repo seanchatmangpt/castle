@@ -89,6 +89,45 @@ derive_vulnerabilities()       DfCM: goal -> minimal predicate/witness sets (sub
 `dyn` objects, and `run_planner_ensemble` needs heterogeneous `&[Box<dyn Planner>]`) — this is the one place
 `async-trait` earns its keep as a dependency; prefer plain generics over trait objects elsewhere.
 
+### Semantic Jira crown (`docs/sjira/v26.9.28`)
+
+`goal.ttl` is the stable governing GoalCheckpoint graph. Do not hand-author
+`sj:WorkOrder` or `sj:Receipt` instances into it: WorkOrders are compiler
+projections and receipts are observed evidence. All checkpoints stop at
+`authorityCeiling "CONSTRUCT"`.
+
+`repos.ttl` is the exact-subject fleet registry. `RUNTIME_EXISTENCE` belongs
+only to `seanchatmangpt/xaas`; `CONSEQUENTIAL_ADMISSIBILITY` belongs only to
+`seanchatmangpt/castle`. Retained irreducible capabilities must have one owner.
+`SUPPORTING_CANDIDATE` repositories may not claim ownership until they are
+explicitly dispositioned.
+
+The sJira stop court is receipt-driven. Never declare a gate ALIVE in
+`goal.ttl`; attach external receipts and evaluate the stop query over goal +
+generated orders + receipts. BRCE remains the sole protected CONSTRUCT -> DO
+boundary.
+
+### Board strategic command (`src/strategic_command.rs`)
+
+This is the product-level strategic layer, separate from the generated Fortune-5 readiness inventory. It reuses the semantics proven in the earlier Berthier campaign compiler without making that closed/unmerged branch an authority dependency.
+
+The non-negotiable flow is:
+
+    BoardConstitution
+      -> StrategyDoctrine
+      -> sealed StrategyPartition[]
+      -> CampaignCandidate[]
+      -> judge_campaign_candidate()
+      -> explicit board SELECT via admit_board_selection()
+      -> StrategicMandatePacket(actuation=NONE, authority_ceiling=CONSTRUCT)
+      -> existing BRCE / DO path
+
+Do **not** add an optimizer that automatically selects the material campaign. Machines may construct, falsify, compare, counterplan, and replan; the material strategic SELECT is represented as a board act. Board selection still does not grant DO authority.
+
+`STRATEGY_OPERATORS` is a provenance-bearing operator catalog derived from the prior 33SW, Napoleon/Berthier, DfCM, and Fuller work. Operators are state transformations, not authorities. Global premise drift must produce `RecompileScope::Strategic`; local premise drift must invalidate only the dependent strategy partition. Runtime divergence must use the smallest lawful escalation in `route_replan()` before strategic recompilation.
+
+The board-facing contract has exactly eight lenses: Audit, Risk, Capital Allocation, Resilience, Governance, Safety, Competitive Strategy, and Lead Independent. Keep executive-management personas out of this product surface.
+
 ### Fortune-5 readiness gate (`src/fortune5.rs` + `src/board.rs`)
 
 `qualify_fortune5` evaluates `FORTUNE5_REQUIREMENTS` (generated, ontology-sourced) against

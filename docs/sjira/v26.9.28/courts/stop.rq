@@ -1,0 +1,52 @@
+PREFIX sj: <https://ggen-igniter.dev/ontology/semantic-jira#>
+PREFIX dcterms: <http://purl.org/dc/terms/>
+
+# True only when every CASTLE v26.9.28 crown gate has an externally observed
+# ALIVE receipt and every required WorkOrder is terminal or successor.
+ASK {
+  ?root a sj:GoalCheckpoint ;
+        dcterms:identifier "GC-CASTLE-26.9.28" .
+
+  VALUES ?gateId {
+    "CASTLE-28-0" "CASTLE-28-1" "CASTLE-28-2" "CASTLE-28-3"
+    "CASTLE-28-4" "CASTLE-28-5" "CASTLE-28-6" "CASTLE-28-7"
+    "CASTLE-28-8" "CASTLE-28-9" "CASTLE-28-10" "CASTLE-28-11"
+    "CASTLE-28-12" "CASTLE-28-13"
+  }
+
+  ?gate a sj:GoalCheckpoint ;
+        dcterms:identifier ?gateId ;
+        sj:checkpointOf+ ?root ;
+        sj:receipt ?receipt .
+  ?receipt a sj:Receipt ;
+           sj:standing "ALIVE" .
+
+  FILTER NOT EXISTS {
+    ?requiredGate a sj:GoalCheckpoint ;
+                  sj:checkpointOf+ ?root ;
+                  dcterms:identifier ?requiredId .
+    FILTER(STRSTARTS(?requiredId, "CASTLE-28-"))
+    FILTER NOT EXISTS {
+      ?requiredGate sj:receipt ?requiredReceipt .
+      ?requiredReceipt a sj:Receipt ;
+                       sj:standing "ALIVE" .
+    }
+  }
+
+  FILTER NOT EXISTS {
+    ?order a sj:WorkOrder ;
+           sj:checkpointOf+ ?root .
+    FILTER NOT EXISTS { ?order sj:boundaryClass sj:Successor . }
+    FILTER NOT EXISTS {
+      ?order sj:receipt ?orderReceipt .
+      ?orderReceipt a sj:Receipt ;
+                    sj:standing ?standing .
+      FILTER(
+        ?standing = "ALIVE" ||
+        STRSTARTS(?standing, "BLOCKED") ||
+        STRSTARTS(?standing, "UNSUPPORTED") ||
+        STRSTARTS(?standing, "REFUSED")
+      )
+    }
+  }
+}

@@ -9,7 +9,11 @@ pub mod planner_minimal;
 pub mod reconstitution;
 pub mod refusal_conformance;
 pub mod security_universe;
+pub mod sa2a_security;
+pub mod strategic_command;
+pub mod strategic_board;
 pub mod v26_8_18;
+pub mod v26_9_28;
 
 pub use castle::*;
 pub use generated::{

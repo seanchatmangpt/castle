@@ -1,6 +1,54 @@
 # CASTLE
 
-CASTLE is a continuously self-adversarial system for owned or explicitly authorized infrastructure. It derives vulnerability conditions backward from prohibited goals, CONSTRUCTs dependency compromise worlds, fans planning problems across a planner ensemble, compiles witnesses into POWL-style partial orders, executes admitted tests through a bounded GymAct interface, records OCEL v2 evidence, and binds artifacts to BLAKE3-256 receipts with origin signatures.
+CASTLE is a board-governed consequence and strategic-command system. A board defines the corporation's objectives, prohibited outcomes, delegated authority, nondelegable decisions, capital-at-risk bounds, escalation/withdrawal conditions, and evidence requirements; CASTLE lets the organization explore and replan broadly while keeping consequential commitment behind a separate admitted boundary.
+
+The implementation remains continuously self-adversarial for owned or explicitly authorized infrastructure: it derives vulnerability conditions backward from prohibited goals, CONSTRUCTs dependency compromise worlds, fans planning problems across a planner ensemble, compiles witnesses into POWL-style partial orders, executes admitted tests through a bounded GymAct interface, records OCEL v2 evidence, and binds artifacts to cryptographic receipts. The board-facing product contract is documented in `docs/WBPR_CASTLE_BOARD_V26_9_28.md`.
+
+## Board strategic command
+
+`src/strategic_command.rs` implements the non-actuating strategic layer introduced in v26.9.28. It reuses the Berthier campaign-compiler semantics developed in `chatman-ecosystem` PR #285 without importing that closed/unmerged branch as runtime authority.
+
+The board path is:
+
+    BoardConstitution
+      -> StrategyDoctrine
+      -> sealed StrategyPartition[]
+      -> CampaignCandidate[]
+      -> fail-closed campaign courts
+      -> explicit board SELECT
+      -> StrategicMandatePacket(actuation=NONE, authority_ceiling=CONSTRUCT)
+      -> BRCE
+      -> existing CASTLE DO boundary
+
+The strategy operator catalog carries provenance from the prior 33SW, Napoleon/Berthier, DfCM, and Fuller work. Operators are candidate state transformations only; they grant no authority. Global premise drift triggers strategic recompilation, local premise drift invalidates only dependent strategy partitions, and runtime divergence follows the smallest lawful recovery ladder: policy branch -> suffix reuse -> tail repair -> bounded replan -> hierarchy recompile -> strategic recompile.
+
+There is deliberately no optimizer-to-DO edge. A machine may construct, falsify, compare, and replan campaigns. Material campaign selection is represented as a separate board act, and even that selection emits only an inert mandate for the existing consequence boundary.
+
+## CASTLE semantic Jira crown
+
+The governing semantic-Jira graph for the v26.9.28 product/fleet composition is
+`docs/sjira/v26.9.28/goal.ttl`; exact repository subjects and irreducible
+capability ownership are pinned in `docs/sjira/v26.9.28/repos.ttl`.
+
+The graph is intentionally authority-free:
+
+```text
+sJira             = goals / work / obligations
+CASTLE            = consequential admissibility
+XaaS              = runtime existence and composition
+GraphLaw          = semantic-law derivation
+Affidavit         = cryptographic standing
+BRCE              = sole protected CONSTRUCT -> DO boundary
+```
+
+`goal.ttl` contains no authored WorkOrders and no authored Receipts. WorkOrders
+are compiler projections; standing is observed from executed courts and
+exact-subject receipts. The root stop query remains false from the goal graph
+alone. Repository-local anti-vacuity tests in `tests/sjira_castle.rs` enforce
+the 14-gate crown, XaaS runtime ownership, CASTLE consequence ownership, unique
+irreducible capability ownership, and the absence of a sJira DO ceiling.
+
+See `docs/sjira/v26.9.28/README.md` for the court order and successor policy.
 
 ## Canonical flow
 
@@ -182,3 +230,22 @@ castle inventory goals
 Every subcommand accepts `--format json|json-pretty|yaml|table|plain|tsv|quiet` (provided by
 `clap-noun-verb` itself). `tests/cli_fortune5.rs` and `tests/cli_replay_impact_inventory.rs`
 exercise the real compiled binary as a subprocess — no mocking of the CLI layer.
+
+
+## v26.9.28 ecosystem interoperability
+
+The September 28 Los Angeles task-window review is bound in `configs/ecosystem-v26.9.28.json` and the complete 66-PR task-window ledger is in `docs/REVIEW_2026-09-28.md`. The selected semantic source is the immutable `ggen-marketplace@v26.9.29` CASTLE pack; exact release/merge SHAs are part of the manifest rather than inferred from version labels.
+
+`src/v26_9_28` adds admission courts for the capabilities that became available across the fleet during the review window:
+
+- exact-SHA, exact-subject, resource-bounded external evidence;
+- multi-runtime portable-WASM agreement;
+- independent plan verification so a planner cannot grade itself;
+- FOND/TLA+ differential agreement with counterexample refusal;
+- edge-local provider recovery that excludes failed edges without converting recovery into authority.
+
+These integrations are upstream evidence and compute surfaces only. GraphLaw, Affidavit, wasm4pm, DSPy-WASM, AutoFDE-Lab, AshA2A, AshPPlan, Ferroplan, Beam4PM, AshR2RML, XaaS, ggen, and ggen-marketplace do not receive ambient CASTLE actuation authority. `CONSTRUCT != DO` remains unchanged: consequential execution still requires CASTLE's existing opaque `ConstructAdmission -> BRCE -> DO -> OCEL/receipt` path.
+
+The strongest same-day runtime composition is `AshPPlan → AshA2A → GymAct/Beam4PM/XaaS`: planner ownership stays separate, AshA2A owns portable recovery/consequence semantics, and consumers preserve rather than re-derive the decision. CASTLE admits that chain only as bounded evidence/compute semantics.
+
+The released marketplace pack also contains generator rules for `security_sources_generated.rs`, `security_tools_generated.rs`, and `security_core_generated.rs`. Those outputs are intentionally **not handwritten in this PR**. They remain generator-owned consequences and should be materialized by the released ggen toolchain when the native manufacture lane is available.

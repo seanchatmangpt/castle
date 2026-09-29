@@ -1,0 +1,1 @@
+{"version":1,"principal":"principal:alice","capability":"payments","subject":{"id":42,"kind":"order"},"payload":{"amount":100,"currency":"USD"}}

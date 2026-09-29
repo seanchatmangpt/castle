@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"urn:sa2a:resource-envelope:v1","type":"object","required":["compute_units","io_bytes","effects"],"properties":{"compute_units":{"type":"integer","minimum":1},"io_bytes":{"type":"integer","minimum":0},"effects":{"type":"integer","minimum":1}},"additionalProperties":false}
