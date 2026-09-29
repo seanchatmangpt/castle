@@ -89,6 +89,27 @@ derive_vulnerabilities()       DfCM: goal -> minimal predicate/witness sets (sub
 `dyn` objects, and `run_planner_ensemble` needs heterogeneous `&[Box<dyn Planner>]`) — this is the one place
 `async-trait` earns its keep as a dependency; prefer plain generics over trait objects elsewhere.
 
+### Board strategic command (`src/strategic_command.rs`)
+
+This is the product-level strategic layer, separate from the generated Fortune-5 readiness inventory. It reuses the semantics proven in the earlier Berthier campaign compiler without making that closed/unmerged branch an authority dependency.
+
+The non-negotiable flow is:
+
+    BoardConstitution
+      -> StrategyDoctrine
+      -> sealed StrategyPartition[]
+      -> CampaignCandidate[]
+      -> judge_campaign_candidate()
+      -> explicit board SELECT via admit_board_selection()
+      -> StrategicMandatePacket(actuation=NONE, authority_ceiling=CONSTRUCT)
+      -> existing BRCE / DO path
+
+Do **not** add an optimizer that automatically selects the material campaign. Machines may construct, falsify, compare, counterplan, and replan; the material strategic SELECT is represented as a board act. Board selection still does not grant DO authority.
+
+`STRATEGY_OPERATORS` is a provenance-bearing operator catalog derived from the prior 33SW, Napoleon/Berthier, DfCM, and Fuller work. Operators are state transformations, not authorities. Global premise drift must produce `RecompileScope::Strategic`; local premise drift must invalidate only the dependent strategy partition. Runtime divergence must use the smallest lawful escalation in `route_replan()` before strategic recompilation.
+
+The board-facing contract has exactly eight lenses: Audit, Risk, Capital Allocation, Resilience, Governance, Safety, Competitive Strategy, and Lead Independent. Keep executive-management personas out of this product surface.
+
 ### Fortune-5 readiness gate (`src/fortune5.rs` + `src/board.rs`)
 
 `qualify_fortune5` evaluates `FORTUNE5_REQUIREMENTS` (generated, ontology-sourced) against
