@@ -241,6 +241,71 @@ pub fn bind_v26_9_28_construct_request(
     Ok(request)
 }
 
+pub const SA2A_REPLAN_SCHEMA_ID: &str = "sa2a/replan-envelope/v1";
+pub const SA2A_REPLAN_CONTRACT_DIGEST: &str =
+    "sha256:ff7643034ed101930e9c80df716df863b6ee6d14f3b29aff764209ad11dab80e";
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PortableReplanDecision {
+    pub kind: String,
+    pub reason: String,
+    pub authority: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PortableReplanEnvelope {
+    pub schema: String,
+    pub contract_digest: String,
+    pub exact_subject: Value,
+    pub receipt_id: String,
+    pub consequence: String,
+    pub decision: PortableReplanDecision,
+    pub provider: Option<String>,
+    pub projection_digest: Option<String>,
+    pub source_replay_key: Option<String>,
+}
+
+/// Validate AshA2A's published v1 portable envelope without re-deriving its
+/// consequence/recovery algebra. CASTLE is a consumer: SA2A remains the owner
+/// of the candidate stop/replan decision, and the wire contract grants no
+/// authority.
+pub fn admit_sa2a_replan_envelope(
+    expected_subject: &str,
+    envelope: &PortableReplanEnvelope,
+) -> EvidenceStanding {
+    const CONSEQUENCES: &[&str] = &[
+        "executed",
+        "failed",
+        "refused",
+        "reconciled",
+        "compensated",
+        "unknown_outcome",
+    ];
+    const DECISIONS: &[&str] = &["stop", "replan"];
+
+    if envelope.schema != SA2A_REPLAN_SCHEMA_ID
+        || envelope.contract_digest != SA2A_REPLAN_CONTRACT_DIGEST
+    {
+        return EvidenceStanding::Refused("REFUSED:SA2A_CONTRACT_DRIFT".to_string());
+    }
+    if envelope.exact_subject != Value::String(expected_subject.to_string()) {
+        return EvidenceStanding::Refused("REFUSED:SA2A_EXACT_SUBJECT_MISMATCH".to_string());
+    }
+    if envelope.receipt_id.is_empty() || envelope.decision.reason.is_empty() {
+        return EvidenceStanding::Refused("REFUSED:SA2A_REQUIRED_FIELD".to_string());
+    }
+    if !CONSEQUENCES.contains(&envelope.consequence.as_str())
+        || !DECISIONS.contains(&envelope.decision.kind.as_str())
+    {
+        return EvidenceStanding::Refused("REFUSED:SA2A_ENUM_DRIFT".to_string());
+    }
+    if envelope.decision.authority != "none" {
+        return EvidenceStanding::Refused("REFUSED:SA2A_AUTHORITY_ESCALATION".to_string());
+    }
+
+    EvidenceStanding::Alive
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PortableRuntimeWitness {
     pub engine_family: String,
