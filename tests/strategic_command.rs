@@ -3,11 +3,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use castle::strategic_command::{
     admit_board_selection, compile_board_constitution, compile_board_strategic_receipt,
     compile_strategy_doctrine, construct_campaign_candidate, determine_recompile_scope,
-    judge_campaign_candidate, partition_strategy, route_replan, BoardAvatar, BoardReceiptInput,
-    BoardSelectionRequest, CampaignCandidate, CampaignVerdict, ConstitutionInput,
-    DivergenceEvidence, RecompileScope, ReplanLevel, StrategicStanding, StrategyDoctrine,
-    StrategyPartition, BOARD_LENSES, STRATEGIC_ACTUATION, STRATEGIC_AUTHORITY_CEILING,
-    STRATEGIC_SUCCESSOR_BOUNDARY, STRATEGY_OPERATORS,
+    judge_campaign_candidate, judge_counterstrategy, partition_strategy, qualify_campaign_portfolio,
+    route_replan, assess_board_reentry, assess_counterstrategies, build_strategic_board_package,
+    build_strategic_twin_snapshot, diff_strategic_twins, verify_strategic_board_package_offline,
+    BoardAvatar, BoardReceiptInput, BoardSelectionRequest, CampaignCandidate, CampaignPortfolioPolicy,
+    CampaignVerdict, ConstitutionInput, CounterstrategyScenario, DivergenceEvidence, RecompileScope,
+    ReplanLevel, StrategicStanding, StrategyDoctrine, StrategyPartition, BOARD_LENSES,
+    STRATEGIC_ACTUATION, STRATEGIC_AUTHORITY_CEILING, STRATEGIC_SUCCESSOR_BOUNDARY,
+    STRATEGY_OPERATORS,
 };
 
 fn digest(ch: char) -> String {
@@ -803,4 +806,474 @@ fn board_receipt_surfaces_residual_consequence_and_authority_witnesses() {
         refused.authority_expansions,
         vec!["authority:unapproved-expansion".to_string()]
     );
+}
+
+
+#[test]
+fn counterstrategy_court_falsifies_campaigns_without_gaining_authority() {
+    let constitution = constitution();
+    let doctrine = doctrine();
+    let partitions = partitions(&doctrine);
+    let campaign = candidate(
+        &constitution,
+        &doctrine,
+        &partitions[0],
+        "campaign:counterstrategy",
+        "competitor-response-breaks-build-thesis",
+        1_000_000_000,
+    );
+
+    let benign = CounterstrategyScenario {
+        scenario_id: "response:benign".to_string(),
+        local_premise_mutations: BTreeMap::new(),
+        falsifier_triggered: false,
+        prohibited_outcomes_reached: vec![],
+        authority_expansion_attempts: vec![],
+        additional_capital_required: 100_000_000,
+        remaining_options: 3,
+    };
+    let benign_verdict =
+        judge_counterstrategy(&constitution, &partitions[0], &campaign, &benign).unwrap();
+    assert_eq!(benign_verdict.standing, StrategicStanding::Alive);
+    assert_eq!(benign_verdict.verdict_digest.len(), 64);
+
+    let hostile = CounterstrategyScenario {
+        scenario_id: "response:hostile".to_string(),
+        local_premise_mutations: BTreeMap::from([(
+            "strategy:build:cost".to_string(),
+            digest('d'),
+        )]),
+        falsifier_triggered: true,
+        prohibited_outcomes_reached: vec!["unauthorized-capital-commitment".to_string()],
+        authority_expansion_attempts: vec!["grant-do-to-strategy-compiler".to_string()],
+        additional_capital_required: 4_000_000_000,
+        remaining_options: 0,
+    };
+    let hostile_verdict =
+        judge_counterstrategy(&constitution, &partitions[0], &campaign, &hostile).unwrap();
+    assert_eq!(hostile_verdict.standing, StrategicStanding::Refused);
+    assert!(hostile_verdict
+        .refusals
+        .contains(&"REFUSED:CAMPAIGN_FALSIFIER_TRIGGERED".to_string()));
+    assert!(hostile_verdict
+        .refusals
+        .iter()
+        .any(|reason| reason.starts_with("REFUSED:COUNTERSTRATEGY_FALSIFIED_PREMISE:")));
+    assert!(hostile_verdict
+        .refusals
+        .contains(&"REFUSED:COUNTERSTRATEGY_REACHES_PROHIBITED_OUTCOME".to_string()));
+    assert!(hostile_verdict
+        .refusals
+        .contains(&"REFUSED:COUNTERSTRATEGY_REQUIRES_AUTHORITY_EXPANSION".to_string()));
+    assert!(hostile_verdict
+        .refusals
+        .contains(&"REFUSED:COUNTERSTRATEGY_EXCEEDS_CAPITAL_BOUND".to_string()));
+    assert!(hostile_verdict
+        .refusals
+        .contains(&"REFUSED:COUNTERSTRATEGY_EXHAUSTS_OPTION_SPACE".to_string()));
+
+    let assessment =
+        assess_counterstrategies(&constitution, &partitions[0], &campaign, &[benign, hostile])
+            .unwrap();
+    assert_eq!(assessment.standing, StrategicStanding::Refused);
+    assert_eq!(assessment.verdicts.len(), 2);
+    assert_eq!(assessment.assessment_digest.len(), 64);
+}
+
+#[test]
+fn portfolio_analysis_enforces_capital_concentration_and_reversibility_without_selecting_a_winner() {
+    let constitution = constitution();
+    let doctrine = doctrine();
+    let partitions = partitions(&doctrine);
+    let current = current_local(&partitions);
+
+    let campaigns = vec![
+        candidate(
+            &constitution,
+            &doctrine,
+            &partitions[0],
+            "campaign:portfolio-build",
+            "counterexample:build",
+            1_000_000_000,
+        ),
+        candidate(
+            &constitution,
+            &doctrine,
+            &partitions[1],
+            "campaign:portfolio-partner",
+            "counterexample:partner",
+            1_000_000_000,
+        ),
+    ];
+    let verdicts: Vec<_> = campaigns
+        .iter()
+        .zip(partitions.iter())
+        .map(|(campaign, partition)| {
+            judge_campaign_candidate(&constitution, &doctrine, partition, campaign, &current)
+        })
+        .collect();
+
+    let analysis = qualify_campaign_portfolio(
+        &campaigns,
+        &verdicts,
+        &CampaignPortfolioPolicy {
+            aggregate_capital_at_risk_limit: 3_000_000_000,
+            max_single_campaign_concentration_bps: 6_000,
+            min_reversible_capital_bps: 4_000,
+        },
+    )
+    .unwrap();
+
+    assert_eq!(analysis.standing, StrategicStanding::Alive);
+    assert_eq!(analysis.aggregate_capital_committed, 2_000_000_000);
+    assert_eq!(analysis.aggregate_reversible_capital, 1_000_000_000);
+    assert_eq!(analysis.reversible_capital_bps, 5_000);
+    assert_eq!(analysis.max_single_campaign_concentration_bps, 5_000);
+    assert_eq!(
+        analysis.campaign_ids,
+        vec![
+            "campaign:portfolio-build".to_string(),
+            "campaign:portfolio-partner".to_string()
+        ]
+    );
+    assert_eq!(analysis.analysis_digest.len(), 64);
+
+    let refused = qualify_campaign_portfolio(
+        &campaigns,
+        &verdicts,
+        &CampaignPortfolioPolicy {
+            aggregate_capital_at_risk_limit: 1_500_000_000,
+            max_single_campaign_concentration_bps: 4_000,
+            min_reversible_capital_bps: 6_000,
+        },
+    )
+    .unwrap();
+    assert_eq!(refused.standing, StrategicStanding::Refused);
+    assert!(refused
+        .reasons
+        .contains(&"REFUSED:PORTFOLIO_CAPITAL_BOUND_EXCEEDED".to_string()));
+    assert!(refused
+        .reasons
+        .contains(&"REFUSED:PORTFOLIO_CONCENTRATION_BOUND_EXCEEDED".to_string()));
+    assert!(refused
+        .reasons
+        .contains(&"REFUSED:PORTFOLIO_REVERSIBILITY_BELOW_BOUND".to_string()));
+}
+
+#[test]
+fn materiality_and_strategic_falsification_force_explicit_board_reentry() {
+    use castle::board::{MaterialityDimension, MaterialityEvent, MaterialityPolicy};
+
+    let constitution = constitution();
+    let doctrine = doctrine();
+    let partitions = partitions(&doctrine);
+    let current = current_local(&partitions);
+    let campaign = candidate(
+        &constitution,
+        &doctrine,
+        &partitions[0],
+        "campaign:materiality",
+        "counterexample",
+        1_000_000_000,
+    );
+    let verdict =
+        judge_campaign_candidate(&constitution, &doctrine, &partitions[0], &campaign, &current);
+    let mandate = admit_board_selection(
+        &constitution,
+        std::slice::from_ref(&campaign),
+        std::slice::from_ref(&verdict),
+        BoardSelectionRequest {
+            candidate_id: campaign.candidate_id.clone(),
+            selection_authority_digest: digest('a'),
+            selected_by: "board:independent-directors".to_string(),
+            selected_at: "2026-09-28T22:00:00-07:00".to_string(),
+        },
+    )
+    .unwrap();
+    let receipt = compile_board_strategic_receipt(
+        &constitution,
+        &campaign,
+        &mandate,
+        BoardReceiptInput {
+            falsified_premises: vec!["market-thesis".to_string()],
+            material_exceptions: vec![],
+            options_remaining: 2,
+            prohibited_outcome_witnesses: vec![],
+            authority_expansions: vec![],
+            next_board_decision: Some("revise-campaign".to_string()),
+            evidence_digest: digest('b'),
+        },
+    )
+    .unwrap();
+
+    let event = MaterialityEvent {
+        id: "event:material".to_string(),
+        subject: constitution.subject.clone(),
+        occurred_at_epoch_ms: 1_000,
+        impact_bps: BTreeMap::from([(MaterialityDimension::Financial, 750)]),
+    };
+    let policy = MaterialityPolicy {
+        policy_digest: digest('c'),
+        authority_digest: digest('d'),
+        per_dimension_threshold_bps: BTreeMap::from([(MaterialityDimension::Financial, 500)]),
+        aggregate_threshold_bps: 9_000,
+        escalation_within_ms: 3_600_000,
+    };
+
+    let reentry = assess_board_reentry(&constitution, &receipt, &event, &policy).unwrap();
+    assert!(reentry.required);
+    assert!(reentry
+        .reasons
+        .contains(&"MATERIALITY_THRESHOLD_CROSSED".to_string()));
+    assert!(reentry
+        .reasons
+        .contains(&"STRATEGIC_PREMISE_FALSIFIED".to_string()));
+    assert_eq!(reentry.escalate_by_epoch_ms, Some(3_601_000));
+}
+
+#[test]
+fn strategic_twin_collapses_runtime_state_to_a_board_delta() {
+    let constitution = constitution();
+    let doctrine = doctrine();
+    let partitions = partitions(&doctrine);
+    let current = current_local(&partitions);
+    let campaign = candidate(
+        &constitution,
+        &doctrine,
+        &partitions[0],
+        "campaign:twin",
+        "counterexample",
+        1_000_000_000,
+    );
+    let verdict =
+        judge_campaign_candidate(&constitution, &doctrine, &partitions[0], &campaign, &current);
+    let mandate = admit_board_selection(
+        &constitution,
+        std::slice::from_ref(&campaign),
+        std::slice::from_ref(&verdict),
+        BoardSelectionRequest {
+            candidate_id: campaign.candidate_id.clone(),
+            selection_authority_digest: digest('e'),
+            selected_by: "board:independent-directors".to_string(),
+            selected_at: "2026-09-28T22:01:00-07:00".to_string(),
+        },
+    )
+    .unwrap();
+    let receipt = compile_board_strategic_receipt(
+        &constitution,
+        &campaign,
+        &mandate,
+        BoardReceiptInput {
+            falsified_premises: vec![],
+            material_exceptions: vec![],
+            options_remaining: 4,
+            prohibited_outcome_witnesses: vec![],
+            authority_expansions: vec![],
+            next_board_decision: None,
+            evidence_digest: digest('f'),
+        },
+    )
+    .unwrap();
+    let portfolio = qualify_campaign_portfolio(
+        std::slice::from_ref(&campaign),
+        std::slice::from_ref(&verdict),
+        &CampaignPortfolioPolicy {
+            aggregate_capital_at_risk_limit: 2_000_000_000,
+            max_single_campaign_concentration_bps: 10_000,
+            min_reversible_capital_bps: 5_000,
+        },
+    )
+    .unwrap();
+    let scenario = CounterstrategyScenario {
+        scenario_id: "response:stable".to_string(),
+        local_premise_mutations: BTreeMap::new(),
+        falsifier_triggered: false,
+        prohibited_outcomes_reached: vec![],
+        authority_expansion_attempts: vec![],
+        additional_capital_required: 0,
+        remaining_options: 4,
+    };
+    let counterstrategy = assess_counterstrategies(
+        &constitution,
+        &partitions[0],
+        &campaign,
+        &[scenario],
+    )
+    .unwrap();
+
+    let previous = build_strategic_twin_snapshot(
+        &constitution,
+        &mandate,
+        &receipt,
+        &portfolio,
+        &counterstrategy,
+    )
+    .unwrap();
+    assert_eq!(previous.standing, StrategicStanding::Alive);
+
+    let mut current_snapshot = previous.clone();
+    current_snapshot.options_remaining = 2;
+    current_snapshot.standing = StrategicStanding::Refused;
+    current_snapshot
+        .falsified_premises
+        .push("market-thesis".to_string());
+    current_snapshot
+        .failed_counterstrategy_scenarios
+        .push("response:hostile".to_string());
+    current_snapshot.snapshot_digest = digest('1');
+
+    let delta = diff_strategic_twins(&previous, &current_snapshot).unwrap();
+    assert!(delta.requires_board_attention);
+    assert!(delta
+        .changed_dimensions
+        .contains(&"options-remaining".to_string()));
+    assert!(delta
+        .changed_dimensions
+        .contains(&"falsified-premises".to_string()));
+    assert!(delta
+        .changed_dimensions
+        .contains(&"counterstrategy".to_string()));
+    assert!(delta.changed_dimensions.contains(&"standing".to_string()));
+}
+
+#[test]
+fn strategic_board_package_is_self_contained_and_offline_verifiable() {
+    use castle::board::{
+        BoardPackage, MaterialityDimension, MaterialityEvent, MaterialityPolicy,
+    };
+    use castle::fortune5::Standing;
+
+    let constitution = constitution();
+    let doctrine = doctrine();
+    let partitions = partitions(&doctrine);
+    let current = current_local(&partitions);
+    let campaign = candidate(
+        &constitution,
+        &doctrine,
+        &partitions[0],
+        "campaign:package",
+        "counterexample",
+        1_000_000_000,
+    );
+    let verdict =
+        judge_campaign_candidate(&constitution, &doctrine, &partitions[0], &campaign, &current);
+    let mandate = admit_board_selection(
+        &constitution,
+        std::slice::from_ref(&campaign),
+        std::slice::from_ref(&verdict),
+        BoardSelectionRequest {
+            candidate_id: campaign.candidate_id.clone(),
+            selection_authority_digest: digest('2'),
+            selected_by: "board:independent-directors".to_string(),
+            selected_at: "2026-09-28T22:02:00-07:00".to_string(),
+        },
+    )
+    .unwrap();
+    let receipt = compile_board_strategic_receipt(
+        &constitution,
+        &campaign,
+        &mandate,
+        BoardReceiptInput {
+            falsified_premises: vec![],
+            material_exceptions: vec![],
+            options_remaining: 4,
+            prohibited_outcome_witnesses: vec![],
+            authority_expansions: vec![],
+            next_board_decision: None,
+            evidence_digest: digest('3'),
+        },
+    )
+    .unwrap();
+    let portfolio = qualify_campaign_portfolio(
+        std::slice::from_ref(&campaign),
+        std::slice::from_ref(&verdict),
+        &CampaignPortfolioPolicy {
+            aggregate_capital_at_risk_limit: 2_000_000_000,
+            max_single_campaign_concentration_bps: 10_000,
+            min_reversible_capital_bps: 5_000,
+        },
+    )
+    .unwrap();
+    let scenario = CounterstrategyScenario {
+        scenario_id: "response:stable".to_string(),
+        local_premise_mutations: BTreeMap::new(),
+        falsifier_triggered: false,
+        prohibited_outcomes_reached: vec![],
+        authority_expansion_attempts: vec![],
+        additional_capital_required: 0,
+        remaining_options: 4,
+    };
+    let counterstrategy = assess_counterstrategies(
+        &constitution,
+        &partitions[0],
+        &campaign,
+        &[scenario],
+    )
+    .unwrap();
+    let twin = build_strategic_twin_snapshot(
+        &constitution,
+        &mandate,
+        &receipt,
+        &portfolio,
+        &counterstrategy,
+    )
+    .unwrap();
+
+    let event = MaterialityEvent {
+        id: "event:nonmaterial".to_string(),
+        subject: constitution.subject.clone(),
+        occurred_at_epoch_ms: 2_000,
+        impact_bps: BTreeMap::from([(MaterialityDimension::Financial, 100)]),
+    };
+    let policy = MaterialityPolicy {
+        policy_digest: digest('4'),
+        authority_digest: digest('5'),
+        per_dimension_threshold_bps: BTreeMap::from([(MaterialityDimension::Financial, 500)]),
+        aggregate_threshold_bps: 9_000,
+        escalation_within_ms: 3_600_000,
+    };
+    let reentry = assess_board_reentry(&constitution, &receipt, &event, &policy).unwrap();
+    assert!(!reentry.required);
+
+    let base = BoardPackage {
+        profile: "CASTLE_FORTUNE5_BOARD_V1",
+        enterprise_subject: constitution.subject.clone(),
+        castle_subject: "castle:self".to_string(),
+        generated_at: "2026-09-28T22:02:00-07:00".to_string(),
+        enterprise_standing: Standing::Alive,
+        castle_standing: Standing::Alive,
+        material_refused_subjects: 0,
+        risk_appetite_breaches: 0,
+        control_count: 40,
+        evidence_digest: digest('6'),
+    };
+
+    let package = build_strategic_board_package(
+        &base,
+        &constitution,
+        &mandate,
+        &receipt,
+        &portfolio,
+        &counterstrategy,
+        &twin,
+        &reentry,
+        "2026-09-28T22:03:00-07:00",
+    )
+    .unwrap();
+
+    assert_eq!(package.profile, "CASTLE_STRATEGIC_BOARD_V1");
+    assert_eq!(package.authority_ceiling, STRATEGIC_AUTHORITY_CEILING);
+    assert_eq!(package.actuation, STRATEGIC_ACTUATION);
+    assert_eq!(package.package_digest.len(), 64);
+    let verification = verify_strategic_board_package_offline(&package);
+    assert_eq!(verification.standing, StrategicStanding::Alive);
+    assert!(verification.reasons.is_empty());
+
+    let mut tampered = package;
+    tampered.board_reentry_required = true;
+    let verification = verify_strategic_board_package_offline(&tampered);
+    assert_eq!(verification.standing, StrategicStanding::Refused);
+    assert!(verification
+        .reasons
+        .contains(&"REFUSED:STRATEGIC_BOARD_PACKAGE_CONTENT_MISMATCH".to_string()));
 }
