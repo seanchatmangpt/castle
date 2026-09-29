@@ -6,14 +6,15 @@
 
 use std::collections::BTreeSet;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 
 pub const ECOSYSTEM_EPOCH: &str = "v26.9.28";
 pub const MAX_EXTERNAL_WITNESS_BYTES: u64 = 64 * 1024 * 1024;
 pub const MAX_EXTERNAL_WITNESS_STEPS: u64 = 1_000_000;
 pub const MAX_EXTERNAL_WITNESS_DEADLINE_MS: u64 = 3_600_000;
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct MarketplacePack {
     pub repo: String,
     pub r#ref: String,
@@ -24,7 +25,7 @@ pub struct MarketplacePack {
     pub security_tools_sha: String,
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct SourceSubject {
     pub id: String,
     pub repo: String,
@@ -36,14 +37,14 @@ pub struct SourceSubject {
     pub authority_ceiling: String,
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct ExcludedPr {
     pub repo: String,
     pub pr: u64,
     pub reason: String,
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct EcosystemManifest {
     pub kind: String,
     pub release_epoch: String,
@@ -67,7 +68,7 @@ fn lowercase_hex(value: &str, len: usize) -> bool {
             .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum WitnessKind {
     Semantic,
     Receipt,
@@ -78,14 +79,14 @@ pub enum WitnessKind {
     ModelCompute,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 pub struct WitnessLimits {
     pub max_steps: u64,
     pub max_bytes: u64,
     pub deadline_ms: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct ExternalWitness {
     pub source_id: String,
     pub source_sha: String,
@@ -144,6 +145,86 @@ pub fn admit_external_witness(
     }
 
     EvidenceStanding::Alive
+}
+
+
+/// Bind admitted Sep-28 ecosystem evidence into a normal CASTLE ConstructRequest.
+///
+/// This does not manufacture a capability. It only enriches the inert config
+/// graph so the existing `manufacture_construct_capability` path will include
+/// the exact review manifest and witness set in its normal config receipt.
+pub fn bind_v26_9_28_construct_request(
+    mut request: crate::castle::ConstructRequest,
+    manifest: &EcosystemManifest,
+    witnesses: &[ExternalWitness],
+) -> Result<crate::castle::ConstructRequest, String> {
+    let qualification = qualify_v26_9_28_upgrade(manifest);
+    if let EvidenceStanding::Refused(reason) = qualification.standing {
+        return Err(reason);
+    }
+
+    for witness in witnesses {
+        if let EvidenceStanding::Refused(reason) = admit_external_witness(manifest, witness) {
+            return Err(reason);
+        }
+        if witness.subject != request.subject {
+            return Err("REFUSED:EXTERNAL_WITNESS_SUBJECT_MISMATCH".to_string());
+        }
+    }
+
+    let Value::Object(mut config) = request.config_graph else {
+        return Err("REFUSED:CONFIG_GRAPH_NOT_OBJECT".to_string());
+    };
+
+    let manifest_value = serde_json::to_value(manifest)
+        .map_err(|e| format!("REFUSED:MANIFEST_SERIALIZATION:{e}"))?;
+    let manifest_digest = blake3::hash(crate::castle::canonical_json(&manifest_value).as_bytes())
+        .to_hex()
+        .to_string();
+
+    let mut ordered = witnesses.to_vec();
+    ordered.sort_by(|a, b| {
+        (
+            a.source_id.as_str(),
+            a.subject.as_str(),
+            a.kind,
+            a.input_digest.as_str(),
+            a.output_digest.as_str(),
+        )
+            .cmp(&(
+                b.source_id.as_str(),
+                b.subject.as_str(),
+                b.kind,
+                b.input_digest.as_str(),
+                b.output_digest.as_str(),
+            ))
+    });
+    let witness_value = serde_json::to_value(&ordered)
+        .map_err(|e| format!("REFUSED:WITNESS_SERIALIZATION:{e}"))?;
+    let witness_digest = blake3::hash(crate::castle::canonical_json(&witness_value).as_bytes())
+        .to_hex()
+        .to_string();
+
+    config.insert(
+        "_castle_v26_9_28".to_string(),
+        json!({
+            "epoch": ECOSYSTEM_EPOCH,
+            "manifest_digest": manifest_digest,
+            "marketplace_commit": manifest.marketplace_pack.commit_sha,
+            "witness_digest": witness_digest,
+            "witness_count": ordered.len(),
+            "sources": ordered.iter().map(|w| json!({
+                "id": w.source_id,
+                "sha": w.source_sha,
+                "subject": w.subject,
+                "kind": w.kind,
+                "input_digest": w.input_digest,
+                "output_digest": w.output_digest,
+            })).collect::<Vec<_>>(),
+        }),
+    );
+    request.config_graph = Value::Object(config);
+    Ok(request)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
