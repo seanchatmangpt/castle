@@ -40,38 +40,162 @@ document.
 
 ## The gap between kernel and system
 
-Three things stand between today's kernel and a system that does what `README.md`'s canonical flow
-describes end-to-end:
+One thing stands between today's kernel and a system that does what `README.md`'s canonical flow
+describes end-to-end (gaps #1 and #2 as of 2026-08-15 are closed — see the dated note below):
 
-1. **No real `GymActAdapter`.** The bounded test-envelope executor has no implementation against
-   any actual infrastructure (a cloud API, a container runtime, a CI system). Building one, scoped
-   and receipt-bound the same way the kernel already is, is the highest-leverage next step —
-   everything downstream (real OCEL evidence, real Fortune-5 metrics, real replay classes) depends
-   on it existing.
-2. **The ensemble has exactly one planner beyond `WitnessPlanner`.** `CostMinimizingPlanner`
-   (added; see `tests/planner_ensemble.rs`) generalizes `run_planner_ensemble`'s
-   scoring/selection to a second scoring family; further structurally different planners
-   (e.g. hint-routed, adversarial-depth-aware) remain unwritten.
-3. **No ontology-driven CLI verbs for CONSTRUCT/DO.** The `castle` binary can query and evaluate but
+1. **No ontology-driven CLI verbs for CONSTRUCT/DO.** The `castle` binary can query and evaluate but
    not manufacture or actuate — by design, for now: CONSTRUCT manufacture and DO execution both
    require a `Blake3Provider`/`ReceiptSigner`/`GymActAdapter` triple that has no default, safe CLI
    shape yet. Wiring one prematurely would be worse than not having it.
+
+### 2026-08-17/18: gaps #1 (`GymActAdapter`) and #2 (second planner) closed, with scope notes
+
+**`GymActAdapter` (was gap #1).** `KindClusterReadOnlyGymAct` in `src/castle.rs` (~line 790) is the
+crate's first non-test-double `GymActAdapter` implementor, run against a real, already-running
+`kind-platform-eng-colima` kind cluster (verified live via `kubectl get nodes` / `docker ps` before
+writing code, not assumed). It shells out to the real `kubectl` binary through a fixed,
+construction-time allowlist of three read-only `kubectl get` queries (nodes / kube-system pods /
+namespaces); any `transition_id` outside that map is refused before `kubectl` is ever invoked. The
+real JSON response's `items[].metadata.name` becomes real `OcelObject`s, so the OCEL log names
+actual observed cluster resources. It still routes through the existing `execute_powl_with_gym_act`
+admission/envelope/digest chain, plus its own allowlist on top — `CONSTRUCT != DO` unrelaxed. Test
+`kind_cluster_gymact_observes_real_nodes_and_yields_a_receipted_ocel_log` asserts on the real
+`ReceiptedOcelLog` state (object ids prefixed `k8s:kind-platform-eng-colima:`), degrading to a named
+`eprintln!("SKIPPED: ...")` — never a mock — if the cluster isn't reachable; a companion test
+confirms an unlisted `transition_id` is refused without invoking `kubectl` at all. Real run:
+`cargo test --test castle` → 14 passed, 0 failed, live-cluster test not skipped; full suite green;
+`grep -rn "unittest.mock|Mock(|MagicMock|patch(|monkeypatch" src/ tests/` → zero matches. Honest
+scope: this is one read-only adapter against one already-provisioned local cluster, not the
+2030-horizon `ContainerGymActAdapter` (network-isolated `docker`/`podman` spawn, image allowlist,
+`permit.expires_at_epoch_ms` enforcement) described below — that item is still open.
+
+**Second planner (was gap #2).** `AutofdeLabPlanner` in `src/castle.rs` implements the existing
+`Planner` trait by serializing the `PlanningProblem` to JSON, spawning a real Python subprocess
+(`autofde-lab/scripts/castle_bridge/plan_astar.py`, a genuine A* forward search over the problem's
+own `TransitionRule` set, Python stdlib `heapq`) and parsing its real stdout back into
+`PlanCandidate`s — no mocking, degrades to `Vec::new()` on any subprocess/parse failure, same as
+`WitnessPlanner`'s inapplicable-case behavior. Test
+`ensemble_selects_between_witness_and_autofde_lab_planners` runs both planners through the real
+`run_planner_ensemble` on a two-rule problem and shows the ascending-score sort placing
+`autofde-lab-astar` (score 2, from a real search path) ahead of `witness-partial-order` (score 3) —
+the winning planner and process differ structurally, not just in labeling, closing the exact
+falsifiable condition the 2030 horizon item below describes. Real run: the new test passes; full
+`cargo test` afterward stays green (`lib.rs` 14, `tests/castle.rs` 12, `cli_fortune5.rs` 3,
+`cli_replay_impact_inventory.rs` 5, `fortune5.rs` 9, `prop_dfcm.rs` 2); `grep` for mock usage in
+`src/`/`tests/` → zero matches. Honest scope: `plan_astar.py` does **not** route through
+autofde-lab's registered `autofde_lab.hub.solver.astar.Astar` scikit-decide `Solver` — that deeper
+integration (wiring the problem into `GoalDomain`'s state/action/`Memory`/`Value` protocol) was
+verified buildable (`uv run python -c "import autofde_lab"` → ok) but not attempted in this pass.
+
+Both changes are staged in `src/castle.rs`/`tests/castle.rs` in the castle repo, not committed; the
+bridge script is new and untracked in the separate autofde-lab repo.
+
+### 2026-08-18: production `GymActAdapter` against the live `gymact` service
+
+`ProcessGymActAdapter` in `src/castle.rs` (~line 926, immediately after `KindClusterReadOnlyGymAct`)
+is the crate's second non-test-double `GymActAdapter` implementor, and the first backed by a real
+external *service's* CLI rather than a hand-rolled `kubectl` call: it shells out to the real
+`gymact` Typer CLI (`~/gymact/.venv/bin/gymact verify <request.json>`, subprocess+JSON, the same
+bridge pattern as `AutofdeLabPlanner`) against the real `kubernetes-reconciliation` provider on the
+already-running `kind-platform-eng-colima` cluster, rather than gymact's HTTP/FastAPI surface
+(avoids network/auth setup for a same-host CLI already installed and already authorized). A fixed,
+construction-time `allowed_verifications` map (`transition_id` -> gymact `provider` name + expected
+postcondition JSON) plays the same role as `KindClusterReadOnlyGymAct`'s allowlist: any
+`transition_id` outside it is refused before `gymact` is ever invoked, so nothing from
+`PowlActivity`/`WorldState` is interpolated into the gymact request. `gymact verify`'s CLI path
+materializes a real subject per call (a real `kubernetes-reconciliation` Pod, confirmed live via
+`kubectl get pods` before/after) but ships no `teardown` subcommand
+(`~/gymact/src/gymact/cli.py` has none); the adapter best-effort tears its own materialized pod down
+via a fixed `kubectl delete pod <observed-name> --now` afterward so repeated runs don't accumulate
+live pods — verified: `kubectl --context kind-platform-eng-colima get pods -n default` showed the
+pod present mid-run and `No resources found` after. It still routes through the existing
+`execute_powl_with_gym_act` admission/envelope/digest chain — `CONSTRUCT != DO` unrelaxed; no new
+actuation path bypasses `admit_construct_for_do`.
+
+Two new tests in `tests/castle.rs` cover it:
+`process_gym_act_adapter_runs_a_real_powl_sequence_against_the_live_kubernetes_reconciliation_provider_and_yields_a_receipted_ocel_log`
+runs a real one-activity POWL process through `execute_powl_with_gym_act` against the live cluster
+and asserts on the real `ReceiptedOcelLog` state (a `gymact:kubernetes-reconciliation:<episode-id>`
+object, the real `gymact_observed.running == true` postcondition attached to the OCEL event, and a
+non-empty real receipt digest) — never on "was gymact called"; and
+`process_gym_act_adapter_refuses_transitions_outside_its_fixed_allowlist` confirms an unlisted
+`transition_id` is refused without invoking `gymact` at all. Both degrade to a named
+`eprintln!("SKIPPED: ...")` (never a mock) if the real cluster or the real `gymact` CLI isn't
+reachable, matching `kind_cluster_gymact_observes_real_nodes_and_yields_a_receipted_ocel_log`'s
+contract. Real run: `cargo test --test castle` -> 16 passed, 0 failed, both live-service tests not
+skipped, full suite green; `grep -rn "unittest.mock|Mock(|MagicMock|patch(|monkeypatch|mockall" src/
+tests/` -> zero matches.
+
+Honest scope: this adapter drives gymact's `verify` command only (a materialize -> independently
+observe/check cycle), not `execute`'s heavier BRCEBroker/`ExecutionGrant`/`admission_digest` DO
+path — wiring a `ProcessGymActAdapter` variant against `gymact execute` for a true multi-capability
+DO sequence (e.g. `scale_restart` then re-verify) remains open. Selecting this adapter over
+`KindClusterReadOnlyGymAct` at the `execute_powl_with_gym_act` call site is not yet config/env-driven
+in this repo; callers construct whichever `GymActAdapter` they want directly, same as both existing
+adapters today.
+
+### 2026-08-18/19: `ContainerGymActAdapter` against the local `docker` daemon — gap #1's docker item closed
+
+`ContainerGymActAdapter` in `src/castle.rs` (immediately after `ProcessGymActAdapter`) is the crate's
+third non-test-double `GymActAdapter` implementor, and the first backed directly by a local container
+runtime rather than Kubernetes: it shells out to the real `docker` binary (`std::process::Command`,
+the same subprocess-bridge pattern as `KindClusterReadOnlyGymAct`/`ProcessGymActAdapter`, never a
+Docker API client crate) against the real, already-running colima-backed docker daemon on this host
+(verified live via `docker version` / `docker info` before writing code). A fixed, construction-time
+`allowed_images` map (`transition_id` -> already-approved image reference) plays the same allowlist
+role as the other two adapters: any `transition_id` outside it is refused before `docker` is ever
+invoked, so nothing from `PowlActivity`/`WorldState` is interpolated into the image reference or
+command. The container run is bounded on every axis the 2030-horizon item asked for:
+`--network=none` (no network egress), no host mounts, a fixed non-interpolated `sleep 5` command
+(self-expiring even if teardown fails), a name the adapter generates itself
+(`castle-gymact-<transition_id>-<nonce>`) so it only ever creates and later `docker rm -f`s
+containers it owns — never touching any other running container. `permit.expires_at_epoch_ms` is
+checked explicitly inside the adapter (an injectable `now_ms: fn() -> i64` field, defaulting to the
+real wall clock) before `docker` is spawned at all, independent of `execute_powl_with_gym_act`'s own
+upstream expiry check — defense in depth, not reliance on the caller. On any spawn failure or
+nonzero `docker` exit it returns `GymActStatus::Refused`, never a fabricated `Observed`; it cannot
+construct its own `ConstructAdmission` (module-private `sealed::AdmissionBrand` still makes that
+structurally impossible); `CONSTRUCT != DO` is unrelaxed — no new actuation path bypasses
+`admit_construct_for_do`.
+
+Three new tests in `tests/castle.rs` cover it:
+`container_gym_act_adapter_runs_a_real_powl_sequence_against_the_local_docker_daemon_and_yields_a_receipted_ocel_log`
+runs a real one-activity POWL process through `execute_powl_with_gym_act` against the live docker
+daemon and asserts on the real `ReceiptedOcelLog` state (a real `docker:castle-gymact-...` container
+object with the real container id, a real 64-hex-char BLAKE3 digest of the captured `docker inspect`
+stdout attached as `stdout_blake3`, and a non-empty real receipt digest) — never on "was docker
+called" — then independently confirms via a fresh `docker ps -a --filter name=...` that the adapter's
+owned container is actually gone afterward, i.e. teardown is checked as real state, not assumed;
+`container_gym_act_adapter_refuses_transitions_outside_its_fixed_image_allowlist` confirms an
+unlisted `transition_id` is refused without invoking `docker` at all; and
+`container_gym_act_adapter_refuses_an_already_expired_permit_without_spawning_docker` confirms an
+already-expired `permit.expires_at_epoch_ms` is refused before `docker` is ever spawned. The live-daemon
+test degrades to a named `eprintln!("SKIPPED: ...")` (never a mock) if `docker info` fails, matching
+the other two adapters' contract. Real run: `cargo test --test castle` -> 19 passed, 0 failed, all
+three container tests exercised live (not skipped) against the real colima docker daemon on this
+host; full workspace `cargo test` afterward stays green (`lib.rs` unit tests + `tests/castle.rs` 19 +
+`cli_fortune5.rs` 3 + `cli_replay_impact_inventory.rs` 5 + `fortune5.rs` 9 + `prop_dfcm.rs` 2);
+`grep -rn "unittest.mock|Mock(|MagicMock|patch(|monkeypatch|mockall" src/ tests/` -> zero matches.
+
+Honest scope: this closes the docker/local-container-runtime item of the 2030-horizon entry below —
+not the whole item. It targets `docker` only (not `podman`, though the same subprocess-bridge shape
+would extend to it trivially); it runs one fixed, harmless `sleep 5` per invocation rather than any
+caller-meaningful workload (by design — the crate has no real workload to actuate against a container
+yet, so "observe a container this adapter itself created and tore down" is the honest, bounded
+envelope, same spirit as `KindClusterReadOnlyGymAct`'s read-only kubectl queries); and it does not
+attempt image-pull (callers must have already pulled `alpine:latest`, or whatever image they
+allowlist, themselves). Cloud-API and CI-system `GymActAdapter`s remain fully open, as does wiring
+adapter selection at the `execute_powl_with_gym_act` call site.
 
 ## 2030 horizon (target, not status)
 
 Framed as conditions that would have to hold, each traceable to a file that would need to exist and
 pass tests — not aspirational language:
 
-- **At least one real GymAct adapter, receipt-bound and test-envelope-scoped, ships in-repo** —
-  concretely, a `ContainerGymActAdapter` implementing the existing `GymActAdapter` trait
-  (`src/castle.rs:645-648`) against a local, network-isolated container runtime (`docker`/`podman`
-  via `tokio::process::Command`, `--network=none`, an explicit image allowlist) — no credentials or
-  network egress required to exercise it. It must return `GymActStatus::Refused`, never a
-  fabricated `Observed`, on nonzero exit or spawn failure; it must not construct its own
-  `ConstructAdmission` (module-private `sealed::AdmissionBrand` already makes that impossible); it
-  must honor `permit.expires_at_epoch_ms`. Tested against a real local daemon (a named skip, not a
-  mock, when one isn't running), asserting on the real returned `GymActResult`'s exit-code
-  attribute and a BLAKE3 digest of captured stdout — not on whether the subprocess was called.
+- **At least one real GymAct adapter, receipt-bound and test-envelope-scoped, ships in-repo** — the
+  local-container-runtime instance of this is now real: `ContainerGymActAdapter` (see the dated note
+  above), against `docker` specifically. A `podman` variant, and adapters against a real cloud API or
+  a real CI system, remain open — this item is partially, not fully, closed.
 - **`admit_replay`'s fail-closed discipline has been exercised against real semantic drift** — an
   actual ontology version bump or provider-semantics change that a real replay class survived or was
   correctly refused for, not just the synthetic drift in `tests/fortune5.rs`.
@@ -87,6 +211,12 @@ pass tests — not aspirational language:
   `run_planner_ensemble`, asserting the returned `Vec<PlanCandidate>`'s `score`, `planner_id`, and
   `process.activities` show the winning planner differs from `WitnessPlanner` and the winning
   process differs structurally, not just in labeling (`tests/planner_ensemble.rs`).
+- **A second planner exists and the ensemble's scoring/selection has been shown to matter.** ✅
+  Satisfied as of 2026-08-17/18 by `AutofdeLabPlanner` — see the dated note above. The specific
+  design sketched here (`TransitionRule`'s unused `cost`/`planner_hint` fields driving a
+  `CostMinimizingPlanner` over `derive_vulnerabilities`'s `producers` map) was **not** what got
+  built; `AutofdeLabPlanner` instead delegates to a real external A* subprocess. That
+  `cost`/`planner_hint`-driven design is still open if a third, in-process planner is wanted later.
 - **castle-pack's ontology has driven at least one real regeneration of
   `src/generated.rs`/`src/fortune5_generated.rs` via `ggen sync run`, gated in CI.** `ggen` is
   installed and runnable today (`ggen 26.8.8`), but `ggen.toml` currently has no rule wiring

@@ -1,0 +1,19 @@
+name: Build and test the castle Rust workspace on every push to a governed ref.
+on:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        
+      - name: Cargo test
+        run: |
+          cargo test --workspace
+

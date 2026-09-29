@@ -8,6 +8,8 @@ license = "AGPL-3.0"
 [packs]
 castle-pack = { path = "../ggen-marketplace/packs/castle-pack" }
 castle-board-pack = { path = "../ggen-marketplace/packs/castle-board-pack" }
+platform-engineers-handbook-ch02-cluster-pack = { path = "/Users/sac/ggen-marketplace/packs/platform-engineers-handbook-ch02-cluster-pack" }
+github-actions-pack = { path = "/Users/sac/ggen-marketplace/packs/github-actions-pack" }
 
 # Consumer-side projection contract. The sibling marketplace revision is pinned
 # by ggen.ecosystem.lock.toml; this manifest intentionally points every semantic
