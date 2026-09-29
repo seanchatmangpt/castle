@@ -59,7 +59,17 @@
       "reference": "v26.9.28",
       "sha": "40d181fffdefbb65ee4a83486eae86534690c4d5",
       "pr": 47,
-      "role": "exact-source-vkg-federation",
+      "role": "published-vkg-line",
+      "authority_ceiling": "EVIDENCE_ONLY"
+    },
+    {
+      "id": "ash-r2rml-pr48",
+      "repo": "seanchatmangpt/ash_r2rml",
+      "source_kind": "merged_pr",
+      "reference": "merge:48",
+      "sha": "d4971a40c89820f412d5309a9057fbf17275ec76",
+      "pr": 48,
+      "role": "observe-only-exact-source-vkg",
       "authority_ceiling": "EVIDENCE_ONLY"
     },
     {
@@ -73,13 +83,13 @@
       "authority_ceiling": "EVIDENCE_ONLY"
     },
     {
-      "id": "wasm4pm-pr642",
+      "id": "wasm4pm-pr646",
       "repo": "seanchatmangpt/wasm4pm",
       "source_kind": "merged_pr",
-      "reference": "merge:642",
-      "sha": "c321251bba8613528dd1f2018560c37e180cfdcf",
-      "pr": 642,
-      "role": "portable-process-qualification",
+      "reference": "merge:646",
+      "sha": "2ec870ef6f2411beab238f56859c3ca438455c1c",
+      "pr": 646,
+      "role": "portable-process-court-and-allocation-authority-ceiling",
       "authority_ceiling": "COMPUTE_ONLY"
     },
     {
@@ -103,23 +113,43 @@
       "authority_ceiling": "SELECT_ONLY"
     },
     {
-      "id": "ash-a2a-pr56",
+      "id": "ash-pplan-pr15",
+      "repo": "seanchatmangpt/ash_pplan",
+      "source_kind": "merged_pr",
+      "reference": "merge:15",
+      "sha": "b9da1ad7590d70afac5eace3bd7ba1a644f7249f",
+      "pr": 15,
+      "role": "fond-planner-owner-side-sa2a-provider",
+      "authority_ceiling": "COMPUTE_ONLY"
+    },
+    {
+      "id": "ash-a2a-pr60",
       "repo": "seanchatmangpt/ash_a2a",
       "source_kind": "merged_pr",
-      "reference": "merge:56",
-      "sha": "0da2e1588166d455368a655b12faa24bf8b876a2",
-      "pr": 56,
-      "role": "canonical-gall-closure",
+      "reference": "merge:60",
+      "sha": "fee5257662b860dcfe41c055996152379053f8cc",
+      "pr": 60,
+      "role": "portable-consequence-replan-envelope",
       "authority_ceiling": "EVIDENCE_ONLY"
     },
     {
-      "id": "beam4pm-pr102",
+      "id": "gymact-pr154",
+      "repo": "seanchatmangpt/gymact",
+      "source_kind": "merged_pr",
+      "reference": "merge:154",
+      "sha": "dac36298462de98b1fc7a8f1f7bb6ec6bca09b70",
+      "pr": 154,
+      "role": "portable-replan-envelope-consumer",
+      "authority_ceiling": "NO_CASTLE_DO"
+    },
+    {
+      "id": "beam4pm-pr104",
       "repo": "seanchatmangpt/beam4pm",
       "source_kind": "merged_pr",
-      "reference": "merge:102",
-      "sha": "43994bd7b72e14657627d1415d2e8b5c2be928f0",
-      "pr": 102,
-      "role": "provider-recovery-router",
+      "reference": "merge:104",
+      "sha": "34ce4a23d0c59edab2391f149413bc5fb1e375c3",
+      "pr": 104,
+      "role": "sa2a-owned-replanning-failover",
       "authority_ceiling": "SELECT_ONLY"
     },
     {
@@ -133,14 +163,14 @@
       "authority_ceiling": "SELECT_ONLY"
     },
     {
-      "id": "ash-pplan-pr8",
-      "repo": "seanchatmangpt/ash_pplan",
+      "id": "xaas-pr98",
+      "repo": "seanchatmangpt/xaas",
       "source_kind": "merged_pr",
-      "reference": "merge:8",
-      "sha": "385d05792baa4dd0121ba24b7786f764e92aab85",
-      "pr": 8,
-      "role": "fond-tla-differential",
-      "authority_ceiling": "COMPUTE_ONLY"
+      "reference": "merge:98",
+      "sha": "e9b42e22a5df1359181c1e07be88d49e1828cd0b",
+      "pr": 98,
+      "role": "sa2a-consequence-semantics-consumer",
+      "authority_ceiling": "NO_CASTLE_DO"
     },
     {
       "id": "xaas-pr95",
@@ -155,39 +185,55 @@
   ],
   "excluded_open_prs": [
     {
-      "repo": "seanchatmangpt/gymact",
-      "pr": 152,
-      "reason": "open/unreleased"
+      "repo": "seanchatmangpt/beam4pm",
+      "pr": 105,
+      "reason": "open/unreleased at task cutoff"
+    },
+    {
+      "repo": "seanchatmangpt/unrdf",
+      "pr": 117,
+      "reason": "open/unreleased at task cutoff"
+    },
+    {
+      "repo": "seanchatmangpt/unrdf",
+      "pr": 116,
+      "reason": "open/unreleased at task cutoff"
+    },
+    {
+      "repo": "seanchatmangpt/gitvan",
+      "pr": 28,
+      "reason": "open/unreleased at task cutoff"
+    },
+    {
+      "repo": "seanchatmangpt/wasm4pm-compat",
+      "pr": 36,
+      "reason": "open/unreleased at task cutoff"
     },
     {
       "repo": "seanchatmangpt/gymact",
       "pr": 153,
-      "reason": "open/unreleased"
+      "reason": "open/unreleased at task cutoff"
     },
     {
       "repo": "seanchatmangpt/ferroplan",
       "pr": 50,
-      "reason": "open/unreleased"
+      "reason": "open/unreleased at task cutoff"
     },
     {
-      "repo": "seanchatmangpt/ash_ex4pm",
-      "pr": 4,
-      "reason": "open draft"
-    },
-    {
-      "repo": "seanchatmangpt/ggen_igniter",
-      "pr": 45,
-      "reason": "open draft"
-    },
-    {
-      "repo": "seanchatmangpt/ggen-marketplace",
-      "pr": 516,
-      "reason": "open draft"
-    },
-    {
-      "repo": "seanchatmangpt/ggen-marketplace",
-      "pr": 518,
-      "reason": "open draft"
+      "repo": "seanchatmangpt/gymact",
+      "pr": 152,
+      "reason": "open/unreleased at task cutoff"
     }
-  ]
+  ],
+  "review_window": {
+    "timezone": "America/Los_Angeles",
+    "local_start": "2026-09-28T00:00:00-07:00",
+    "task_cutoff": "2026-09-28T21:39:59-07:00",
+    "utc_start": "2026-09-28T07:00:00Z",
+    "utc_cutoff": "2026-09-29T04:39:59Z",
+    "pr_count": 66,
+    "merged_pr_count": 57,
+    "open_pr_count": 8,
+    "closed_unmerged_pr_count": 1
+  }
 }
