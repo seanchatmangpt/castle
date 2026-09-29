@@ -164,3 +164,101 @@ fn recovery_excludes_failed_edge_without_stopping_graph() {
         Err("BLOCKED:NO_LAWFUL_RECOVERY_EDGE".to_string())
     );
 }
+
+
+#[test]
+fn ecosystem_evidence_is_bound_into_construct_config_identity() {
+    use castle::castle::{ConstructRequest, PowlProcess, TestEnvelope};
+    use serde_json::json;
+
+    let manifest = ecosystem_manifest().unwrap();
+    let source = manifest.subjects.iter().find(|s| s.id == "graphlaw-v26.9.28").unwrap();
+    let request = ConstructRequest {
+        subject: "subject:payments".to_string(),
+        authority: "bounded-test".to_string(),
+        o_star: json!({"subject": "subject:payments"}),
+        config_graph: json!({"zeroUnreceiptedActuation": true}),
+        ontology: json!({"version": "castle-pack-v26.9.29"}),
+        process: PowlProcess {
+            id: "powl:test".to_string(),
+            goal_id: "goal:test".to_string(),
+            activities: vec![],
+        },
+        envelope: TestEnvelope {
+            system_id: "subject:payments".to_string(),
+            allowed_transition_ids: BTreeSet::new(),
+            max_steps: 0,
+            expires_at_epoch_ms: 100,
+        },
+    };
+    let witness = ExternalWitness {
+        source_id: source.id.clone(),
+        source_sha: source.sha.clone(),
+        subject: "subject:payments".to_string(),
+        kind: WitnessKind::Semantic,
+        input_digest: digest('a'),
+        output_digest: digest('b'),
+        direct_do_authority: false,
+        limits: WitnessLimits { max_steps: 1, max_bytes: 1024, deadline_ms: 1000 },
+    };
+
+    let bound = bind_v26_9_28_construct_request(request, &manifest, &[witness.clone()]).unwrap();
+    let marker = bound.config_graph.get("_castle_v26_9_28").unwrap();
+    assert_eq!(marker["epoch"], "v26.9.28");
+    assert_eq!(marker["witness_count"], 1);
+    assert_eq!(marker["sources"][0]["sha"], source.sha);
+
+    let mut changed = witness;
+    changed.output_digest = digest('c');
+    let request2 = ConstructRequest {
+        subject: bound.subject.clone(),
+        authority: bound.authority.clone(),
+        o_star: bound.o_star.clone(),
+        config_graph: json!({"zeroUnreceiptedActuation": true}),
+        ontology: bound.ontology.clone(),
+        process: bound.process.clone(),
+        envelope: bound.envelope.clone(),
+    };
+    let rebound = bind_v26_9_28_construct_request(request2, &manifest, &[changed]).unwrap();
+    assert_ne!(
+        bound.config_graph["_castle_v26_9_28"]["witness_digest"],
+        rebound.config_graph["_castle_v26_9_28"]["witness_digest"]
+    );
+}
+
+#[test]
+fn ecosystem_witness_cannot_cross_construct_subject_boundary() {
+    use castle::castle::{ConstructRequest, PowlProcess, TestEnvelope};
+    use serde_json::json;
+
+    let manifest = ecosystem_manifest().unwrap();
+    let source = manifest.subjects.iter().find(|s| s.id == "affidavit-pr89").unwrap();
+    let request = ConstructRequest {
+        subject: "subject:a".to_string(),
+        authority: "bounded-test".to_string(),
+        o_star: json!({}),
+        config_graph: json!({}),
+        ontology: json!({}),
+        process: PowlProcess { id: "p".to_string(), goal_id: "g".to_string(), activities: vec![] },
+        envelope: TestEnvelope {
+            system_id: "subject:a".to_string(),
+            allowed_transition_ids: BTreeSet::new(),
+            max_steps: 0,
+            expires_at_epoch_ms: 100,
+        },
+    };
+    let witness = ExternalWitness {
+        source_id: source.id.clone(),
+        source_sha: source.sha.clone(),
+        subject: "subject:b".to_string(),
+        kind: WitnessKind::Receipt,
+        input_digest: digest('a'),
+        output_digest: digest('b'),
+        direct_do_authority: false,
+        limits: WitnessLimits { max_steps: 1, max_bytes: 1024, deadline_ms: 1000 },
+    };
+    assert_eq!(
+        bind_v26_9_28_construct_request(request, &manifest, &[witness]).unwrap_err(),
+        "REFUSED:EXTERNAL_WITNESS_SUBJECT_MISMATCH"
+    );
+}
