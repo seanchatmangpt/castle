@@ -24,6 +24,32 @@ The strategy operator catalog carries provenance from the prior 33SW, Napoleon/B
 
 There is deliberately no optimizer-to-DO edge. A machine may construct, falsify, compare, and replan campaigns. Material campaign selection is represented as a separate board act, and even that selection emits only an inert mandate for the existing consequence boundary.
 
+## CASTLE semantic Jira crown
+
+The governing semantic-Jira graph for the v26.9.28 product/fleet composition is
+`docs/sjira/v26.9.28/goal.ttl`; exact repository subjects and irreducible
+capability ownership are pinned in `docs/sjira/v26.9.28/repos.ttl`.
+
+The graph is intentionally authority-free:
+
+```text
+sJira             = goals / work / obligations
+CASTLE            = consequential admissibility
+XaaS              = runtime existence and composition
+GraphLaw          = semantic-law derivation
+Affidavit         = cryptographic standing
+BRCE              = sole protected CONSTRUCT -> DO boundary
+```
+
+`goal.ttl` contains no authored WorkOrders and no authored Receipts. WorkOrders
+are compiler projections; standing is observed from executed courts and
+exact-subject receipts. The root stop query remains false from the goal graph
+alone. Repository-local anti-vacuity tests in `tests/sjira_castle.rs` enforce
+the 14-gate crown, XaaS runtime ownership, CASTLE consequence ownership, unique
+irreducible capability ownership, and the absence of a sJira DO ceiling.
+
+See `docs/sjira/v26.9.28/README.md` for the court order and successor policy.
+
 ## Canonical flow
 
 ```text
