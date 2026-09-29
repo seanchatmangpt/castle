@@ -18,7 +18,7 @@ use castle::payments::experience::requires_intelligence;
 use castle::payments::iso20022::{pain001_customer_credit_transfer, project_effect_digest_from_pain001, ISO20022_PROFILE};
 use castle::payments::rail::{RailAck, RailActuator, RailInstruction};
 use castle::payments::replay::{admit_payment_journaled, replay_admission, AdmissionJournal, ReplayVerdict};
-use castle::payments::settlement::{apply_finality, FinalityEvidence, FinalityKind};
+use castle::payments::settlement::{apply_rail_report, observe_rail};
 use castle::payments::*;
 use castle::sa2a_security::{CertificateSignature, PreparedEffect, SignatureAlgorithm};
 use ed25519_dalek::{Signer, SigningKey};
@@ -195,7 +195,6 @@ fn rf1_authenticated_does_not_imply_authorized_payment() {
 /// One custodian can therefore sign a certificate that declares `threshold = 1`
 /// and obtain a PaymentAdmission. No policy floor exists.
 #[test]
-#[ignore = "FINDING: CertificateVerifier honors certificate.threshold with no policy minimum; a single custodian self-declares threshold=1 and is admitted (src/sa2a_security/verifier.rs:60-63). Patch: add min_threshold to CertificateVerifier/AdmissionContext (source it from PrincipalPolicy) and refuse InsufficientQuorum when certificate.threshold < min_threshold."]
 fn rf1_finding_single_custodian_self_declared_threshold_is_admitted() {
     let fx = Fixture::new("rf1-threshold");
     let eff = fx.effect("1000", "inv-a");
@@ -353,7 +352,7 @@ async fn rf4_obligation_effect_join_is_durable_and_total() {
     for _ in 0..8 {
         match finalize(&fx, &rail, &d) {
             FinalizeResult::Pending => continue,
-            FinalizeResult::Applied(FinalityOutcome::Settled(e)) => {
+            FinalizeResult::Applied { outcome: FinalityOutcome::Settled(e), .. } => {
                 entry = Some(e);
                 break;
             }
@@ -433,7 +432,7 @@ fn poll_with_checks(fx: &Fixture, rail: &SimRail, d: &str, ctx: &str) -> Finaliz
     for i in 0..16 {
         let r = finalize(fx, rail, d);
         match r {
-            FinalizeResult::Applied(_) | FinalizeResult::ProvenAbsent => return r,
+            FinalizeResult::Applied { outcome: _, .. } | FinalizeResult::ProvenAbsent => return r,
             FinalizeResult::Pending | FinalizeResult::StillUnknown => assert_books_untouched(fx, &format!("{ctx} poll {i}")),
         }
     }
@@ -451,15 +450,10 @@ async fn rf5_ledger_never_settled_before_observed_finality() {
     let adm = admit_payment(eff, &cert, &fx.admission_ctx()).unwrap();
     let d = adm.effect().digest().to_string();
     assert_books_untouched(&fx, "after admission");
-    // Fabricated finality against a merely Reserved claim moves nothing.
-    let early = FinalityEvidence {
-        effect_digest: d.clone(),
-        correlation_id: RailInstruction::correlation_id_for(&d),
-        evidence_digest: "sha256:early".into(),
-        kind: FinalityKind::Final,
-        reason: "SETTLED".into(),
-    };
-    assert!(apply_finality(&fx.claims, &fx.ledger, &early).is_err());
+    // A rail report against a merely Reserved claim (no hold) moves nothing: it cannot settle.
+    let early_rail = sim(&fx, "early", SimMode::SettleAfterPolls(0));
+    let early = observe_rail(&early_rail, &d).unwrap();
+    assert!(apply_rail_report(&fx.claims, &fx.ledger, &early).is_err());
     assert_books_untouched(&fx, "early finality against Reserved");
 
     let rail = sim(&fx, "honest", SimMode::SettleAfterPolls(3));
@@ -468,7 +462,7 @@ async fn rf5_ledger_never_settled_before_observed_finality() {
     assert_books_untouched(&fx, "after submit (rail Accepted)");
     assert_eq!(fx.ledger.available(PAYER, Currency::USD).unwrap(), 600_000, "funds are held, not moved");
     match poll_with_checks(&fx, &rail, &d, "honest") {
-        FinalizeResult::Applied(FinalityOutcome::Settled(e)) => assert_eq!(e.amount_minor, 400_000),
+        FinalizeResult::Applied { outcome: FinalityOutcome::Settled(e), .. } => assert_eq!(e.amount_minor, 400_000),
         other => panic!("{other:?}"),
     }
     assert_eq!(fx.ledger.entries().unwrap().len(), 1);
@@ -480,7 +474,7 @@ async fn rf5_ledger_never_settled_before_observed_finality() {
     let s2 = submit(&fx2, &rail2, "400000", "inv-1", "n-1").await;
     assert_eq!(s2.standing, RailStandingAfterSubmit::UnknownOutcome);
     assert_books_untouched(&fx2, "after dropped ack");
-    assert!(matches!(poll_with_checks(&fx2, &rail2, &s2.effect_id, "drop"), FinalizeResult::Applied(FinalityOutcome::Settled(_))));
+    assert!(matches!(poll_with_checks(&fx2, &rail2, &s2.effect_id, "drop"), FinalizeResult::Applied { outcome: FinalityOutcome::Settled(_), .. }));
 
     // Rail down: uninformative, books untouched.
     let fx3 = Fixture::new("rf5-down");
@@ -495,29 +489,21 @@ async fn rf5_ledger_never_settled_before_observed_finality() {
     let fx4 = Fixture::new("rf5-reject");
     let rail4 = sim(&fx4, "reject", SimMode::RejectAfterPolls(2));
     let s4 = submit(&fx4, &rail4, "400000", "inv-1", "n-1").await;
-    assert!(matches!(poll_with_checks(&fx4, &rail4, &s4.effect_id, "reject"), FinalizeResult::Applied(FinalityOutcome::Released)));
+    assert!(matches!(poll_with_checks(&fx4, &rail4, &s4.effect_id, "reject"), FinalizeResult::Applied { outcome: FinalityOutcome::Released, .. }));
     assert_books_untouched(&fx4, "after rejection");
 }
 
-/// rf5 (finding): `apply_finality` is public and its evidence is a plain struct, so a caller
-/// can settle the ledger with fabricated "Final" evidence while the rail still says Accepted.
+/// rf5 (FIXED): finality cannot be fabricated; it can only be observed from the rail.
 #[tokio::test]
-#[ignore = "FINDING: apply_finality trusts caller-supplied FinalityEvidence (all-pub struct, digest unchecked): fabricated Final evidence settles the ledger while the rail reports Accepted (src/payments/settlement.rs apply_finality, FinalityEvidence). Patch: make FinalityEvidence fields private with a pub(crate) constructor from a RailStatus fetched by finalize_via_rail (or a signed rail attestation), and make apply_finality pub(crate); also check ev.correlation_id == correlation_id_for(effect_digest)."]
-async fn rf5_finding_fabricated_finality_evidence_settles_ledger() {
+async fn rf5_observed_accepted_report_cannot_settle_ledger() {
     let fx = Fixture::new("rf5-forged");
     let rail = sim(&fx, "accepted", SimMode::SettleAfterPolls(1000));
     let s = submit(&fx, &rail, "400000", "inv-1", "n-1").await;
     assert_eq!(finalize(&fx, &rail, &s.effect_id), FinalizeResult::Pending, "rail says Accepted, not settled");
-    let forged = FinalityEvidence {
-        effect_digest: s.effect_id.clone(),
-        correlation_id: s.correlation_id.clone(),
-        evidence_digest: "sha256:made-up-by-caller".into(),
-        kind: FinalityKind::Final,
-        reason: "SETTLED".into(),
-    };
-    let r = apply_finality(&fx.claims, &fx.ledger, &forged);
-    assert!(r.is_err(), "fabricated finality must not settle: {r:?}");
-    assert_books_untouched(&fx, "after forged finality");
+    let report = observe_rail(&rail, &s.effect_id).unwrap();
+    let r = apply_rail_report(&fx.claims, &fx.ledger, &report);
+    assert!(r.is_err(), "an Accepted report must not settle: {r:?}");
+    assert_books_untouched(&fx, "after non-terminal report");
 }
 
 // ---------------------------------------------------------------- rf6
@@ -532,7 +518,7 @@ async fn rf6_replay_never_actuates() {
     let d = s.effect_id.clone();
     let mut settled = false;
     for _ in 0..8 {
-        if let FinalizeResult::Applied(FinalityOutcome::Settled(_)) = finalize(&fx, &rail, &d) {
+        if let FinalizeResult::Applied { outcome: FinalityOutcome::Settled(_), .. } = finalize(&fx, &rail, &d) {
             settled = true;
             break;
         }
@@ -551,24 +537,17 @@ async fn rf6_replay_never_actuates() {
     assert_eq!(fx.ledger.entries().unwrap().len(), 1);
 
     // Re-applying the same finality evidence (directly) is a no-op on claims, ledger and BRCE journal.
-    let claim = fx.claims.get(&d).unwrap().unwrap();
-    let ev = FinalityEvidence {
-        effect_digest: d.clone(),
-        correlation_id: s.correlation_id.clone(),
-        evidence_digest: claim.detail.strip_prefix("final:").unwrap().to_string(),
-        kind: FinalityKind::Final,
-        reason: "SETTLED".into(),
-    };
     let scoped = |fx: &Fixture| (snapshot(&fx.dir.join("claims")), snapshot(&fx.dir.join("ledger")), snapshot(&fx.dir.join("brce")));
     let frozen = scoped(&fx);
     for _ in 0..3 {
-        assert_eq!(apply_finality(&fx.claims, &fx.ledger, &ev).unwrap(), FinalityOutcome::AlreadyFinal);
+        let report = observe_rail(&rail, &d).unwrap();
+        assert_eq!(apply_rail_report(&fx.claims, &fx.ledger, &report).unwrap(), FinalityOutcome::AlreadyFinal);
     }
     assert_eq!(scoped(&fx), frozen);
 
     // Re-running the finalizer against the rail: still no second submission, no second entry.
     for _ in 0..3 {
-        assert_eq!(finalize(&fx, &rail, &d), FinalizeResult::Applied(FinalityOutcome::AlreadyFinal));
+        assert!(matches!(finalize(&fx, &rail, &d), FinalizeResult::Applied { outcome: FinalityOutcome::AlreadyFinal, .. }));
     }
     assert_eq!(scoped(&fx), frozen);
     assert_eq!(rail.submissions_seen(&s.correlation_id), 1);
@@ -640,7 +619,7 @@ async fn rf7_rail_adapter_cannot_increase_authority() {
     // The single settlement is the admitted amount, to the admitted payee.
     let mut entry = None;
     for _ in 0..8 {
-        if let FinalizeResult::Applied(FinalityOutcome::Settled(e)) = finalize(&fx, &rail, &digest) {
+        if let FinalizeResult::Applied { outcome: FinalityOutcome::Settled(e), .. } = finalize(&fx, &rail, &digest) {
             entry = Some(e);
             break;
         }
@@ -714,7 +693,7 @@ async fn settled_rail_payment(fx: &Fixture, journal: &AdmissionJournal, rail: &S
     let (s, decision) = submit_journaled(fx, journal, rail, "470000", "invoice-9821", "n-1").await;
     let mut entry = None;
     for _ in 0..8 {
-        if let FinalizeResult::Applied(FinalityOutcome::Settled(e)) = finalize(fx, rail, &s.effect_id) {
+        if let FinalizeResult::Applied { outcome: FinalityOutcome::Settled(e), .. } = finalize(fx, rail, &s.effect_id) {
             entry = Some(e);
             break;
         }
@@ -826,7 +805,6 @@ async fn rf9_receipt_reconstructs_the_six_questions() {
 /// rf9 (finding): the receipt binds the PEE identity, but `explain` cannot answer
 /// "which sealed economic effect was this?" because it omits `pee_effect_id`.
 #[tokio::test]
-#[ignore = "FINDING: explain() drops EventInputs.pee_effect_id (the sealed PreparedEconomicEffect identity), so the effect binding is not reconstructable from explain() alone (src/payments/event_receipt.rs explain). Patch: add \"effect\": {\"pee_effect_id\": i.pee_effect_id} (null-with-reason when absent) to the explain() JSON."]
 async fn rf9_finding_explain_omits_the_sealed_effect_identity() {
     let fx = Fixture::new("rf9-pee");
     let journal = AdmissionJournal::open(fx.dir.join("journal")).unwrap();
@@ -869,7 +847,7 @@ async fn rf10_known_class_completes_full_rail_path_without_intelligence() {
     assert!(s.pee.verify_identity().is_ok());
     let mut entry = None;
     for _ in 0..8 {
-        if let FinalizeResult::Applied(FinalityOutcome::Settled(e)) = finalize(&fx, &rail, &s.effect_id) {
+        if let FinalizeResult::Applied { outcome: FinalityOutcome::Settled(e), .. } = finalize(&fx, &rail, &s.effect_id) {
             entry = Some(e);
             break;
         }

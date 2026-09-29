@@ -25,7 +25,7 @@ use castle::payments::obligation::{derive_obligation_id, prepare_for_invoice};
 use castle::payments::rail::{RailAck, RailActuator, RailInstruction};
 use castle::payments::reconcile::recover_journal;
 use castle::payments::replay::{admit_payment_journaled, replay_admission, AdmissionJournal, ReplayVerdict};
-use castle::payments::settlement::{apply_finality, FinalityEvidence, FinalityKind};
+use castle::payments::settlement::{apply_rail_report, observe_rail};
 use castle::payments::*;
 use serde_json::Value;
 
@@ -294,7 +294,7 @@ async fn court_a_hostile_rail_obligation_to_replay_with_exactly_one_effect() {
     raw_balance_untouched(&fx);
     assert!(raw_hold_exists(&fx, &digest));
 
-    let FinalizeResult::Applied(FinalityOutcome::Settled(entry)) = w.settle(&digest) else {
+    let FinalizeResult::Applied { outcome: FinalityOutcome::Settled(entry), .. } = w.settle(&digest) else {
         panic!("rail must resolve to observed finality");
     };
 
@@ -363,7 +363,7 @@ async fn court_a_hostile_rail_obligation_to_replay_with_exactly_one_effect() {
 
     // NEVER a second effect.
     for _ in 0..3 {
-        assert_eq!(w.finalize(&digest), FinalizeResult::Applied(FinalityOutcome::AlreadyFinal));
+        assert!(matches!(w.finalize(&digest), FinalizeResult::Applied { outcome: FinalityOutcome::AlreadyFinal, .. }));
     }
     assert_eq!(w.rail.settlement_count(&correlation), 1);
     assert_eq!(w.rail.submissions_seen(&correlation), 1);
@@ -425,14 +425,8 @@ async fn court_b_one_bit_consequence_change_is_refused_on_both_paths() {
         finalize_via_rail(&b_digest, &w.claims, &w.ledger, &w.rail).unwrap_err(),
         "REFUSED:PAYMENT_NOT_SUBMITTED"
     );
-    let fake = FinalityEvidence {
-        effect_digest: b_digest.clone(),
-        correlation_id: RailInstruction::correlation_id_for(&b_digest),
-        evidence_digest: "sha256:whatever".into(),
-        kind: FinalityKind::Final,
-        reason: "SETTLED".into(),
-    };
-    assert_eq!(apply_finality(&w.claims, &w.ledger, &fake).unwrap_err(), "REFUSED:PAYMENT_NOT_SUBMITTED");
+    let fake = observe_rail(&w.rail, &b_digest).unwrap();
+    assert_eq!(apply_rail_report(&w.claims, &w.ledger, &fake).unwrap_err(), "REFUSED:PAYMENT_NOT_SUBMITTED");
     raw_balance_untouched(&fx);
 
     // The approved effect goes through the rail; B's instruction under A's correlation is rejected.
@@ -452,7 +446,7 @@ async fn court_b_one_bit_consequence_change_is_refused_on_both_paths() {
         RailAck::Rejected { reason_code, .. } => assert_eq!(reason_code, "DUPLICATE_CORRELATION_DIFFERENT_PAYLOAD"),
         RailAck::Accepted { .. } => panic!("rail accepted beneficiary B under A's correlation"),
     }
-    let FinalizeResult::Applied(FinalityOutcome::Settled(entry)) = w.settle(&a_digest) else { panic!("A settles") };
+    let FinalizeResult::Applied { outcome: FinalityOutcome::Settled(entry), .. } = w.settle(&a_digest) else { panic!("A settles") };
     assert_eq!((entry.credit_account.as_str(), entry.amount_minor), (PAYEE, 10_000_000));
     assert_eq!(w.ledger.balance(beneficiary_b, Currency::USD).unwrap(), 0, "B never received a cent");
     assert_eq!(w.ledger.entries().unwrap().len(), 1);
@@ -503,13 +497,13 @@ async fn court_c_restart_durability_converges_to_exactly_one_settlement() {
     let w = World::open(&fx, mode);
     assert_eq!(w.claims.get(&d).unwrap().unwrap().state, ClaimState::Submitted);
     assert!(w.ledger.entries().unwrap().is_empty(), "still no settlement without observed finality");
-    let FinalizeResult::Applied(FinalityOutcome::Settled(entry)) = w.settle(&d) else { panic!("settles") };
+    let FinalizeResult::Applied { outcome: FinalityOutcome::Settled(entry), .. } = w.settle(&d) else { panic!("settles") };
     assert_eq!(entry.amount_minor, 470_000);
     drop(w); // ---- RESTART 3: after settlement ----
 
     let w = World::open(&fx, mode);
     for _ in 0..3 {
-        assert_eq!(w.finalize(&d), FinalizeResult::Applied(FinalityOutcome::AlreadyFinal));
+        assert!(matches!(w.finalize(&d), FinalizeResult::Applied { outcome: FinalityOutcome::AlreadyFinal, .. }));
     }
     assert_eq!(w.claims.get(&d).unwrap().unwrap().state, ClaimState::Final);
     assert_eq!(w.ledger.entries().unwrap().len(), 1);
@@ -562,7 +556,7 @@ async fn court_c_restart_with_rail_down_then_recovered_settles_once() {
     assert_eq!(admission.effect().digest(), d, "same effect identity");
     let s2 = submit_via_rail(admission, &params(), &w.exec_ctx(&fx), &w.rail).await.unwrap();
     assert_eq!(s2.standing, RailStandingAfterSubmit::Submitted, "{}", s2.detail);
-    let FinalizeResult::Applied(FinalityOutcome::Settled(_)) = w.settle(&d) else { panic!("settles") };
+    let FinalizeResult::Applied { outcome: FinalityOutcome::Settled(_), .. } = w.settle(&d) else { panic!("settles") };
     assert_eq!(w.ledger.entries().unwrap().len(), 1);
     assert_eq!(w.rail.settlement_count(&correlation), 1);
     assert_eq!(w.rail.submissions_seen(&correlation), 1);
@@ -573,8 +567,7 @@ async fn court_c_restart_with_rail_down_then_recovered_settles_once() {
 /// `finalize_via_rail` cannot recover it: Final evidence on a Reserved claim is refused, so the
 /// rail can settle while the books never do.
 #[tokio::test]
-#[ignore = "FINDING: crash after rail accept but before the Reserved->Submitted transition is unrecoverable via finalize_via_rail (Reserved is not in-flight for apply_finality; src/payments/settlement.rs apply_finality `inflight`, src/payments/execute_rail.rs finalize_via_rail). Patch: in finalize_via_rail, when claim.state == Reserved and the rail reports anything but Unknown, first transition Reserved->UnknownOutcome (detail crash-recovered); when the rail reports Unknown for a Reserved claim also route through UnknownOutcome so ProvenAbsent releases the hold."]
-async fn court_c_finding_reserved_claim_after_rail_accept_is_unrecoverable() {
+async fn court_c_reserved_claim_after_rail_accept_converges_via_finalize() {
     let fx = Fixture::new("court-c-crash");
     let rail_root = fx.dir.join("rail");
     let rail = SimRail::open(&rail_root, SimMode::SettleAfterPolls(1)).unwrap();
@@ -607,7 +600,7 @@ async fn court_c_finding_reserved_claim_after_rail_accept_is_unrecoverable() {
     let rail = SimRail::open(&rail_root, SimMode::SettleAfterPolls(1)).unwrap();
     let mut settled = false;
     for _ in 0..6 {
-        if let Ok(FinalizeResult::Applied(FinalityOutcome::Settled(_))) = finalize_via_rail(&d, &claims, &fx.ledger, &rail) {
+        if let Ok(FinalizeResult::Applied { outcome: FinalityOutcome::Settled(_), .. }) = finalize_via_rail(&d, &claims, &fx.ledger, &rail) {
             settled = true;
             break;
         }
@@ -621,7 +614,6 @@ async fn court_c_finding_reserved_claim_after_rail_accept_is_unrecoverable() {
 /// through the rail: `obl:sha256:<64 hex>` exceeds ISO 20022 Max35Text for `EndToEndId`, so
 /// `submit_via_rail` refuses PROJECTION_FIELD_INVALID and the payment is dead-on-arrival.
 #[tokio::test]
-#[ignore = "FINDING: derived obligation ids (obl:sha256:<64hex>, ~75 chars) exceed pain.001 EndToEndId Max35Text; submit_via_rail refuses REFUSED:PROJECTION_FIELD_INVALID for every prepare_for_invoice effect (src/payments/iso20022.rs check_max(e.obligation_id(), 35); src/payments/obligation.rs derive_obligation_id). Patch: project EndToEndId as a bounded surrogate (e.g. first 35 chars of a digest of the obligation id) and carry the full obligation id in a Ustrd marker, or shorten derive_obligation_id to <=35 chars."]
 async fn court_finding_derived_obligation_ids_cannot_traverse_the_rail() {
     let fx = Fixture::new("court-derived");
     let w = World::open(&fx, SimMode::SettleAfterPolls(1));

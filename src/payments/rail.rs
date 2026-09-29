@@ -62,4 +62,10 @@ pub enum RailStatus {
 pub trait RailActuator: Send + Sync {
     fn submit(&self, i: &RailInstruction) -> Result<RailAck, RailError>;
     fn status(&self, correlation_id: &str) -> Result<RailStatus, RailError>;
+    /// True only when this rail's durable store is THE authority for what it has seen, so
+    /// `RailStatus::Unknown` is proof the effect was never accepted. Default false: an
+    /// unknown answer from an amnesiac or proxying rail is not proof of absence.
+    fn absence_is_authoritative(&self) -> bool {
+        false
+    }
 }

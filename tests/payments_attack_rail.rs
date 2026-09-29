@@ -6,6 +6,8 @@
 //! current code; run with `--ignored` to see them fail.
 mod common;
 use common::payments::*;
+#[path = "common/scripted_rail.rs"]
+mod scripted_rail;
 
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -14,7 +16,7 @@ use std::sync::{Barrier, Mutex};
 use castle::payments::execute_rail::*;
 use castle::payments::rail::RailInstruction;
 use castle::payments::settlement::{
-    apply_finality, FinalityEvidence, FinalityKind, RejectionObservation, ReturnObservation, SettlementObservation,
+    apply_rail_report, observe_rail, RejectionObservation, ReturnObservation, SettlementObservation, REPORT_NOT_TERMINAL,
 };
 use castle::payments::*;
 
@@ -189,7 +191,7 @@ async fn crash_before_ledger_settle_hold_leaves_hold_and_retry_settles_once() {
     assert!(fx.ledger.entries().unwrap().is_empty());
 
     let r = finalize_via_rail(&d, &fx.claims, &fl, &rail).unwrap();
-    assert!(matches!(r, FinalizeResult::Applied(FinalityOutcome::Settled(_))), "{r:?}");
+    assert!(matches!(r, FinalizeResult::Applied { outcome: FinalityOutcome::Settled(_), .. }), "{r:?}");
     assert_eq!(claim_state(&fx.claims, &d), ClaimState::Final);
     assert_eq!(fx.ledger.entries().unwrap().len(), 1);
     assert!(fx.ledger.conserves(Currency::USD).unwrap());
@@ -215,7 +217,7 @@ async fn crash_after_ledger_settle_before_claim_final_resumes_idempotently() {
     unlock_dir(&fx.dir.join("claims"));
     for _ in 0..3 {
         let r = finalize_via_rail(&d, &fx.claims, &fl, &rail).unwrap();
-        assert!(matches!(r, FinalizeResult::Applied(_)), "{r:?}");
+        assert!(matches!(r, FinalizeResult::Applied { outcome: _, .. }), "{r:?}");
     }
     assert_eq!(claim_state(&fx.claims, &d), ClaimState::Final);
     assert_eq!(fx.ledger.entries().unwrap().len(), 1, "resume must not double-settle");
@@ -240,7 +242,7 @@ async fn crash_after_release_hold_before_claim_refused_resumes() {
 
     unlock_dir(&fx.dir.join("claims"));
     let r = finalize_via_rail(&d, &fx.claims, &fl, &rail).unwrap();
-    assert_eq!(r, FinalizeResult::Applied(FinalityOutcome::Released));
+    assert!(matches!(r, FinalizeResult::Applied { outcome: FinalityOutcome::Released, .. }));
     assert_eq!(claim_state(&fx.claims, &d), ClaimState::Refused);
     assert_eq!(fx.ledger.available(PAYER, Currency::USD).unwrap(), 1_000_000);
     assert!(fx.ledger.entries().unwrap().is_empty());
@@ -266,7 +268,7 @@ async fn crash_after_settle_return_before_claim_returned_resumes() {
 
     unlock_dir(&fx.dir.join("claims"));
     let r = finalize_via_rail(&d, &fx.claims, &fl, &rail).unwrap();
-    assert!(matches!(r, FinalizeResult::Applied(FinalityOutcome::Returned(_))), "{r:?}");
+    assert!(matches!(r, FinalizeResult::Applied { outcome: FinalityOutcome::Returned(_), .. }), "{r:?}");
     assert_eq!(claim_state(&fx.claims, &d), ClaimState::Returned);
     assert_eq!(fx.ledger.returns().unwrap().len(), 1, "one inverse entry only");
     assert_eq!(fx.ledger.balance(PAYER, Currency::USD).unwrap(), 1_000_000);
@@ -286,7 +288,7 @@ async fn missed_settled_report_then_returned_settles_implied_then_returns() {
     assert_eq!(claim_state(&fx.claims, &d), ClaimState::Submitted);
 
     let r = finalize_via_rail(&d, &fx.claims, &fx.ledger, &rail).unwrap();
-    assert!(matches!(r, FinalizeResult::Applied(FinalityOutcome::Returned(_))), "{r:?}");
+    assert!(matches!(r, FinalizeResult::Applied { outcome: FinalityOutcome::Returned(_), .. }), "{r:?}");
     assert_eq!(claim_state(&fx.claims, &d), ClaimState::Returned);
     assert_eq!(fx.ledger.entries().unwrap().len(), 1);
     assert_eq!(fx.ledger.returns().unwrap().len(), 1);
@@ -314,7 +316,7 @@ async fn dropack_then_rail_down_then_recovery_settles_exactly_once() {
     for _ in 0..6 {
         if matches!(
             finalize_via_rail(&d, &fx.claims, &fx.ledger, &rail).unwrap(),
-            FinalizeResult::Applied(FinalityOutcome::Settled(_))
+            FinalizeResult::Applied { outcome: FinalityOutcome::Settled(_), .. }
         ) {
             settled = true;
             break;
@@ -333,18 +335,12 @@ async fn rejection_then_late_settlement_report_cannot_reopen_a_refused_claim() {
     let rail = sim(&fx, "ro", SimMode::RejectAfterPolls(0));
     let s = submit(&fx, &rail, "400000", "inv-1", "n-1").await;
     let d = s.effect_id.clone();
-    assert_eq!(
+    assert!(matches!(
         finalize_via_rail(&d, &fx.claims, &fx.ledger, &rail).unwrap(),
-        FinalizeResult::Applied(FinalityOutcome::Released)
-    );
-    let late = FinalityEvidence {
-        effect_digest: d.clone(),
-        correlation_id: s.correlation_id.clone(),
-        evidence_digest: "late-settle".into(),
-        kind: FinalityKind::Final,
-        reason: "LATE".into(),
-    };
-    assert_eq!(apply_finality(&fx.claims, &fx.ledger, &late).unwrap_err(), "REFUSED:PAYMENT_EVIDENCE_CONFLICT");
+        FinalizeResult::Applied { outcome: FinalityOutcome::Released, .. }
+    ));
+    let late_rail = scripted_rail::ScriptedRail::new(vec![scripted_rail::settled()]);
+    assert_eq!(finalize_via_rail(&d, &fx.claims, &fx.ledger, &late_rail).unwrap_err(), "REFUSED:PAYMENT_EVIDENCE_CONFLICT");
     assert!(fx.ledger.entries().unwrap().is_empty());
     assert_eq!(claim_state(&fx.claims, &d), ClaimState::Refused);
 }
@@ -383,7 +379,7 @@ async fn racing_finalize_across_separate_handles_yields_exactly_one_entry() {
     assert_eq!(fx.ledger.balance(PAYEE, Currency::USD).unwrap(), 400_000);
     assert!(fx.ledger.conserves(Currency::USD).unwrap());
     assert_eq!(rail.settlement_count(&s.correlation_id), 1);
-    assert!(results.iter().any(|r| matches!(r, Ok(FinalizeResult::Applied(FinalityOutcome::Settled(_))))));
+    assert!(results.iter().any(|r| matches!(r, Ok(FinalizeResult::Applied { outcome: FinalityOutcome::Settled(_), .. }))));
 }
 
 #[test]
@@ -524,7 +520,6 @@ async fn stuck_submitted_claim_retains_its_hold_and_stays_pending() {
 /// persisted leaves claim=Reserved, hold live, rail settled. `apply_finality` only
 /// treats Submitted|UnknownOutcome as in-flight, so the rail's Settled report is
 /// refused PAYMENT_NOT_SUBMITTED forever: rail paid, ledger never settles, hold leaks.
-#[ignore = "FINDING: Reserved claim with rail-accepted effect can never be finalized (rail settled, ledger not)"]
 #[tokio::test]
 async fn crash_between_rail_ack_and_claim_submitted_is_recoverable() {
     let fx = Fixture::new("ar-f-ack-crash");
@@ -546,7 +541,7 @@ async fn crash_between_rail_ack_and_claim_submitted_is_recoverable() {
     let mut settled = false;
     for _ in 0..4 {
         match finalize_via_rail(&d, &fx.claims, &fx.ledger, &inner) {
-            Ok(FinalizeResult::Applied(FinalityOutcome::Settled(_))) => {
+            Ok(FinalizeResult::Applied { outcome: FinalityOutcome::Settled(_), .. }) => {
                 settled = true;
                 break;
             }
@@ -555,48 +550,100 @@ async fn crash_between_rail_ack_and_claim_submitted_is_recoverable() {
         }
     }
     assert!(settled, "rail settled {corr} but ledger cannot follow; last finalize = {last}");
+    assert_eq!(fx.ledger.entries().unwrap().len(), 1, "one entry");
+    assert_eq!(claim_state(&fx.claims, &d), ClaimState::Final);
 }
 
-/// FINDING G3: crash between `ledger.hold` and rail submit (admission is consumed by
-/// value, so it is lost) leaves claim=Reserved + live hold. `finalize_via_rail` with
-/// the rail reporting Unknown returns StillUnknown for Reserved (only UnknownOutcome
-/// is resolved), and re-admission is refused IN_FLIGHT: hold and budget leak forever.
-#[ignore = "FINDING: orphan Reserved claim + hold (crash before rail submit) has no recovery path"]
+/// G3: crash between `ledger.hold` and rail submit leaves claim=Reserved + live hold.
+/// `abandon_unsubmitted` recovers it only when the rail's absence is authoritative.
+fn orphan(fx: &Fixture) -> String {
+    let a = fx.admit(fx.effect("400000", "inv-1"), "n-1").unwrap();
+    let t = fx.token_for(&a);
+    fx.ledger.hold(&a, &t).unwrap();
+    a.effect().digest().to_string()
+    // `a` dropped: the process "died" before the rail call.
+}
+
 #[test]
 fn orphan_hold_after_crash_before_rail_submit_is_recoverable() {
     let fx = Fixture::new("ar-f-orphan");
     let rail = sim(&fx, "or", SimMode::Honest);
-    let d = {
-        let a = fx.admit(fx.effect("400000", "inv-1"), "n-1").unwrap();
-        let t = fx.token_for(&a);
-        fx.ledger.hold(&a, &t).unwrap();
-        a.effect().digest().to_string()
-        // `a` dropped here: the process "died" before the rail call.
-    };
+    let d = orphan(&fx);
     assert_eq!(claim_state(&fx.claims, &d), ClaimState::Reserved);
-    let r = finalize_via_rail(&d, &fx.claims, &fx.ledger, &rail);
-    let recovered = fx.ledger.hold_of(&d).unwrap().is_none() && claim_state(&fx.claims, &d) != ClaimState::Reserved;
-    assert!(recovered, "hold {:?} claim {:?} finalize {r:?}", fx.ledger.hold_of(&d).unwrap(), claim_state(&fx.claims, &d));
+    // finalize alone does not resolve it (Unknown on a Reserved claim).
+    assert_eq!(finalize_via_rail(&d, &fx.claims, &fx.ledger, &rail).unwrap(), FinalizeResult::StillUnknown);
+    let r = abandon_unsubmitted(&fx.claims, &fx.ledger, &rail, &d).unwrap();
+    assert_eq!(r, FinalizeResult::ProvenAbsent);
+    assert!(fx.ledger.hold_of(&d).unwrap().is_none());
+    assert_eq!(claim_state(&fx.claims, &d), ClaimState::Refused);
+    assert_eq!(fx.ledger.available(PAYER, Currency::USD).unwrap(), 1_000_000);
+    assert!(fx.ledger.entries().unwrap().is_empty());
+    // Not abandonable twice.
+    assert_eq!(abandon_unsubmitted(&fx.claims, &fx.ledger, &rail, &d).unwrap_err(), NOT_ABANDONABLE);
 }
 
-/// FINDING G4: `apply_finality` takes caller-fabricated `FinalityEvidence` (public
-/// fields) and never checks `correlation_id` against the effect, so any caller can
-/// settle a held payment with no rail observation at all.
-#[ignore = "FINDING: apply_finality accepts forged evidence with a foreign correlation_id and settles the ledger"]
+/// A rail that delegates to SimRail but does not vouch for absence (a proxy/replica).
+struct NonAuthoritative<'a>(&'a SimRail);
+impl RailActuator for NonAuthoritative<'_> {
+    fn submit(&self, i: &RailInstruction) -> Result<RailAck, RailError> {
+        self.0.submit(i)
+    }
+    fn status(&self, c: &str) -> Result<RailStatus, RailError> {
+        self.0.status(c)
+    }
+    fn absence_is_authoritative(&self) -> bool {
+        false
+    }
+}
+
+#[test]
+fn orphan_hold_is_not_released_on_a_non_authoritative_rails_unknown() {
+    let fx = Fixture::new("ar-f-orphan-na");
+    let real = sim(&fx, "on", SimMode::Honest);
+    let rail = NonAuthoritative(&real);
+    let d = orphan(&fx);
+    assert_eq!(abandon_unsubmitted(&fx.claims, &fx.ledger, &rail, &d).unwrap(), FinalizeResult::StillUnknown);
+    assert!(fx.ledger.hold_of(&d).unwrap().is_some());
+    assert_eq!(claim_state(&fx.claims, &d), ClaimState::Reserved);
+}
+
+#[test]
+fn abandon_delegates_to_finalize_when_the_rail_has_in_fact_seen_the_effect() {
+    let fx = Fixture::new("ar-f-orphan-seen");
+    let rail = sim(&fx, "os", SimMode::SettleAfterPolls(0));
+    let a = fx.admit(fx.effect("400000", "inv-1"), "n-1").unwrap();
+    let d = a.effect().digest().to_string();
+    fx.ledger.hold(&a, &fx.token_for(&a)).unwrap();
+    // The rail did receive the instruction; only the claim transition was lost.
+    let corr = RailInstruction::correlation_id_for(&d);
+    let instr = RailInstruction {
+        effect_id: d.clone(),
+        correlation_id: corr.clone(),
+        message_profile: "p".into(),
+        payload: "<x/>".into(),
+        amount_minor: 400_000,
+        currency: Currency::USD,
+        payer: PAYER.into(),
+        payee: PAYEE.into(),
+    };
+    rail.submit(&instr).unwrap();
+    let r = abandon_unsubmitted(&fx.claims, &fx.ledger, &rail, &d).unwrap();
+    assert!(matches!(r, FinalizeResult::Applied { .. } | FinalizeResult::Pending), "{r:?}");
+    assert!(fx.ledger.hold_of(&d).unwrap().is_some() || fx.ledger.lookup(&d).unwrap().is_some());
+    assert_ne!(claim_state(&fx.claims, &d), ClaimState::Refused, "must never release funds the rail holds");
+}
+
+/// G4 (FIXED): evidence can no longer be fabricated. A non-terminal observed report cannot
+/// settle, and settlement requires the rail's own Settled report.
 #[tokio::test]
-async fn forged_finality_evidence_with_foreign_correlation_is_refused() {
+async fn ledger_cannot_be_settled_without_a_terminal_rail_report() {
     let fx = Fixture::new("ar-f-forge");
     let rail = sim(&fx, "fg", SimMode::SettleAfterPolls(100));
     let s = submit(&fx, &rail, "400000", "inv-1", "n-1").await;
-    let forged = FinalityEvidence {
-        effect_digest: s.effect_id.clone(),
-        correlation_id: "E2E-not-this-effect".into(),
-        evidence_digest: "made-up".into(),
-        kind: FinalityKind::Final,
-        reason: "FORGED".into(),
-    };
-    let r = apply_finality(&fx.claims, &fx.ledger, &forged);
-    assert!(r.is_err(), "ledger settled on forged evidence: {r:?}");
+    let report = observe_rail(&rail, &s.effect_id).unwrap();
+    assert_eq!(report.correlation_id(), s.correlation_id);
+    let r = apply_rail_report(&fx.claims, &fx.ledger, &report);
+    assert_eq!(r.unwrap_err(), REPORT_NOT_TERMINAL);
     assert!(fx.ledger.entries().unwrap().is_empty());
     assert_eq!(rail.settlement_count(&s.correlation_id), 0, "the rail never settled this effect");
 }
@@ -605,7 +652,6 @@ async fn forged_finality_evidence_with_foreign_correlation_is_refused() {
 /// so a return can claw back money the payee has HELD for its own in-flight payment.
 /// Invariant broken: balance >= live holds. The payee's later settle_hold then hits
 /// InsufficientFunds while the rail has already settled it.
-#[ignore = "FINDING: settle_return ignores holds; balance drops below live holds, later settle_hold cannot book rail finality"]
 #[tokio::test]
 async fn return_cannot_claw_back_funds_held_for_another_effect() {
     let fx = Fixture::with("ar-f-return-hold", 1_000_000, 500_000, 100_000_000);
@@ -635,7 +681,6 @@ async fn return_cannot_claw_back_funds_held_for_another_effect() {
 /// A payee at u64::MAX gets a legal-looking entry after which `balance(payee)` errors
 /// NEGATIVE_BALANCE_INVARIANT for every later call: the books are bricked by a
 /// settlement the ledger itself wrote.
-#[ignore = "FINDING: settlement credit overflows payee balance past u64; entry written, balance() then errors forever"]
 #[tokio::test]
 async fn credit_that_overflows_payee_balance_is_refused_before_the_entry_is_written() {
     let fx = Fixture::new("ar-f-overflow");
@@ -658,7 +703,6 @@ async fn credit_that_overflows_payee_balance_is_refused_before_the_entry_is_writ
 /// UnknownOutcome (correct) but `RailSubmission.standing` reports `Refused`, so a
 /// caller trusting `standing` believes re-admission is possible while the claim
 /// blocks it as OUTCOME_UNKNOWN.
-#[ignore = "FINDING: submit_via_rail reports standing=Refused while claim is UnknownOutcome (hold_of unavailable)"]
 #[tokio::test]
 async fn standing_matches_claim_state_when_ledger_is_unavailable_at_hold() {
     let fx = Fixture::new("ar-f-standing");
@@ -680,7 +724,6 @@ async fn standing_matches_claim_state_when_ledger_is_unavailable_at_hold() {
 /// FINDING G8 (low): benign race. Two finalizers on separate handles: the loser
 /// completes the idempotent ledger step, then its claim transition fails with
 /// UNEXPECTED_STATE_Final and the call returns Err although the effect is Final.
-#[ignore = "FINDING: racing finalize returns spurious Err (CLAIM_STORE_FAILED:UNEXPECTED_STATE_Final) for an already-Final claim"]
 #[tokio::test]
 async fn racing_finalize_never_returns_an_error_for_an_effect_that_ends_final() {
     let mut worst = 0usize;
@@ -710,4 +753,15 @@ async fn racing_finalize_never_returns_an_error_for_an_effect_that_ends_final() 
         worst = worst.max(errs);
     }
     assert_eq!(worst, 0, "{worst} finalize calls returned Err on a claim that ended Final");
+}
+
+/// Reconcile-by-ledger must not prove absence while a rail hold is live: the effect may be
+/// in flight at the rail. Only `finalize_via_rail` may resolve it.
+#[test]
+fn reconcile_refuses_while_a_live_rail_hold_exists() {
+    let fx = Fixture::new("ar-reconcile-hold");
+    let d = orphan(&fx);
+    assert_eq!(reconcile(&d, &fx.claims, &fx.ledger).unwrap_err(), "REFUSED:PAYMENT_NOT_RECONCILABLE");
+    assert_eq!(claim_state(&fx.claims, &d), ClaimState::Reserved);
+    assert!(fx.ledger.hold_of(&d).unwrap().is_some());
 }

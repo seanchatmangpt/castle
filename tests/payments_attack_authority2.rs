@@ -5,6 +5,8 @@
 //! real `RailActuator` impl, not a mock.
 mod common;
 use common::payments::*;
+#[path = "common/scripted_rail.rs"]
+mod scripted_rail;
 
 use castle::payments::admission::{admit_payment_screened, Screening};
 use castle::payments::compliance::{ComplianceControl, SanctionsList};
@@ -12,7 +14,7 @@ use castle::payments::counterparty::CounterpartyRegistry;
 use castle::payments::execute_rail::*;
 use castle::payments::rail::{RailAck, RailActuator, RailError, RailInstruction, RailStatus};
 use castle::payments::replay::{replay_admission, AdmissionJournal, AdmissionRecord, ReplayVerdict};
-use castle::payments::settlement::{apply_finality, FinalityEvidence, FinalityKind};
+use castle::payments::settlement::{apply_rail_report, observe_rail, REPORT_NOT_TERMINAL};
 use castle::payments::*;
 use castle::sa2a_security::{CertificateSignature, KeyRecord, KeyRegistry, KeyState, SignatureAlgorithm};
 use ed25519_dalek::{Signer, SigningKey};
@@ -55,16 +57,6 @@ async fn submit(fx: &Fixture, rail: &dyn RailActuator, amount: &str, obl: &str, 
 
 fn state(fx: &Fixture, d: &str) -> ClaimState {
     fx.claims.get(d).unwrap().unwrap().state
-}
-
-fn forged(d: &str, kind: FinalityKind) -> FinalityEvidence {
-    FinalityEvidence {
-        effect_digest: d.to_string(),
-        correlation_id: "E2E-attacker-chosen".to_string(),
-        evidence_digest: "sha256:attacker-invented".to_string(),
-        kind,
-        reason: "FORGED".to_string(),
-    }
 }
 
 /// A real, hand-written rail that forgets everything it was told (replica lag / amnesia /
@@ -122,8 +114,9 @@ fn control_finality_on_unsubmitted_claim_is_refused() {
     let fx = Fixture::new("a2-ctl-unsub");
     let a = fx.admit(fx.effect("1000", "inv-u"), "n-1").unwrap();
     let d = a.effect().digest().to_string();
-    let r = apply_finality(&fx.claims, &fx.ledger, &forged(&d, FinalityKind::Final));
-    assert!(r.is_err(), "Reserved claim must not settle: {r:?}");
+    // A rail claims settlement for a Reserved claim that holds no funds: nothing can settle.
+    let r = finalize_via_rail(&d, &fx.claims, &fx.ledger, &scripted_rail::ScriptedRail::new(vec![scripted_rail::settled()]));
+    assert!(r.is_err(), "claim with no hold must not settle: {r:?}");
     assert!(fx.ledger.entries().unwrap().is_empty());
 }
 
@@ -153,40 +146,41 @@ fn control_replay_returns_a_verdict_never_an_admission_and_touches_no_state() {
 
 // ---------------------------------------------------------------- FINDINGS
 
-/// FINDING-A1: `apply_finality` is `pub` and `FinalityEvidence` is a plain struct with pub
-/// fields, so any caller holding (claims, ledger) can settle a payment the rail never
-/// settled. Nothing binds evidence to the rail (no unforgeable RailReport token) and the
-/// `correlation_id` is not even compared to the claim's.
+/// A1-A3 (FIXED): `FinalityEvidence` has private fields and a crate-private constructor,
+/// so external code cannot forge finality; the only public settler is `apply_rail_report`
+/// over a `RailReport` that `observe_rail` mints from a real `RailActuator::status` call.
+/// These tests drive the honest paths and show the ledger follows the rail, not the caller.
 #[tokio::test]
-#[ignore = "FINDING: apply_finality accepts attacker-authored FinalityEvidence; ledger settles with no rail settlement"]
-async fn forged_final_evidence_cannot_settle_a_payment_the_rail_never_settled() {
+async fn ledger_follows_the_rail_not_the_caller_while_the_rail_has_not_settled() {
     let fx = Fixture::new("a2-forge-final");
     let rail = sim(&fx, "a", SimMode::SettleAfterPolls(1000));
     let s = submit(&fx, &rail, "1000", "inv-1", "n-1").await;
-    let _ = apply_finality(&fx.claims, &fx.ledger, &forged(&s.effect_id, FinalityKind::Final));
-    assert!(fx.ledger.lookup(&s.effect_id).unwrap().is_none(), "ledger settled from forged evidence");
+    // The only settler needs a report observed from the rail; an Accepted report is refused.
+    let report = observe_rail(&rail, &s.effect_id).unwrap();
+    assert_eq!(apply_rail_report(&fx.claims, &fx.ledger, &report).unwrap_err(), REPORT_NOT_TERMINAL);
+    assert_eq!(finalize_via_rail(&s.effect_id, &fx.claims, &fx.ledger, &rail).unwrap(), FinalizeResult::Pending);
+    assert!(fx.ledger.lookup(&s.effect_id).unwrap().is_none());
     assert_ne!(state(&fx, &s.effect_id), ClaimState::Final);
     assert_eq!(fx.ledger.balance(PAYEE, Currency::USD).unwrap(), 0);
-}
-
-/// FINDING-A2: forged REJECTED evidence releases the hold and refuses the claim while the
-/// rail goes on to settle: funds are freed in the books but paid on the rail.
-#[tokio::test]
-#[ignore = "FINDING: forged Rejected evidence releases the hold of a payment the rail accepted"]
-async fn forged_rejection_cannot_release_a_hold_on_an_accepted_payment() {
-    let fx = Fixture::new("a2-forge-reject");
-    let rail = sim(&fx, "a", SimMode::SettleAfterPolls(1000));
-    let s = submit(&fx, &rail, "1000", "inv-1", "n-1").await;
-    let _ = apply_finality(&fx.claims, &fx.ledger, &forged(&s.effect_id, FinalityKind::Rejected));
-    assert!(fx.ledger.hold_of(&s.effect_id).unwrap().is_some(), "hold released by forged rejection");
+    assert!(fx.ledger.hold_of(&s.effect_id).unwrap().is_some());
     assert_eq!(state(&fx, &s.effect_id), ClaimState::Submitted);
 }
 
-/// FINDING-A3: forged RETURNED evidence after genuine settlement posts an inverse entry,
-/// clawing the funds back to the payer in the books with no return on the rail.
 #[tokio::test]
-#[ignore = "FINDING: forged Returned evidence reverses a genuinely settled payment"]
-async fn forged_return_cannot_reverse_a_settled_payment() {
+async fn a_report_for_another_effect_cannot_settle_this_one() {
+    let fx = Fixture::new("a2-forge-foreign");
+    let rail = sim(&fx, "a", SimMode::SettleAfterPolls(1000));
+    let s = submit(&fx, &rail, "1000", "inv-1", "n-1").await;
+    // A settled report minted for a different (unknown) effect digest is refused for lack of a claim.
+    let other = "sha256:".to_string() + &"cd".repeat(32);
+    let report = observe_rail(&scripted_rail::ScriptedRail::new(vec![scripted_rail::settled()]), &other).unwrap();
+    assert!(apply_rail_report(&fx.claims, &fx.ledger, &report).is_err());
+    assert!(fx.ledger.lookup(&s.effect_id).unwrap().is_none());
+    assert_eq!(state(&fx, &s.effect_id), ClaimState::Submitted);
+}
+
+#[tokio::test]
+async fn settled_payment_is_not_reversed_unless_the_rail_reports_a_return() {
     let fx = Fixture::new("a2-forge-return");
     let rail = sim(&fx, "a", SimMode::Honest);
     let s = submit(&fx, &rail, "1000", "inv-1", "n-1").await;
@@ -197,8 +191,10 @@ async fn forged_return_cannot_reverse_a_settled_payment() {
     }
     assert_eq!(state(&fx, &s.effect_id), ClaimState::Final);
     let payee_before = fx.ledger.balance(PAYEE, Currency::USD).unwrap();
-    let _ = apply_finality(&fx.claims, &fx.ledger, &forged(&s.effect_id, FinalityKind::Returned));
-    assert!(fx.ledger.returns().unwrap().is_empty(), "inverse entry posted from forged evidence");
+    for _ in 0..3 {
+        finalize_via_rail(&s.effect_id, &fx.claims, &fx.ledger, &rail).unwrap();
+    }
+    assert!(fx.ledger.returns().unwrap().is_empty(), "no return reported by the rail");
     assert_eq!(fx.ledger.balance(PAYEE, Currency::USD).unwrap(), payee_before);
 }
 
@@ -207,7 +203,6 @@ async fn forged_return_cannot_reverse_a_settled_payment() {
 /// actually accepted the payment turns UnknownOutcome into a released hold, and the later
 /// genuine settlement is then unbookable (EVIDENCE_CONFLICT): rail paid, books say refused.
 #[tokio::test]
-#[ignore = "FINDING: a rail reporting Unknown is trusted as proof the payment never happened"]
 async fn amnesiac_rail_unknown_cannot_release_an_unknown_outcome_hold() {
     let fx = Fixture::new("a2-amnesia");
     let real = sim(&fx, "a", SimMode::DropAckAfterAccept);
@@ -215,7 +210,8 @@ async fn amnesiac_rail_unknown_cannot_release_an_unknown_outcome_hold() {
     let s = submit_via_rail(a, &params("cp:v1"), &fx.exec_ctx(), &real).await.unwrap();
     assert_eq!(s.standing, RailStandingAfterSubmit::UnknownOutcome);
     let liar = AmnesiacRail(&real);
-    let _ = finalize_via_rail(&s.effect_id, &fx.claims, &fx.ledger, &liar);
+    assert!(!liar.absence_is_authoritative());
+    assert_eq!(finalize_via_rail(&s.effect_id, &fx.claims, &fx.ledger, &liar).unwrap(), FinalizeResult::StillUnknown);
     assert_eq!(state(&fx, &s.effect_id), ClaimState::UnknownOutcome, "Unknown status released the claim");
     assert!(fx.ledger.hold_of(&s.effect_id).unwrap().is_some(), "hold released on unverified absence");
 }
@@ -225,7 +221,7 @@ async fn amnesiac_rail_unknown_cannot_release_an_unknown_outcome_hold() {
 /// There is no `verify_against(&PaymentAdmission)`, and `RailSubmission.pee` is never
 /// compared with the instruction actually sent.
 #[test]
-#[ignore = "FINDING: PEE with substituted beneficiary passes verify_identity after reseal"]
+#[ignore = "DESIGN LIMITATION: verify_identity is self-referential by contract; the defect is closed by verify_against (see pee_with_substituted_beneficiary_fails_verify_against_admission)"]
 fn pee_with_substituted_beneficiary_fails_verification() {
     let fx = Fixture::new("a2-pee");
     let a = fx.admit(fx.effect("1000", "inv-1"), "n-1").unwrap();
@@ -236,12 +232,23 @@ fn pee_with_substituted_beneficiary_fails_verification() {
     assert!(pee.verify_identity().is_err(), "substituted beneficiary verified as authentic");
 }
 
+/// FINDING-A5 regression: `verify_against(&admission)` catches a resealed substituted beneficiary.
+#[test]
+fn pee_with_substituted_beneficiary_fails_verify_against_admission() {
+    let fx = Fixture::new("a2-pee-va");
+    let a = fx.admit(fx.effect("1000", "inv-1"), "n-1").unwrap();
+    let mut pee = PreparedEconomicEffect::seal(&a, &bindings("cp:v1")).unwrap();
+    assert!(pee.verify_against(&a).is_ok());
+    pee.beneficiary_account = "acct:attacker".to_string();
+    pee.reseal_identity().unwrap();
+    assert!(pee.verify_against(&a).is_err(), "substituted beneficiary verified against admission");
+}
+
 /// FINDING-A6: `EffectBindings.counterparty_evidence_digest` / `law_state_digest` are free
 /// strings; `submit_via_rail` never checks them against the `ScreeningEvidence` that
 /// `admit_payment_screened` produced, so a screened payment's PEE can carry an arbitrary
 /// (or unrelated) screening binding.
 #[tokio::test]
-#[ignore = "FINDING: PEE counterparty binding is not verified against the screening evidence"]
 async fn pee_counterparty_binding_must_match_screening_evidence() {
     let mut fx = Fixture::new("a2-bind");
     fx.policy.require_screening = true;
@@ -276,7 +283,7 @@ async fn pee_counterparty_binding_must_match_screening_evidence() {
 /// `Reproduced`: a lawful-looking decision digest for an effect no trusted registry ever
 /// authorized. Replay does not admit, but its verdict is not evidence of authority.
 #[test]
-#[ignore = "FINDING: replay Reproduced verdict is derived from an attacker-supplied registry snapshot"]
+#[ignore = "DESIGN LIMITATION: unanchored replay_admission trusts the record's own registry snapshot by contract; the defect is closed by replay_admission_anchored (see anchored_replay_of_a_forged_record_signed_by_rogue_keys_diverges)"]
 fn replay_of_a_forged_record_signed_by_rogue_keys_is_not_reproduced() {
     let fx = Fixture::new("a2-replay-forge");
     let root = fx.dir.join("journal");
@@ -321,4 +328,52 @@ fn replay_of_a_forged_record_signed_by_rogue_keys_is_not_reproduced() {
 
     let v = replay_admission(&j, &digest);
     assert!(!matches!(v, Ok(ReplayVerdict::Reproduced { .. })), "forged record reproduced: {v:?}");
+}
+
+/// Regression for FINDING-A7 fix: replay anchored to the trusted registry refuses the forgery.
+#[test]
+fn anchored_replay_of_a_forged_record_signed_by_rogue_keys_diverges() {
+    let fx = Fixture::new("a2-replay-forge");
+    let root = fx.dir.join("journal");
+    let j = AdmissionJournal::open(&root).unwrap();
+    let effect = fx.effect("1000", "inv-forged");
+    let digest = effect.digest().unwrap();
+
+    let rogue: Vec<(String, SigningKey)> =
+        ["r1", "r2"].iter().enumerate().map(|(i, n)| ((*n).to_string(), SigningKey::from_bytes(&[(i as u8) + 77; 32]))).collect();
+    let registry = KeyRegistry::from_records(rogue.iter().map(|(n, k)| KeyRecord {
+        key_id: format!("rk-{n}"),
+        custodian_id: format!("device:rogue-{n}"),
+        algorithm: SignatureAlgorithm::Ed25519,
+        public_key: k.verifying_key().to_bytes().to_vec(),
+        state: KeyState::Active,
+        not_before_ms: 0,
+        expires_at_ms: 10_000_000,
+        revocation_epoch: 0,
+    }));
+    let mut cert = fx.cert(&effect, "rogue-nonce", &[]);
+    let msg = cert.signing_message().unwrap();
+    for (n, k) in &rogue {
+        cert.signatures.push(CertificateSignature {
+            key_id: format!("rk-{n}"),
+            algorithm: SignatureAlgorithm::Ed25519,
+            signature: k.sign(&msg).to_bytes().to_vec(),
+        });
+    }
+    let rec = AdmissionRecord {
+        prepared: effect,
+        certificate: cert,
+        registry: registry.records(),
+        policy_epoch: 7,
+        revocation_epoch: 0,
+        generation: 1,
+        audience: AUDIENCE.to_string(),
+        now_ms: NOW_MS,
+        policy: fx.policy.clone(),
+    };
+    let path = root.join(format!("{}.admission.json", digest.trim_start_matches("sha256:")));
+    std::fs::write(&path, serde_json::to_vec(&rec).unwrap()).unwrap();
+
+    let v = castle::payments::replay::replay_admission_anchored(&j, &digest, &fx.registry);
+    assert!(matches!(v, Ok(ReplayVerdict::Diverged { .. })), "forged record not diverged under trusted anchor: {v:?}");
 }

@@ -4,6 +4,8 @@
 //! `admit_payment_journaled` snapshots every stateless input of an admission
 //! (prepared effect, certificate, key registry, epochs, audience, clock,
 //! spend policy) and durably writes it after a successful admission.
+//! Unanchored `replay_admission` proves internal consistency only; use
+//! `replay_admission_anchored` to bind the record to a trusted key registry.
 //! `replay_admission` re-runs the *stateless* checks against that snapshot
 //! and never touches the ClaimStore, ledger, rail, nonce fence or network,
 //! and never actuates.
@@ -23,7 +25,9 @@ use crate::sa2a_security::encoding::sha256_tagged;
 use crate::sa2a_security::epoch::SecurityEpochs;
 use crate::sa2a_security::{ActuationCertificate, CertificateVerifier, KeyRecord, KeyRegistry, PreparedEffect};
 
-use super::admission::{admit_payment, AdmissionContext, PaymentAdmission};
+use super::admission::{
+    admit_payment, admit_payment_screened, AdmissionContext, PaymentAdmission, Screening, ScreeningEvidence,
+};
 use super::dirlock::{publish_new, publish_replace};
 use super::effect::PaymentEffect;
 use super::obligation::{derive_obligation_id, OBLIGATION_ID_NOT_DERIVED};
@@ -32,6 +36,7 @@ use super::refusal::{self, PayResult};
 
 pub const REPLAY_RECORD_MISSING: &str = "REFUSED:REPLAY_RECORD_MISSING";
 pub const REPLAY_RECORD_CORRUPT: &str = "REFUSED:REPLAY_RECORD_CORRUPT";
+pub const REPLAY_REGISTRY_UNTRUSTED: &str = "REFUSED:REPLAY_REGISTRY_UNTRUSTED";
 pub const REPLAY_DIGEST_MISMATCH: &str = "REFUSED:REPLAY_EFFECT_DIGEST_MISMATCH";
 
 const DECISION_DOMAIN: &[u8] = b"CASTLE-REPLAY-DECISION-V1";
@@ -98,7 +103,28 @@ pub fn admit_payment_journaled(
     ctx: &AdmissionContext<'_>,
     journal: &AdmissionJournal,
 ) -> PayResult<PaymentAdmission> {
-    let record = AdmissionRecord {
+    let record = snapshot(&prepared, certificate, ctx);
+    let admission = admit_payment(prepared, certificate, ctx)?;
+    journal.store(admission.effect().digest(), &record)?;
+    Ok(admission)
+}
+
+/// `admit_payment_screened` plus a durable snapshot of the stateless inputs (screened + journaled).
+pub fn admit_payment_screened_journaled(
+    prepared: PreparedEffect,
+    certificate: &ActuationCertificate,
+    ctx: &AdmissionContext<'_>,
+    screening: &Screening<'_>,
+    journal: &AdmissionJournal,
+) -> PayResult<(PaymentAdmission, ScreeningEvidence)> {
+    let record = snapshot(&prepared, certificate, ctx);
+    let (admission, evidence) = admit_payment_screened(prepared, certificate, ctx, screening)?;
+    journal.store(admission.effect().digest(), &record)?;
+    Ok((admission, evidence))
+}
+
+fn snapshot(prepared: &PreparedEffect, certificate: &ActuationCertificate, ctx: &AdmissionContext<'_>) -> AdmissionRecord {
+    AdmissionRecord {
         prepared: prepared.clone(),
         certificate: certificate.clone(),
         registry: ctx.registry.records(),
@@ -108,10 +134,28 @@ pub fn admit_payment_journaled(
         audience: ctx.audience.to_string(),
         now_ms: ctx.now_ms,
         policy: ctx.policy.clone(),
+    }
+}
+
+/// Like `replay_admission`, but the record's key-registry snapshot must equal `trusted_registry`.
+/// Unanchored replay proves only INTERNAL CONSISTENCY (the record verifies against the registry
+/// it carries); a record written by anyone holding their own keys reproduces. Only anchoring to a
+/// registry you trust establishes AUTHORITY.
+pub fn replay_admission_anchored(
+    journal: &AdmissionJournal,
+    effect_digest: &str,
+    trusted_registry: &KeyRegistry,
+) -> PayResult<ReplayVerdict> {
+    let rec = journal.load(effect_digest)?;
+    let canon = |rs: &[KeyRecord]| -> Vec<String> {
+        let mut v: Vec<String> = rs.iter().map(|r| serde_json::to_string(r).unwrap_or_default()).collect();
+        v.sort();
+        v
     };
-    let admission = admit_payment(prepared, certificate, ctx)?;
-    journal.store(admission.effect().digest(), &record)?;
-    Ok(admission)
+    if canon(&rec.registry) != canon(&trusted_registry.records()) {
+        return diverged(REPLAY_REGISTRY_UNTRUSTED);
+    }
+    replay_admission(journal, effect_digest)
 }
 
 fn diverged(reason: impl Into<String>) -> PayResult<ReplayVerdict> {
@@ -153,8 +197,13 @@ pub fn replay_admission(journal: &AdmissionJournal, effect_digest: &str) -> PayR
     };
     checks.push(("certificate", format!("ok:{}", receipt.verified_custodian_ids.join(","))));
 
-    if let Err(e) = rec.policy.check_static(&effect) {
-        return diverged(e);
+    match rec.policy.check_static(&effect) {
+        Ok(p) => {
+            if let Err(e) = p.check_quorum(rec.certificate.threshold) {
+                return diverged(e);
+            }
+        }
+        Err(e) => return diverged(e),
     }
     checks.push(("static_policy", "ok".into()));
 

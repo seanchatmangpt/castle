@@ -26,7 +26,10 @@ use super::ledger::{ActuationToken, LedgerError, LedgerPort};
 use super::pee::{EffectBindings, PreparedEconomicEffect};
 use super::rail::{RailAck, RailActuator, RailError, RailInstruction, RailStatus};
 use super::refusal::{self, refuse, PayResult};
-use super::settlement::{apply_finality, FinalityEvidence, FinalityKind, FinalityOutcome, PAYMENT_NOT_SUBMITTED};
+use super::settlement::{
+    apply_finality, apply_rail_report, observe_rail, status_evidence, FinalityEvidence, FinalityKind, FinalityOutcome,
+    PAYMENT_NOT_SUBMITTED,
+};
 
 pub const T_HOLD: &str = "payments.hold";
 pub const T_RAIL_SUBMIT: &str = "payments.rail_submit";
@@ -36,7 +39,7 @@ pub const RAIL_NEVER_SUBMITTED: &str = "RAIL_NEVER_SUBMITTED";
 pub const RAIL_HOLD_UNAVAILABLE: &str = "REFUSED:PAYMENT_RAIL_HOLD_UNAVAILABLE";
 pub const RAIL_TIME_INVALID: &str = "REFUSED:PAYMENT_RAIL_TIME_INVALID";
 
-const STATUS_EVIDENCE_DOMAIN: &[u8] = b"CASTLE-RAIL-STATUS-EVIDENCE-V1";
+pub const NOT_ABANDONABLE: &str = "REFUSED:PAYMENT_NOT_ABANDONABLE";
 const LOCAL_EVIDENCE_DOMAIN: &[u8] = b"CASTLE-RAIL-LOCAL-EVIDENCE-V1";
 
 #[derive(Debug, Clone)]
@@ -219,37 +222,40 @@ fn local_evidence(tag: &str, correlation: &str, detail: &str) -> String {
 }
 
 /// Definite non-submission after a claim is `Reserved`: release any hold via a sealed
-/// rejection (through `Submitted`), else refuse the claim directly.
+/// rejection (through `Submitted`), else refuse the claim directly. Returns the standing
+/// that matches the claim's actual resulting state.
 fn release_unsubmitted(
     claims: &ClaimStore,
     ledger: &dyn LedgerPort,
     digest: &str,
     correlation: &str,
     detail: &str,
-) -> PayResult<()> {
+) -> PayResult<RailStandingAfterSubmit> {
     match ledger.hold_of(digest) {
         Ok(None) => {
             claims.transition(digest, &[ClaimState::Reserved], ClaimState::Refused, None, detail)?;
+            Ok(RailStandingAfterSubmit::Refused)
         }
         Ok(Some(_)) => {
             claims.transition(digest, &[ClaimState::Reserved], ClaimState::Submitted, None, "held-not-submitted")?;
             apply_finality(
                 claims,
                 ledger,
-                &FinalityEvidence {
-                    effect_digest: digest.to_string(),
-                    correlation_id: correlation.to_string(),
-                    evidence_digest: local_evidence("NEVER_SUBMITTED", correlation, detail),
-                    kind: FinalityKind::Rejected,
-                    reason: RAIL_NEVER_SUBMITTED.to_string(),
-                },
+                &FinalityEvidence::new(
+                    digest,
+                    correlation,
+                    local_evidence("NEVER_SUBMITTED", correlation, detail),
+                    FinalityKind::Rejected,
+                    RAIL_NEVER_SUBMITTED,
+                ),
             )?;
+            Ok(RailStandingAfterSubmit::Refused)
         }
         Err(_) => {
             claims.transition(digest, &[ClaimState::Reserved], ClaimState::UnknownOutcome, None, refusal::LEDGER_UNAVAILABLE)?;
+            Ok(RailStandingAfterSubmit::UnknownOutcome)
         }
     }
-    Ok(())
 }
 
 /// CONSTRUCT -> admit -> durable-BRCE DO (`hold`, then `rail_submit`). Never writes a
@@ -272,6 +278,7 @@ pub async fn submit_via_rail(
 
     // (a) PEE: seal, identity, freshness. Failure refuses before DO; no hold is placed.
     let pee_checked = PreparedEconomicEffect::seal(&admission, &params.bindings).and_then(|pee| {
+        pee.verify_against(&admission)?;
         pee.verify_identity()?;
         let now = u64::try_from(ctx.now_epoch_ms).map_err(|_| RAIL_TIME_INVALID.to_string())?;
         pee.check_fresh(now)?;
@@ -365,13 +372,7 @@ pub async fn submit_via_rail(
         apply_finality(
             ctx.claims,
             ctx.ledger,
-            &FinalityEvidence {
-                effect_digest: digest.clone(),
-                correlation_id: correlation.clone(),
-                evidence_digest: local_evidence("REJECT_ACK", &correlation, &reason),
-                kind: FinalityKind::Rejected,
-                reason: reason.clone(),
-            },
+            &FinalityEvidence::new(&digest, &correlation, local_evidence("REJECT_ACK", &correlation, &reason), FinalityKind::Rejected, &reason),
         )?;
         (RailStandingAfterSubmit::Refused, format!("REFUSED:PAYMENT_RAIL_REJECTED:{reason}"))
     } else if steps.iter().any(|s| matches!(s, Step::RailIndeterminate(_) | Step::RailCalled)) {
@@ -386,8 +387,8 @@ pub async fn submit_via_rail(
         (RailStandingAfterSubmit::UnknownOutcome, refusal::OUTCOME_UNKNOWN.to_string())
     } else if held {
         // Hold placed but the rail was provably never called.
-        release_unsubmitted(ctx.claims, ctx.ledger, &digest, &correlation, &result_note)?;
-        (RailStandingAfterSubmit::Refused, format!("REFUSED:PAYMENT_NOT_SUBMITTED:{result_note}"))
+        let st = release_unsubmitted(ctx.claims, ctx.ledger, &digest, &correlation, &result_note)?;
+        (st, format!("REFUSED:PAYMENT_NOT_SUBMITTED:{result_note}"))
     } else if steps.contains(&Step::HoldInsufficient) {
         ctx.claims.transition(
             &digest,
@@ -400,8 +401,8 @@ pub async fn submit_via_rail(
     } else {
         // HoldUnavailable / permit refusal / BRCE refusal before the adapter ran.
         let d = if result_note.is_empty() { RAIL_HOLD_UNAVAILABLE.to_string() } else { result_note.clone() };
-        release_unsubmitted(ctx.claims, ctx.ledger, &digest, &correlation, &d)?;
-        (RailStandingAfterSubmit::Refused, d)
+        let st = release_unsubmitted(ctx.claims, ctx.ledger, &digest, &correlation, &d)?;
+        (st, d)
     };
 
     Ok(RailSubmission {
@@ -421,62 +422,46 @@ pub async fn submit_via_rail(
 pub enum FinalizeResult {
     /// Rail has accepted but not reached finality.
     Pending,
-    /// Finality evidence applied (or already applied; idempotent).
-    Applied(FinalityOutcome),
+    /// Finality applied (or already applied; idempotent), with the evidence digest used.
+    Applied { outcome: FinalityOutcome, evidence_digest: String },
     /// Rail unreachable or uninformative; state unchanged.
     StillUnknown,
-    /// Reachable rail proved it never saw the effect; hold released, claim refused.
+    /// Authoritative rail proved it never saw the effect; hold released, claim refused.
     ProvenAbsent,
 }
 
-fn status_evidence(tag: &str, status: &RailStatus) -> PayResult<String> {
-    let bytes = serde_json::to_vec(status).map_err(|_| refusal::PAYLOAD_INVALID.to_string())?;
-    let mut body = tag.as_bytes().to_vec();
-    body.push(b'|');
-    body.extend_from_slice(&bytes);
-    Ok(sha256_tagged(STATUS_EVIDENCE_DOMAIN, &body))
-}
-
-/// Poll the authoritative rail and apply sealed finality. Safe to call repeatedly and
-/// against duplicate/reordered reports: `apply_finality` is idempotent and refuses conflicts.
+/// Poll the rail and apply sealed finality. Safe to call repeatedly and against
+/// duplicate/reordered reports: settlement is idempotent and refuses conflicts.
+/// `RailStatus::Unknown` is proof of absence only if `rail.absence_is_authoritative()`.
 pub fn finalize_via_rail(
     effect_digest: &str,
     claims: &ClaimStore,
     ledger: &dyn LedgerPort,
     rail: &dyn RailActuator,
 ) -> PayResult<FinalizeResult> {
-    let Some(claim) = claims.get(effect_digest)? else {
+    let Some(mut claim) = claims.get(effect_digest)? else {
         return refuse(PAYMENT_NOT_SUBMITTED);
     };
     let correlation = RailInstruction::correlation_id_for(effect_digest);
-    let status = match rail.status(&correlation) {
-        Ok(s) => s,
-        Err(_) => return Ok(FinalizeResult::StillUnknown),
+    let Ok(report) = observe_rail(rail, effect_digest) else {
+        return Ok(FinalizeResult::StillUnknown);
     };
-    let ev = |kind: FinalityKind, evidence_digest: String, reason: &str| FinalityEvidence {
-        effect_digest: effect_digest.to_string(),
-        correlation_id: correlation.clone(),
-        evidence_digest,
-        kind,
-        reason: reason.to_string(),
-    };
-    match &status {
-        RailStatus::Settled { .. } => {
-            let d = status_evidence("SETTLED", &status)?;
-            Ok(FinalizeResult::Applied(apply_finality(claims, ledger, &ev(FinalityKind::Final, d, "SETTLED"))?))
-        }
-        RailStatus::Rejected { reason } => {
-            let d = status_evidence("REJECTED", &status)?;
-            Ok(FinalizeResult::Applied(apply_finality(claims, ledger, &ev(FinalityKind::Rejected, d, reason))?))
-        }
-        RailStatus::Returned { reason, .. } => {
-            // A return is itself proof of prior settlement: settle first if we have not seen it.
-            if matches!(claim.state, ClaimState::Submitted | ClaimState::UnknownOutcome) {
-                let implied = status_evidence("SETTLED_IMPLIED_BY_RETURN", &status)?;
-                apply_finality(claims, ledger, &ev(FinalityKind::Final, implied, "SETTLED_IMPLIED_BY_RETURN"))?;
+    // A crash after the rail accepted but before Reserved->Submitted: the rail has seen it.
+    if claim.state == ClaimState::Reserved && !matches!(report.status(), RailStatus::Unknown) {
+        if let Err(e) = claims.transition(effect_digest, &[ClaimState::Reserved], ClaimState::Submitted, None, "rail-observed") {
+            // A racing finalizer may have moved it already.
+            match claims.get(effect_digest)? {
+                Some(c) if c.state != ClaimState::Reserved => claim = c,
+                _ => return Err(e),
             }
-            let d = status_evidence("RETURNED", &status)?;
-            Ok(FinalizeResult::Applied(apply_finality(claims, ledger, &ev(FinalityKind::Returned, d, reason))?))
+        } else {
+            claim.state = ClaimState::Submitted;
+        }
+    }
+    match report.status() {
+        RailStatus::Settled { .. } | RailStatus::Rejected { .. } | RailStatus::Returned { .. } => {
+            let outcome = apply_rail_report(claims, ledger, &report)?;
+            Ok(FinalizeResult::Applied { outcome, evidence_digest: report.evidence_digest().to_string() })
         }
         RailStatus::Accepted => {
             if claim.state == ClaimState::UnknownOutcome {
@@ -491,13 +476,53 @@ pub fn finalize_via_rail(
             Ok(FinalizeResult::Pending)
         }
         RailStatus::Unknown => {
-            if claim.state == ClaimState::UnknownOutcome {
-                let d = status_evidence("NEVER_SAW", &status)?;
-                apply_finality(claims, ledger, &ev(FinalityKind::Rejected, d, RAIL_NEVER_SAW_EFFECT))?;
+            if claim.state == ClaimState::UnknownOutcome && rail.absence_is_authoritative() {
+                let d = status_evidence("NEVER_SAW", report.status())?;
+                apply_finality(
+                    claims,
+                    ledger,
+                    &FinalityEvidence::new(effect_digest, &correlation, d, FinalityKind::Rejected, RAIL_NEVER_SAW_EFFECT),
+                )?;
                 Ok(FinalizeResult::ProvenAbsent)
             } else {
                 Ok(FinalizeResult::StillUnknown)
             }
         }
+    }
+}
+
+/// Recovery for an orphan `Reserved` claim (crash between `ledger.hold` and the rail
+/// submit; the admission is consumed by value so the effect cannot be resumed). If the
+/// rail has seen the effect this delegates to `finalize_via_rail`. If an
+/// authoritative-absence rail reports Unknown, the hold is released and the claim refused
+/// (`ProvenAbsent`); a non-authoritative rail yields `StillUnknown`.
+///
+/// Remaining gap: there is no automatic timer or submit lease. The caller must ensure no
+/// `submit_via_rail` for this effect is still in flight before invoking this.
+pub fn abandon_unsubmitted(
+    claims: &ClaimStore,
+    ledger: &dyn LedgerPort,
+    rail: &dyn RailActuator,
+    effect_digest: &str,
+) -> PayResult<FinalizeResult> {
+    let Some(claim) = claims.get(effect_digest)? else {
+        return refuse(PAYMENT_NOT_SUBMITTED);
+    };
+    if claim.state != ClaimState::Reserved {
+        return refuse(NOT_ABANDONABLE);
+    }
+    let Ok(report) = observe_rail(rail, effect_digest) else {
+        return Ok(FinalizeResult::StillUnknown);
+    };
+    if !matches!(report.status(), RailStatus::Unknown) {
+        return finalize_via_rail(effect_digest, claims, ledger, rail);
+    }
+    if !rail.absence_is_authoritative() {
+        return Ok(FinalizeResult::StillUnknown);
+    }
+    let correlation = RailInstruction::correlation_id_for(effect_digest);
+    match release_unsubmitted(claims, ledger, effect_digest, &correlation, RAIL_NEVER_SUBMITTED)? {
+        RailStandingAfterSubmit::Refused => Ok(FinalizeResult::ProvenAbsent),
+        _ => Ok(FinalizeResult::StillUnknown),
     }
 }

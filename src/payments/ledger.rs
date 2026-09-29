@@ -222,6 +222,15 @@ impl FileJournalLedger {
         Ok(u64::try_from(bal.saturating_sub(self.held_excluding(account, currency, except)?)).unwrap_or(u64::MAX))
     }
 
+    /// Refuse a credit that would push `account` past `u64::MAX` (the books would brick).
+    fn check_credit(&self, account: &str, currency: Currency, amount: u64) -> Result<(), LedgerError> {
+        let bal = u128::from(self.balance(account, currency)?);
+        if bal + u128::from(amount) > u128::from(u64::MAX) {
+            return Err(LedgerError::Unavailable("CREDIT_OVERFLOW".into()));
+        }
+        Ok(())
+    }
+
     /// Conservation: sum of all balances equals sum of openings, per currency.
     pub fn conserves(&self, currency: Currency) -> Result<bool, LedgerError> {
         let openings = self.openings()?;
@@ -278,6 +287,7 @@ impl LedgerPort for FileJournalLedger {
         if self.available_excluding(effect.payer(), money.currency, Some(effect.digest()))? < money.minor {
             return Err(LedgerError::InsufficientFunds);
         }
+        self.check_credit(effect.payee(), money.currency, money.minor)?;
         let entry = LedgerEntry {
             seq: self.next_seq()?,
             effect_digest: effect.digest().to_string(),
@@ -315,6 +325,7 @@ impl LedgerPort for FileJournalLedger {
         if self.available_excluding(effect.payer(), money.currency, Some(digest))? < money.minor {
             return Err(LedgerError::InsufficientFunds);
         }
+        self.check_credit(effect.payee(), money.currency, money.minor)?;
         let hold = LedgerHold {
             effect_digest: digest.to_string(),
             account: effect.payer().to_string(),
@@ -368,6 +379,7 @@ impl LedgerPort for FileJournalLedger {
         if self.balance(&hold.account, hold.currency)? < hold.amount_minor {
             return Err(LedgerError::InsufficientFunds);
         }
+        self.check_credit(payee, hold.currency, hold.amount_minor)?;
         let entry = LedgerEntry {
             seq: self.next_seq()?,
             effect_digest: hold.effect_digest.clone(),
@@ -397,9 +409,11 @@ impl LedgerPort for FileJournalLedger {
         let Some(orig) = self.lookup(digest)? else {
             return Err(unavailable("ENTRY_MISSING"));
         };
-        if self.balance(&orig.credit_account, orig.currency)? < orig.amount_minor {
+        // The payee may only give back funds it has not itself reserved for in-flight effects.
+        if self.available_excluding(&orig.credit_account, orig.currency, None)? < orig.amount_minor {
             return Err(LedgerError::InsufficientFunds);
         }
+        self.check_credit(&orig.debit_account, orig.currency, orig.amount_minor)?;
         let entry = LedgerEntry {
             seq: self.next_seq()?,
             effect_digest: orig.effect_digest.clone(),

@@ -30,6 +30,13 @@ pub fn reconcile(effect_digest: &str, claims: &ClaimStore, ledger: &dyn LedgerPo
     if !matches!(claim.state, ClaimState::Reserved | ClaimState::UnknownOutcome) {
         return refuse(NOT_RECONCILABLE);
     }
+    // A live rail hold means the effect may be in flight at a rail: absence from the
+    // ledger's entry table proves nothing. Only finalize_via_rail may resolve it.
+    match ledger.hold_of(effect_digest) {
+        Ok(Some(_)) => return refuse(NOT_RECONCILABLE),
+        Ok(None) => {}
+        Err(_) => return Ok(ReconcileResolution::StillUnknown),
+    }
     match ledger.lookup(effect_digest) {
         Err(_) => Ok(ReconcileResolution::StillUnknown),
         Ok(Some(entry)) => {

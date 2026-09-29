@@ -631,7 +631,7 @@ pub fn finalize_handler(
         FinalizeResult::Pending => ("pending", Value::Null),
         FinalizeResult::StillUnknown => ("still_unknown", Value::Null),
         FinalizeResult::ProvenAbsent => ("proven_absent", Value::Null),
-        FinalizeResult::Applied(o) => (
+        FinalizeResult::Applied { outcome: o, .. } => (
             "applied",
             match o {
                 FinalityOutcome::Settled(e) => json!({ "outcome": "settled", "ledger_entry": e }),

@@ -155,3 +155,25 @@ fn no_placeholder_namespace_anywhere() {
     walk(&PathBuf::from(format!("{root}/fixtures/payments")), &mut hits);
     assert!(hits.is_empty(), "placeholder namespace found in: {hits:?}");
 }
+
+/// Kernel-derived obligation ids (~75 chars) project a bounded EndToEndId + Ustrd marker and
+/// validate against the official XSDs with real xmllint.
+#[test]
+fn derived_long_obligation_id_messages_validate_against_official_xsd() {
+    use castle::payments::obligation::prepare_for_invoice;
+    let pain_xsd = xsd("pain.001.001.09.xsd", "urn:iso:std:iso:20022:tech:xsd:pain.001.001.09");
+    let pacs_xsd = xsd("pacs.008.001.08.xsd", "urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08");
+    let fx = Fixture::new("official-derived");
+    let eff =
+        prepare_for_invoice(PRINCIPAL, PAYER, PAYEE, "470000", Currency::USD, "invoice-payment", "INV-2026-0042", None).unwrap();
+    let a = fx.admit(eff, "nd").unwrap();
+    let full = a.effect().obligation_id().to_string();
+    assert!(full.chars().count() > 35);
+    let pain = pain001_customer_credit_transfer(&a, TS, "Acme Treasury", "Supplier Ltd", "CASTUS33", "SUPPGB2LXXX").unwrap();
+    let pacs = pacs008_fi_credit_transfer(&a, TS, "CASTUS33", "SUPPGB2LXXX", "CASTUS33", "SUPPGB2LXXX").unwrap();
+    let (ok, err) = validate(&pain_xsd, &pain, "derived-pain");
+    assert!(ok, "pain.001 derived-id invalid: {err}");
+    let (ok, err) = validate(&pacs_xsd, &pacs, "derived-pacs");
+    assert!(ok, "pacs.008 derived-id invalid: {err}");
+    assert_eq!(project_obligation_id_from_pain001(&pain).as_deref(), Some(full.as_str()));
+}

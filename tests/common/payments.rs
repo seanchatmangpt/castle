@@ -112,6 +112,7 @@ impl Fixture {
                 allowed_payees: BTreeSet::from([PAYEE.to_string(), PAYER.to_string()]),
                 per_effect_cap: [(Currency::USD, per_effect_cap)].into(),
                 epoch_cap: [(Currency::USD, epoch_cap)].into(),
+                ..Default::default()
             },
         );
         let rk = SigningKey::from_bytes(&[99; 32]);

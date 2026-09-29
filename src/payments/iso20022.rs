@@ -4,6 +4,8 @@
 //! A projection carries no authority: it cannot be turned back into an admission and
 //! never alters amount, parties, or currency. No clock, no maps, no floats.
 
+use crate::sa2a_security::encoding::sha256_tagged;
+
 use super::admission::PaymentAdmission;
 use super::refusal::{refuse, PayResult};
 
@@ -30,6 +32,26 @@ pub const fn message_profile_version() -> &'static str {
 /// Marker prefix of the `Ustrd` remittance line that carries the full effect digest
 /// (`InstrId` is Max35Text in the XSD and can only hold a digest prefix).
 const DIGEST_MARKER: &str = "castle:effect-digest=";
+
+/// Marker prefix of the `Ustrd` line carrying the FULL obligation id when it does not fit
+/// `EndToEndId` (Max35Text) and a bounded surrogate is projected instead.
+const OBLIGATION_MARKER: &str = "castle:obligation-id=";
+
+/// `EndToEndId` value plus the optional obligation-id `Ustrd` line. Ids of <=35 chars are
+/// projected unchanged; longer ids project as `OBL-` + 28 hex of the obligation-id digest and
+/// the full id rides in a `Ustrd` marker (Max140Text). If the marker cannot fit: refused typed.
+fn end_to_end(obligation_id: &str) -> PayResult<(String, Option<String>)> {
+    check_text(obligation_id)?;
+    if obligation_id.chars().count() <= 35 {
+        return Ok((obligation_id.to_string(), None));
+    }
+    let marker = format!("{OBLIGATION_MARKER}{obligation_id}");
+    if marker.chars().count() > 140 {
+        return invalid();
+    }
+    let d = sha256_tagged(b"CASTLE-ISO-E2E-V1", obligation_id.as_bytes());
+    Ok((format!("OBL-{}", id_prefix(&d, 28)), Some(marker)))
+}
 
 fn check_max(s: &str, max: usize) -> PayResult<()> {
     check_text(s)?;
@@ -136,7 +158,7 @@ pub fn pain001_customer_credit_transfer(
     let e = admission.effect();
     check_max(e.payer(), 34)?;
     check_max(e.payee(), 34)?;
-    check_max(e.obligation_id(), 35)?;
+    let (e2e, obl_marker) = end_to_end(e.obligation_id())?;
     check_max(e.purpose(), 140)?;
 
     let digest = e.digest();
@@ -174,7 +196,7 @@ pub fn pain001_customer_credit_transfer(
     x.push_str("      <CdtTrfTxInf>\n");
     x.push_str("        <PmtId>\n");
     x.push_str(&format!("          <InstrId>{}</InstrId>\n", esc(&instr_id)));
-    x.push_str(&format!("          <EndToEndId>{}</EndToEndId>\n", esc(e.obligation_id())));
+    x.push_str(&format!("          <EndToEndId>{}</EndToEndId>\n", esc(&e2e)));
     x.push_str("        </PmtId>\n");
     x.push_str(&format!("        <Amt><InstdAmt Ccy=\"{ccy}\">{amt}</InstdAmt></Amt>\n"));
     x.push_str(&format!(
@@ -185,8 +207,9 @@ pub fn pain001_customer_credit_transfer(
         "        <CdtrAcct><Id><Othr><Id>{}</Id></Othr></Id></CdtrAcct>\n",
         esc(e.payee())
     ));
+    let obl_line = obl_marker.map(|m| format!("<Ustrd>{}</Ustrd>", esc(&m))).unwrap_or_default();
     x.push_str(&format!(
-        "        <RmtInf><Ustrd>{}</Ustrd><Ustrd>{DIGEST_MARKER}{}</Ustrd></RmtInf>\n",
+        "        <RmtInf><Ustrd>{}</Ustrd><Ustrd>{DIGEST_MARKER}{}</Ustrd>{obl_line}</RmtInf>\n",
         esc(e.purpose()),
         esc(digest)
     ));
@@ -214,7 +237,7 @@ pub fn pacs008_fi_credit_transfer(
     let e = admission.effect();
     check_max(e.payer(), 34)?;
     check_max(e.payee(), 34)?;
-    check_max(e.obligation_id(), 35)?;
+    let (e2e, obl_marker) = end_to_end(e.obligation_id())?;
 
     let digest = e.digest();
     let money = e.money();
@@ -237,7 +260,7 @@ pub fn pacs008_fi_credit_transfer(
     x.push_str("    <CdtTrfTxInf>\n");
     x.push_str("      <PmtId>\n");
     x.push_str(&format!("        <InstrId>{}</InstrId>\n", esc(&instr_id)));
-    x.push_str(&format!("        <EndToEndId>{}</EndToEndId>\n", esc(e.obligation_id())));
+    x.push_str(&format!("        <EndToEndId>{}</EndToEndId>\n", esc(&e2e)));
     x.push_str(&format!("        <TxId>{}</TxId>\n", esc(tx_id)));
     x.push_str("      </PmtId>\n");
     x.push_str(&format!("      <IntrBkSttlmAmt Ccy=\"{ccy}\">{amt}</IntrBkSttlmAmt>\n"));
@@ -264,8 +287,9 @@ pub fn pacs008_fi_credit_transfer(
         "      <CdtrAcct><Id><Othr><Id>{}</Id></Othr></Id></CdtrAcct>\n",
         esc(e.payee())
     ));
+    let obl_line = obl_marker.map(|m| format!("<Ustrd>{}</Ustrd>", esc(&m))).unwrap_or_default();
     x.push_str(&format!(
-        "      <RmtInf><Ustrd>{DIGEST_MARKER}{}</Ustrd></RmtInf>\n",
+        "      <RmtInf><Ustrd>{DIGEST_MARKER}{}</Ustrd>{obl_line}</RmtInf>\n",
         esc(digest)
     ));
     x.push_str("    </CdtTrfTxInf>\n");
@@ -282,4 +306,23 @@ pub fn project_effect_digest_from_pain001(xml: &str) -> Option<String> {
     let start = xml.find(&open)? + open.len();
     let end = xml[start..].find("</Ustrd>")? + start;
     Some(xml[start..end].to_string())
+}
+
+fn unesc(s: &str) -> String {
+    s.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&amp;", "&")
+}
+
+/// Recover the full obligation id from a projection: the `Ustrd` marker when a surrogate
+/// `EndToEndId` was projected, otherwise the `EndToEndId` value itself.
+#[must_use]
+pub fn project_obligation_id_from_pain001(xml: &str) -> Option<String> {
+    let open = format!("<Ustrd>{OBLIGATION_MARKER}");
+    if let Some(i) = xml.find(&open) {
+        let start = i + open.len();
+        let end = xml[start..].find("</Ustrd>")? + start;
+        return Some(unesc(&xml[start..end]));
+    }
+    let start = xml.find("<EndToEndId>")? + "<EndToEndId>".len();
+    let end = xml[start..].find("</EndToEndId>")? + start;
+    Some(unesc(&xml[start..end]))
 }

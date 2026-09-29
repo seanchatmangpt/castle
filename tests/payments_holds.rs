@@ -1,6 +1,11 @@
 mod common;
 use common::payments::*;
 
+#[path = "common/scripted_rail.rs"]
+mod scripted_rail;
+use scripted_rail::*;
+
+use castle::payments::execute_rail::finalize_via_rail;
 use castle::payments::ledger::LedgerHold;
 use castle::payments::*;
 
@@ -56,14 +61,7 @@ fn release_frees_funds_and_allows_a_fresh_hold() {
     assert_eq!(fx.ledger.available(PAYER, Currency::USD).unwrap(), 100_000);
 
     let digest = a.effect().digest().to_string();
-    let ev = castle::payments::settlement::FinalityEvidence {
-        effect_digest: digest.clone(),
-        correlation_id: "c-1".into(),
-        evidence_digest: "ev-rej".into(),
-        kind: castle::payments::settlement::FinalityKind::Rejected,
-        reason: "AC04".into(),
-    };
-    castle::payments::settlement::apply_finality(&fx.claims, &fx.ledger, &ev).unwrap();
+    finalize_via_rail(&digest, &fx.claims, &fx.ledger, &ScriptedRail::new(vec![rejected()])).unwrap();
     assert_eq!(fx.ledger.available(PAYER, Currency::USD).unwrap(), 500_000);
     assert_eq!(fx.ledger.hold_of(&digest).unwrap(), None);
 
@@ -116,4 +114,48 @@ fn concurrent_holds_over_separate_handles_never_overdraw() {
     assert!(results.iter().filter(|r| r.is_err()).all(|r| *r == Err(LedgerError::InsufficientFunds)));
     assert_eq!(fx.ledger.available(PAYER, Currency::USD).unwrap(), 100_000);
     assert_eq!(fx.ledger.balance(PAYER, Currency::USD).unwrap(), 1_000_000);
+}
+
+#[test]
+fn hold_that_would_overflow_the_payee_balance_is_refused_typed() {
+    // G6: a credit past u64::MAX would brick balance() for the payee.
+    let fx = Fixture::new("hold-overflow");
+    let big = FileJournalLedger::open(
+        fx.dir.join("ledger-max"),
+        &[(PAYER, Currency::USD, 1_000_000), (PAYEE, Currency::USD, u64::MAX)],
+    )
+    .unwrap();
+    let a = admit_submitted(&fx, "400000", "inv-ov", "n-ov");
+    let err = big.hold(&a, &fx.token_for(&a)).unwrap_err();
+    assert_eq!(err, LedgerError::Unavailable("CREDIT_OVERFLOW".into()));
+    assert_eq!(big.balance(PAYEE, Currency::USD).unwrap(), u64::MAX);
+    assert!(big.entries().unwrap().is_empty());
+}
+
+#[test]
+fn return_cannot_claw_back_funds_the_payee_holds_and_stays_retryable() {
+    // G5 at ledger level: settle_return refuses while the payee's available < amount.
+    let fx = Fixture::with("hold-return", 1_000_000, 500_000, 100_000_000);
+    let a = admit_submitted(&fx, "400000", "inv-A", "n-A");
+    let d = a.effect().digest().to_string();
+    fx.ledger.hold(&a, &fx.token_for(&a)).unwrap();
+    let rail = ScriptedRail::new(vec![settled(), returned()]);
+    finalize_via_rail(&d, &fx.claims, &fx.ledger, &rail).unwrap(); // payee owns 400k
+    // Payee reserves its whole balance for its own outbound payment.
+    let eff_b = PaymentEffect::prepare(PRINCIPAL, PAYEE, PAYER, "400000", Currency::USD, "inv-B", "invoice-payment", None).unwrap();
+    let b = fx.admit(eff_b, "n-B").unwrap();
+    fx.ledger.hold(&b, &fx.token_for(&b)).unwrap();
+    assert_eq!(fx.ledger.available(PAYEE, Currency::USD).unwrap(), 0);
+
+    let err = finalize_via_rail(&d, &fx.claims, &fx.ledger, &rail).unwrap_err();
+    assert_eq!(err, "REFUSED:PAYMENT_INSUFFICIENT_FUNDS", "{err}");
+    assert_eq!(fx.claims.get(&d).unwrap().unwrap().state, ClaimState::Final, "claim stays Final");
+    assert!(fx.ledger.returns().unwrap().is_empty());
+    assert_eq!(fx.ledger.balance(PAYEE, Currency::USD).unwrap(), 400_000);
+
+    // Retryable: once the hold is gone the same return converges.
+    finalize_via_rail(b.effect().digest(), &fx.claims, &fx.ledger, &ScriptedRail::new(vec![rejected()])).unwrap();
+    finalize_via_rail(&d, &fx.claims, &fx.ledger, &rail).unwrap();
+    assert_eq!(fx.claims.get(&d).unwrap().unwrap().state, ClaimState::Returned);
+    assert_eq!(fx.ledger.returns().unwrap().len(), 1);
 }

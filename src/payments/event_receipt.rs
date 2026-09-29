@@ -97,6 +97,10 @@ pub fn explain(receipt: &EventReceipt) -> Value {
             i.settled_at_ms.map(|t| json!({ "settled_at_ms": t, "finality_evidence_digest": i.finality_evidence_digest })),
             "no settled_at_ms: finality not observed",
         ),
+        "effect": field(
+            i.pee_effect_id.as_ref().map(|id| json!({ "pee_effect_id": id })),
+            "no pee_effect_id: event was not bound to a sealed PreparedEconomicEffect",
+        ),
         "what_happened": { "claim_state": i.claim_state, "ledger_entry_digest": i.ledger_entry_digest },
     })
 }

@@ -109,6 +109,14 @@ impl PreparedEconomicEffect {
 
     pub fn seal(admission: &PaymentAdmission, b: &EffectBindings) -> PayResult<Self> {
         b.check_complete()?;
+        // A screened admission fixes the screening outcome: the bindings must carry exactly it.
+        if let Some(sc) = admission.screening() {
+            if b.law_state_digest != sc.compliance_bundle_digest
+                || b.counterparty_evidence_digest != sc.counterparty_evidence_digest
+            {
+                return refuse(PEE_BINDING_INCOMPLETE);
+            }
+        }
         let e = admission.effect();
         let r = admission.verification();
         let mut pee = Self {
@@ -146,6 +154,10 @@ impl PreparedEconomicEffect {
 
     /// Recompute `effect_id`, `idempotency_key` and the payload digest in place
     /// (used after a deliberate field change; the result is a *different* effect).
+    ///
+    /// WARNING: test/tooling hook. A resealed effect is self-consistent, so `verify_identity`
+    /// passes; only `verify_against(admission)` detects a substituted field.
+    #[doc(hidden)]
     pub fn reseal_identity(&mut self) -> PayResult<()> {
         let bytes = self.identity_bytes()?;
         self.effect_id = sha256_tagged(PEE_DOMAIN, &bytes);
@@ -162,6 +174,36 @@ impl PreparedEconomicEffect {
             || self.canonical_payload_digest != sha256_tagged(b"", &bytes)
         {
             return refuse(PEE_IDENTITY_MISMATCH);
+        }
+        Ok(())
+    }
+
+    /// Bind this effect to the admission it claims to come from: identity is self-consistent AND
+    /// payer, beneficiary, amount, currency, purpose, obligation, principal, nonce and authority
+    /// equal what the admission authorized. A resealed effect with a substituted field is refused.
+    pub fn verify_against(&self, admission: &PaymentAdmission) -> PayResult<()> {
+        self.verify_identity()?;
+        let e = admission.effect();
+        let r = admission.verification();
+        let ok = self.payer_account == e.payer()
+            && self.beneficiary_account == e.payee()
+            && self.amount_minor == e.money().minor.to_string()
+            && self.currency == e.money().currency
+            && self.purpose == e.purpose()
+            && self.obligation_id == e.obligation_id()
+            && self.principal_id == e.principal()
+            && self.nonce == admission.nonce()
+            && self.authority_grant_id == format!("grant:{}#gen{}", r.audience, r.generation)
+            && self.authority_digest == authority_digest(admission);
+        if !ok {
+            return refuse(PEE_IDENTITY_MISMATCH);
+        }
+        if let Some(sc) = admission.screening() {
+            if self.law_state_digest != sc.compliance_bundle_digest
+                || self.counterparty_evidence_digest != sc.counterparty_evidence_digest
+            {
+                return refuse(PEE_IDENTITY_MISMATCH);
+            }
         }
         Ok(())
     }

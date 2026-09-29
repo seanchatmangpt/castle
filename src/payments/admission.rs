@@ -22,6 +22,7 @@ pub struct PaymentAdmission {
     receipt: VerificationReceipt,
     generation: u64,
     nonce: String,
+    screening: Option<ScreeningEvidence>,
     _seal: (),
 }
 
@@ -43,6 +44,11 @@ impl PaymentAdmission {
     pub fn nonce(&self) -> &str {
         &self.nonce
     }
+    /// Screening evidence; `Some` only when admitted via `admit_payment_screened`.
+    #[must_use]
+    pub const fn screening(&self) -> Option<&ScreeningEvidence> {
+        self.screening.as_ref()
+    }
 }
 
 pub struct AdmissionContext<'a> {
@@ -63,7 +69,7 @@ pub fn admit_payment(
     certificate: &ActuationCertificate,
     ctx: &AdmissionContext<'_>,
 ) -> PayResult<PaymentAdmission> {
-    admit_inner(prepared, certificate, ctx, false)
+    admit_inner(prepared, certificate, ctx, None)
 }
 
 /// Refusal when policy demands screening but the unscreened admission path was used.
@@ -102,7 +108,7 @@ pub fn admit_payment_screened(
         compliance_bundle_digest: bundle.bundle_digest,
         counterparty_evidence_digest: screening.counterparties.evidence_digest(payer, payee),
     };
-    let admission = admit_inner(prepared, certificate, ctx, true)?;
+    let admission = admit_inner(prepared, certificate, ctx, Some(evidence.clone()))?;
     Ok((admission, evidence))
 }
 
@@ -110,10 +116,10 @@ fn admit_inner(
     prepared: PreparedEffect,
     certificate: &ActuationCertificate,
     ctx: &AdmissionContext<'_>,
-    screened: bool,
+    screening: Option<ScreeningEvidence>,
 ) -> PayResult<PaymentAdmission> {
     let effect = PaymentEffect::from_prepared(prepared)?;
-    if ctx.policy.require_screening && !screened {
+    if ctx.policy.require_screening && screening.is_none() {
         return refuse(PAYMENT_SCREENING_REQUIRED);
     }
 
@@ -128,6 +134,8 @@ fn admit_inner(
         .map_err(|r| r.to_string())?;
 
     let policy = ctx.policy.check_static(&effect)?;
+    // Quorum floor comes from policy, never from the certificate; refused before the nonce burns.
+    policy.check_quorum(certificate.threshold)?;
 
     if ctx.policy.require_derived_obligation {
         let derived = effect.invoice_ref().map(|inv| {
@@ -169,7 +177,7 @@ fn admit_inner(
     };
     ctx.claims.reserve(&claim, epoch_cap)?;
 
-    Ok(PaymentAdmission { effect, receipt, generation: certificate.generation, nonce: certificate.nonce.clone(), _seal: () })
+    Ok(PaymentAdmission { effect, receipt, generation: certificate.generation, nonce: certificate.nonce.clone(), screening, _seal: () })
 }
 
 fn check_reversal(effect: &PaymentEffect, original: &str, claims: &ClaimStore) -> PayResult<()> {

@@ -161,6 +161,10 @@ impl SimRail {
 }
 
 impl RailActuator for SimRail {
+    fn absence_is_authoritative(&self) -> bool {
+        true
+    }
+
     fn submit(&self, i: &RailInstruction) -> Result<RailAck, RailError> {
         let mode = self.mode().map_err(unavailable)?;
         if mode == SimMode::Down {

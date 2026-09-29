@@ -3,7 +3,10 @@ use common::payments::*;
 
 use castle::payments::execute_rail::*;
 use castle::payments::rail::{RailActuator, RailInstruction};
-use castle::payments::settlement::{apply_finality, FinalityEvidence, FinalityKind, EVIDENCE_CONFLICT};
+#[path = "common/scripted_rail.rs"]
+mod scripted_rail;
+
+use castle::payments::settlement::EVIDENCE_CONFLICT;
 use castle::payments::*;
 
 fn bindings(expires_at_ms: u64) -> EffectBindings {
@@ -90,7 +93,7 @@ async fn honest_submit_holds_only_and_finality_alone_writes_the_ledger() {
     assert_eq!(finalize(&fx, &rail, &d), FinalizeResult::Pending);
     assert!(fx.ledger.entries().unwrap().is_empty());
 
-    let FinalizeResult::Applied(FinalityOutcome::Settled(entry)) = finalize(&fx, &rail, &d) else {
+    let FinalizeResult::Applied { outcome: FinalityOutcome::Settled(entry), .. } = finalize(&fx, &rail, &d) else {
         panic!("expected settled after finality");
     };
     assert_eq!((entry.amount_minor, entry.debit_account.as_str(), entry.credit_account.as_str()), (400_000, PAYER, PAYEE));
@@ -119,7 +122,7 @@ async fn court1_dropped_ack_is_unknown_never_resubmitted_and_settles_once() {
     assert_eq!(again.unwrap_err(), "REFUSED:PAYMENT_OUTCOME_UNKNOWN");
     assert_eq!(rail.submissions_seen(&s.correlation_id), 1);
 
-    let FinalizeResult::Applied(FinalityOutcome::Settled(_)) = poll_terminal(&fx, &rail, &d) else {
+    let FinalizeResult::Applied { outcome: FinalityOutcome::Settled(_), .. } = poll_terminal(&fx, &rail, &d) else {
         panic!("status poll must resolve to Final");
     };
     assert_eq!(claim_state(&fx, &d), ClaimState::Final);
@@ -139,7 +142,7 @@ async fn rail_rejection_releases_hold_and_funds_are_reusable() {
     assert_eq!(fx.ledger.available(PAYER, Currency::USD).unwrap(), 100_000);
 
     assert_eq!(finalize(&fx, &rail, &d), FinalizeResult::Pending);
-    assert_eq!(finalize(&fx, &rail, &d), FinalizeResult::Applied(FinalityOutcome::Released));
+    assert!(matches!(finalize(&fx, &rail, &d), FinalizeResult::Applied { outcome: FinalityOutcome::Released, .. }));
     assert!(fx.ledger.hold_of(&d).unwrap().is_none());
     assert_eq!(claim_state(&fx, &d), ClaimState::Refused);
     assert_eq!(fx.ledger.available(PAYER, Currency::USD).unwrap(), 500_000);
@@ -182,13 +185,13 @@ async fn return_after_final_posts_the_inverse_entry() {
     let s = submit(&fx, &rail, "250000", "inv-1", "n-1").await;
     let d = s.effect_id.clone();
 
-    let FinalizeResult::Applied(FinalityOutcome::Settled(_)) = poll_terminal(&fx, &rail, &d) else {
+    let FinalizeResult::Applied { outcome: FinalityOutcome::Settled(_), .. } = poll_terminal(&fx, &rail, &d) else {
         panic!("expected Final first");
     };
     assert_eq!(claim_state(&fx, &d), ClaimState::Final);
     assert_eq!(fx.ledger.balance(PAYEE, Currency::USD).unwrap(), 250_000);
 
-    let FinalizeResult::Applied(FinalityOutcome::Returned(_)) = finalize(&fx, &rail, &d) else {
+    let FinalizeResult::Applied { outcome: FinalityOutcome::Returned(_), .. } = finalize(&fx, &rail, &d) else {
         panic!("expected Returned");
     };
     assert_eq!(claim_state(&fx, &d), ClaimState::Returned);
@@ -211,22 +214,16 @@ async fn duplicate_and_reordered_reports_change_nothing() {
     let d = s.effect_id.clone();
 
     assert_eq!(finalize(&fx, &rail, &d), FinalizeResult::Pending);
-    let FinalizeResult::Applied(FinalityOutcome::Settled(_)) = finalize(&fx, &rail, &d) else { panic!("settled") };
+    let FinalizeResult::Applied { outcome: FinalityOutcome::Settled(_), .. } = finalize(&fx, &rail, &d) else { panic!("settled") };
     for _ in 0..4 {
-        assert_eq!(finalize(&fx, &rail, &d), FinalizeResult::Applied(FinalityOutcome::AlreadyFinal));
+        assert!(matches!(finalize(&fx, &rail, &d), FinalizeResult::Applied { outcome: FinalityOutcome::AlreadyFinal, .. }));
     }
     assert_eq!(fx.ledger.entries().unwrap().len(), 1);
     assert_eq!(rail.settlement_count(&s.correlation_id), 1);
 
     // A reordered late rejection cannot undo observed finality.
-    let late = FinalityEvidence {
-        effect_digest: d.clone(),
-        correlation_id: s.correlation_id.clone(),
-        evidence_digest: "late-reject".into(),
-        kind: FinalityKind::Rejected,
-        reason: "LATE".into(),
-    };
-    assert_eq!(apply_finality(&fx.claims, &fx.ledger, &late).unwrap_err(), EVIDENCE_CONFLICT);
+    let late_rail = scripted_rail::ScriptedRail::new(vec![scripted_rail::rejected()]);
+    assert_eq!(finalize_via_rail(&d, &fx.claims, &fx.ledger, &late_rail).unwrap_err(), EVIDENCE_CONFLICT);
     assert_eq!(claim_state(&fx, &d), ClaimState::Final);
     assert_eq!(fx.ledger.entries().unwrap().len(), 1);
     assert_eq!(fx.ledger.balance(PAYEE, Currency::USD).unwrap(), 100_000);
