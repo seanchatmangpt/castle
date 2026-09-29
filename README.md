@@ -177,3 +177,20 @@ castle inventory goals
 Every subcommand accepts `--format json|json-pretty|yaml|table|plain|tsv|quiet` (provided by
 `clap-noun-verb` itself). `tests/cli_fortune5.rs` and `tests/cli_replay_impact_inventory.rs`
 exercise the real compiled binary as a subprocess — no mocking of the CLI layer.
+
+
+## v26.9.28 ecosystem interoperability
+
+The September 28 fleet review is bound in `configs/ecosystem-v26.9.28.json` and the complete 64-PR ledger is in `docs/REVIEW_2026-09-28.md`. The selected semantic source is the immutable `ggen-marketplace@v26.9.29` CASTLE pack; exact release/merge SHAs are part of the manifest rather than inferred from version labels.
+
+`src/v26_9_28` adds admission courts for the capabilities that became available across the fleet during the review window:
+
+- exact-SHA, exact-subject, resource-bounded external evidence;
+- multi-runtime portable-WASM agreement;
+- independent plan verification so a planner cannot grade itself;
+- FOND/TLA+ differential agreement with counterexample refusal;
+- edge-local provider recovery that excludes failed edges without converting recovery into authority.
+
+These integrations are upstream evidence and compute surfaces only. GraphLaw, Affidavit, wasm4pm, DSPy-WASM, AutoFDE-Lab, AshA2A, AshPPlan, Ferroplan, Beam4PM, AshR2RML, XaaS, ggen, and ggen-marketplace do not receive ambient CASTLE actuation authority. `CONSTRUCT != DO` remains unchanged: consequential execution still requires CASTLE's existing opaque `ConstructAdmission -> BRCE -> DO -> OCEL/receipt` path.
+
+The released marketplace pack also contains generator rules for `security_sources_generated.rs`, `security_tools_generated.rs`, and `security_core_generated.rs`. Those outputs are intentionally **not handwritten in this PR**. They remain generator-owned consequences and should be materialized by the released ggen toolchain when the native manufacture lane is available.
