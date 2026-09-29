@@ -278,7 +278,7 @@ pub fn qualify_v26_9_28_upgrade(manifest: &EcosystemManifest) -> UpgradeQualific
     let present: BTreeSet<&str> = manifest.subjects.iter().map(|s| s.id.as_str()).collect();
     let missing: Vec<String> = REQUIRED
         .iter()
-        .filter(|id| !present.contains(**id))
+        .filter(|id| !present.contains(*id))
         .map(|id| (*id).to_string())
         .collect();
 
