@@ -1,0 +1,19 @@
+PREFIX castle: <https://chatmangpt.com/ontology/castle#>
+PREFIX dcterms: <http://purl.org/dc/terms/>
+
+SELECT ?id ?constName ?castleTerm ?fiboIri ?fiboKind ?matchKind ?status ?fiboModule ?versionIri ?corpusFile ?corpusSha256
+WHERE {
+  ?m a castle:FiboMapping ;
+    dcterms:identifier ?id ;
+    castle:constName ?constName ;
+    castle:castleTerm ?castleTerm ;
+    castle:fiboIri ?fiboIri ;
+    castle:fiboKind ?fiboKind ;
+    castle:matchKind ?matchKind ;
+    castle:status ?status ;
+    castle:fiboModule ?fiboModule ;
+    castle:versionIri ?versionIri ;
+    castle:corpusFile ?corpusFile ;
+    castle:corpusSha256 ?corpusSha256 .
+}
+ORDER BY ?id

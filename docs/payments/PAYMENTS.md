@@ -130,6 +130,34 @@ array of `{account, currency, amount_minor}`. `--state-dir` holds `claims/`, `no
 - `--receipt-seed-hex` is a command-line argument and is visible to process listings; a
   key-file or KMS input is not implemented.
 
+## FIBO alignment
+
+Payments vocabulary aligns to the Financial Industry Business Ontology (FIBO) as a
+projection, never as authority.
+
+- Source: `ontology/payments-fibo/payments-fibo.ttl` (RDF). Generated table:
+  `ontology/payments-fibo/generated/fibo_generated.rs`, produced by
+  `cd ontology/payments-fibo && ggen sync run`. Do not hand-edit generated output.
+- Hand-written API: `castle::payments::fibo` (`currency_iri`, `monetary_amount_json`,
+  `claim_type_iri`, `claim_jsonld`, `mapping_for`, `unverified_terms`).
+- Mapped terms: `MonetaryAmount`, `Currency`, `hasAmount`, `hasCurrency`, ISO 4217
+  individuals (USD, EUR, GBP, JPY, KWD), `Payment`, `PaymentObligation`, `Payer`,
+  `Payee`, `hasPaymentAmount`, `Settlement`, `LegalEntityIdentifier`.
+- Typing rule: only a settled (`Executed`) claim projects as FIBO `Payment`; reserved,
+  refused and unknown-outcome claims stay `castle:PaymentEffect`.
+- Amounts: `hasAmount` is a decimal string using the currency exponent; minor units
+  are carried in `castle:minorUnits`. No floats.
+- Pinning: each row records the corpus file sha256 and that module's own
+  `owl:versionIRI`. The corpus modules carry different release versionIRIs, so no
+  single FIBO release tag is claimed. Corpus:
+  `ggen-marketplace/ontologies/public/fibo` (override `CASTLE_FIBO_CORPUS`).
+- Court: `tests/payments_fibo.rs` fails if a verified IRI is not declared in the
+  corpus, if the corpus file drifts from its pinned sha256, or if the generated table
+  is stale against the RDF source.
+- Not in FIBO, kept in the `castle:` namespace: reversal, finality, sanctions, sealed
+  admission, `CONSTRUCT != DO`. `Settlement` and `LegalEntityIdentifier` are mapped in
+  the table but not yet projected (finality and counterparty gaps remain open).
+
 ## See Also
 
 - `README.md` (DfCM CONSTRUCT origin law)

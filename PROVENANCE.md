@@ -10,3 +10,7 @@ CASTLE separates semantic authority from consumer consequences.
 The marketplace ontology owns the generated component inventory, authority boundaries, and default prohibited-goal priorities. The runtime must not silently redefine those facts.
 
 A BLAKE3 digest establishes content identity, not producer identity by itself. CASTLE receipts therefore require both a BLAKE3-256 digest provider and an origin signer. Epistemic class (`CONSTRUCTED`, `COUNTERFACTUAL`, `REPLAYED`, `OBSERVED`, `INFERRED`) remains explicit so constructed OCEL histories cannot be confused with observed history.
+
+- FIBO alignment: `ontology/payments-fibo/payments-fibo.ttl` generates
+  `ontology/payments-fibo/generated/fibo_generated.rs` via `ggen sync run` (ggen 26.9.28);
+  corpus pinned per file by sha256 from `ggen-marketplace/ontologies/public/fibo`.

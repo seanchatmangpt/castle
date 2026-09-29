@@ -13,6 +13,7 @@ pub mod dirlock;
 pub mod effect;
 pub mod execute;
 pub mod experience;
+pub mod fibo;
 pub mod iso20022;
 pub mod ledger;
 pub mod money;

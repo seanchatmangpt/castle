@@ -1,0 +1,25 @@
+[project]
+name = "castle-payments-fibo"
+version = "26.9.29"
+description = "CASTLE payments to FIBO alignment: ontology-first source for generated/fibo_generated.rs"
+authors = ["Sean Chatman"]
+license = "AGPL-3.0"
+
+[ontology]
+source = "payments-fibo.ttl"
+base_iri = "https://chatmangpt.com/ontology/castle#"
+
+[ontology.prefixes]
+castle = "https://chatmangpt.com/ontology/castle#"
+dcterms = "http://purl.org/dc/terms/"
+
+[generation]
+output_dir = "."
+
+[[generation.rules]]
+name = "castle-payments-fibo"
+query = { file = "queries/payments-fibo.rq" }
+template = { file = "templates/payments_fibo_generated.rs.tmpl" }
+output_file = "generated/fibo_generated.rs"
+skip_empty = false
+mode = "Overwrite"
