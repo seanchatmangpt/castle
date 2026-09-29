@@ -6,6 +6,7 @@ pub mod fortune5_generated;
 pub mod generated;
 pub mod reconstitution;
 pub mod v26_8_18;
+pub mod v26_9_28;
 
 pub use castle::*;
 pub use generated::{
