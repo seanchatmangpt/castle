@@ -335,3 +335,24 @@ fn sa2a_portable_envelope_refuses_subject_or_authority_drift() {
         EvidenceStanding::Refused("REFUSED:SA2A_AUTHORITY_ESCALATION".to_string())
     );
 }
+
+
+#[test]
+fn source_witness_kind_is_typed() {
+    let manifest = ecosystem_manifest().unwrap();
+    let source = manifest.subjects.iter().find(|s| s.id == "graphlaw-v26.9.28").unwrap();
+    let witness = ExternalWitness {
+        source_id: source.id.clone(),
+        source_sha: source.sha.clone(),
+        subject: "subject:payments".to_string(),
+        kind: WitnessKind::ModelCompute,
+        input_digest: digest('a'),
+        output_digest: digest('b'),
+        direct_do_authority: false,
+        limits: WitnessLimits { max_steps: 1, max_bytes: 1024, deadline_ms: 1000 },
+    };
+    assert_eq!(
+        admit_external_witness(&manifest, &witness),
+        EvidenceStanding::Refused("REFUSED:SOURCE_WITNESS_KIND_MISMATCH".to_string())
+    );
+}
