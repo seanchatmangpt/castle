@@ -8,6 +8,7 @@ pub mod generated;
 pub mod gymact_container;
 pub mod planner_minimal;
 pub mod reconstitution;
+pub mod payments;
 pub mod refusal_conformance;
 pub mod security_universe;
 pub mod sa2a_security;
