@@ -6,5 +6,7 @@
 //! keep the existing release-line handler file bounded.
 
 pub mod dfcm_handlers;
+pub mod evidence_handlers;
+pub mod evidence_routes;
 pub mod handlers;
 pub mod routes;
