@@ -35,6 +35,7 @@ pub struct SourceSubject {
     pub pr: Option<u64>,
     pub role: String,
     pub authority_ceiling: String,
+    pub allowed_witness_kinds: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -93,6 +94,21 @@ pub enum WitnessKind {
     ModelCompute,
 }
 
+impl WitnessKind {
+    #[must_use]
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::Semantic => "semantic",
+            Self::Receipt => "receipt",
+            Self::Process => "process",
+            Self::Planner => "planner",
+            Self::Recovery => "recovery",
+            Self::Federation => "federation",
+            Self::ModelCompute => "model_compute",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 pub struct WitnessLimits {
     pub max_steps: u64,
@@ -135,6 +151,13 @@ pub fn admit_external_witness(
 
     if source.sha != witness.source_sha || !lowercase_hex(&witness.source_sha, 40) {
         return EvidenceStanding::Refused("REFUSED:SOURCE_SUBJECT_DRIFT".to_string());
+    }
+    if !source
+        .allowed_witness_kinds
+        .iter()
+        .any(|kind| kind == witness.kind.id())
+    {
+        return EvidenceStanding::Refused("REFUSED:SOURCE_WITNESS_KIND_MISMATCH".to_string());
     }
     if witness.subject.trim().is_empty() {
         return EvidenceStanding::Refused("REFUSED:EMPTY_EXACT_SUBJECT".to_string());
