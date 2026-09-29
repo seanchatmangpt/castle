@@ -21,7 +21,10 @@
       "reference": "v26.9.29",
       "sha": "637b561cc6384fc9ac0e4282d048cc7624256258",
       "role": "semantic-authority",
-      "authority_ceiling": "NO_DO"
+      "authority_ceiling": "NO_DO",
+      "allowed_witness_kinds": [
+        "semantic"
+      ]
     },
     {
       "id": "ggen-marketplace-v26.9.28",
@@ -30,7 +33,10 @@
       "reference": "v26.9.28",
       "sha": "d94fb4b6fa7345f988a758e3e63ab1ae669e3885",
       "role": "prior-marketplace-release",
-      "authority_ceiling": "NO_DO"
+      "authority_ceiling": "NO_DO",
+      "allowed_witness_kinds": [
+        "semantic"
+      ]
     },
     {
       "id": "graphlaw-v26.9.28",
@@ -40,7 +46,11 @@
       "sha": "74c039f258d3e2941be4e29e4715d400bbd774fe",
       "pr": 10,
       "role": "semantic-court-and-wasi",
-      "authority_ceiling": "COMPUTE_ONLY"
+      "authority_ceiling": "COMPUTE_ONLY",
+      "allowed_witness_kinds": [
+        "semantic",
+        "process"
+      ]
     },
     {
       "id": "ggen-v26.9.28",
@@ -50,7 +60,11 @@
       "sha": "ff96f04e8c7b851e5cca53f3faf5ce1d5f43ce6e",
       "pr": 779,
       "role": "generator",
-      "authority_ceiling": "CONSTRUCT_ONLY"
+      "authority_ceiling": "CONSTRUCT_ONLY",
+      "allowed_witness_kinds": [
+        "semantic",
+        "process"
+      ]
     },
     {
       "id": "ash-r2rml-v26.9.28",
@@ -60,7 +74,10 @@
       "sha": "40d181fffdefbb65ee4a83486eae86534690c4d5",
       "pr": 47,
       "role": "published-vkg-line",
-      "authority_ceiling": "EVIDENCE_ONLY"
+      "authority_ceiling": "EVIDENCE_ONLY",
+      "allowed_witness_kinds": [
+        "federation"
+      ]
     },
     {
       "id": "ash-r2rml-pr48",
@@ -70,7 +87,10 @@
       "sha": "d4971a40c89820f412d5309a9057fbf17275ec76",
       "pr": 48,
       "role": "observe-only-exact-source-vkg",
-      "authority_ceiling": "EVIDENCE_ONLY"
+      "authority_ceiling": "EVIDENCE_ONLY",
+      "allowed_witness_kinds": [
+        "federation"
+      ]
     },
     {
       "id": "affidavit-pr89",
@@ -80,7 +100,10 @@
       "sha": "7eaf86b796fccec4fe1c1c1c81d221501401a24d",
       "pr": 89,
       "role": "receipt-verifier-wasi",
-      "authority_ceiling": "EVIDENCE_ONLY"
+      "authority_ceiling": "EVIDENCE_ONLY",
+      "allowed_witness_kinds": [
+        "receipt"
+      ]
     },
     {
       "id": "wasm4pm-pr646",
@@ -90,7 +113,10 @@
       "sha": "2ec870ef6f2411beab238f56859c3ca438455c1c",
       "pr": 646,
       "role": "portable-process-court-and-allocation-authority-ceiling",
-      "authority_ceiling": "COMPUTE_ONLY"
+      "authority_ceiling": "COMPUTE_ONLY",
+      "allowed_witness_kinds": [
+        "process"
+      ]
     },
     {
       "id": "dspy-wasm-pr8",
@@ -100,7 +126,10 @@
       "sha": "336482ce19464a3a752936f9c866ff6fea2780d3",
       "pr": 8,
       "role": "bounded-model-compute",
-      "authority_ceiling": "ADVICE_ONLY"
+      "authority_ceiling": "ADVICE_ONLY",
+      "allowed_witness_kinds": [
+        "model_compute"
+      ]
     },
     {
       "id": "autofde-lab-pr207",
@@ -110,7 +139,10 @@
       "sha": "d42a5af94481a3128bf3e35d5f2a0a9a70f22e41",
       "pr": 207,
       "role": "independent-plan-verification",
-      "authority_ceiling": "SELECT_ONLY"
+      "authority_ceiling": "SELECT_ONLY",
+      "allowed_witness_kinds": [
+        "planner"
+      ]
     },
     {
       "id": "ash-pplan-pr15",
@@ -120,7 +152,10 @@
       "sha": "b9da1ad7590d70afac5eace3bd7ba1a644f7249f",
       "pr": 15,
       "role": "fond-planner-owner-side-sa2a-provider",
-      "authority_ceiling": "COMPUTE_ONLY"
+      "authority_ceiling": "COMPUTE_ONLY",
+      "allowed_witness_kinds": [
+        "planner"
+      ]
     },
     {
       "id": "ash-a2a-pr60",
@@ -130,7 +165,10 @@
       "sha": "fee5257662b860dcfe41c055996152379053f8cc",
       "pr": 60,
       "role": "portable-consequence-replan-envelope",
-      "authority_ceiling": "EVIDENCE_ONLY"
+      "authority_ceiling": "EVIDENCE_ONLY",
+      "allowed_witness_kinds": [
+        "recovery"
+      ]
     },
     {
       "id": "gymact-pr154",
@@ -140,7 +178,10 @@
       "sha": "dac36298462de98b1fc7a8f1f7bb6ec6bca09b70",
       "pr": 154,
       "role": "portable-replan-envelope-consumer",
-      "authority_ceiling": "NO_CASTLE_DO"
+      "authority_ceiling": "NO_CASTLE_DO",
+      "allowed_witness_kinds": [
+        "recovery"
+      ]
     },
     {
       "id": "beam4pm-pr104",
@@ -150,7 +191,10 @@
       "sha": "34ce4a23d0c59edab2391f149413bc5fb1e375c3",
       "pr": 104,
       "role": "sa2a-owned-replanning-failover",
-      "authority_ceiling": "SELECT_ONLY"
+      "authority_ceiling": "SELECT_ONLY",
+      "allowed_witness_kinds": [
+        "recovery"
+      ]
     },
     {
       "id": "ferroplan-pr49",
@@ -160,7 +204,10 @@
       "sha": "f5300ee6935c3aa0fb8bb4da413e314bce9d7000",
       "pr": 49,
       "role": "multi-plan-provider-recovery",
-      "authority_ceiling": "SELECT_ONLY"
+      "authority_ceiling": "SELECT_ONLY",
+      "allowed_witness_kinds": [
+        "recovery"
+      ]
     },
     {
       "id": "xaas-pr98",
@@ -170,7 +217,10 @@
       "sha": "e9b42e22a5df1359181c1e07be88d49e1828cd0b",
       "pr": 98,
       "role": "sa2a-consequence-semantics-consumer",
-      "authority_ceiling": "NO_CASTLE_DO"
+      "authority_ceiling": "NO_CASTLE_DO",
+      "allowed_witness_kinds": [
+        "recovery"
+      ]
     },
     {
       "id": "xaas-pr95",
@@ -180,7 +230,11 @@
       "sha": "69ff991a960009da602b67c2c1290fb25b69a96a",
       "pr": 95,
       "role": "execution-closure-reference",
-      "authority_ceiling": "NO_CASTLE_DO"
+      "authority_ceiling": "NO_CASTLE_DO",
+      "allowed_witness_kinds": [
+        "process",
+        "recovery"
+      ]
     }
   ],
   "excluded_open_prs": [
