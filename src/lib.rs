@@ -1,5 +1,6 @@
 pub mod blake3;
 pub mod board;
+pub mod capability_intake;
 pub mod castle;
 pub mod fortune5;
 pub mod fortune5_generated;

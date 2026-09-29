@@ -1,0 +1,69 @@
+@prefix eco: <https://ggen.dev/ecosystem#> .
+@prefix c: <https://castle.dev/ontology/capability-intake#> .
+
+# Product-crown intake from the ggen-ecosystem CASTLE profile.
+# Source projection:
+# seanchatmangpt/ggen-ecosystem@50fdfa20c84205a80c6eb94e916cffbedc4b816e
+#
+# These sources are surfaces, consequence adapters, knowledge, or application
+# research. They do not become alternate runtime or consequence crowns.
+
+c:intake
+    a eco:CapabilityProjection ;
+    eco:projectionSource "seanchatmangpt/ggen-ecosystem@50fdfa20c84205a80c6eb94e916cffbedc4b816e" ;
+    eco:ownerRepository "seanchatmangpt/castle" ;
+    eco:ownerCapability "CONSEQUENTIAL_ADMISSIBILITY" ;
+    eco:projectionStanding "CANDIDATE" ;
+    eco:authorityCeiling "CONSTRUCT" ;
+    eco:forbidsCapability "RUNTIME_EXISTENCE" ;
+    eco:runtimeCore "seanchatmangpt/xaas" .
+
+c:ash-surface
+    a eco:ProjectedCapability ;
+    eco:sourceRepository "seanchatmangpt/ash_surface" ;
+    eco:sourceSha "c066a55f452f23b348df375c00aae7811f6f72be" ;
+    eco:capability "HUMAN_BOARD_SURFACE" ;
+    eco:disposition "WRAP" ;
+    eco:runtimePlacement "HUMAN_SURFACE" ;
+    eco:projectionTarget c:intake ;
+    eco:falsifier "UI state or presentation becomes board authority or canonical semantic truth." .
+
+c:zoela
+    a eco:ProjectedCapability ;
+    eco:sourceRepository "seanchatmangpt/zoela" ;
+    eco:sourceSha "cae4a862744380f6a78b962e3f345ede8bd860dd" ;
+    eco:capability "DOMAIN_APPLICATION_SURFACE" ;
+    eco:disposition "WRAP" ;
+    eco:runtimePlacement "DOMAIN_TENANT" ;
+    eco:projectionTarget c:intake ;
+    eco:falsifier "A domain application becomes universal CASTLE law or a runtime crown." .
+
+c:cargo-cicd
+    a eco:ProjectedCapability ;
+    eco:sourceRepository "seanchatmangpt/cargo-cicd" ;
+    eco:sourceSha "59214d6a1293d794b7a27095276047cdff73a9ec" ;
+    eco:capability "SOFTWARE_CONSEQUENCE_ADAPTER" ;
+    eco:disposition "WRAP" ;
+    eco:runtimePlacement "PROTECTED_CONSEQUENCE_ADAPTER" ;
+    eco:projectionTarget c:intake ;
+    eco:falsifier "CI/CD mutates protected software state without CASTLE BRCE admission." .
+
+c:chatman-ecosystem
+    a eco:ProjectedCapability ;
+    eco:sourceRepository "seanchatmangpt/chatman-ecosystem" ;
+    eco:sourceSha "92cb17cda899a8d85abdaa04db10a3d2334e116d" ;
+    eco:capability "STRATEGY_DOCTRINE_KNOWLEDGE" ;
+    eco:disposition "KEEP_KNOWLEDGE_PLANE" ;
+    eco:runtimePlacement "KNOWLEDGE_PLANE_ONLY" ;
+    eco:projectionTarget c:intake ;
+    eco:falsifier "Historical doctrine or strategy source becomes runtime authority merely by citation." .
+
+c:chatman-nano-stack
+    a eco:ProjectedCapability ;
+    eco:sourceRepository "seanchatmangpt/chatman-nano-stack" ;
+    eco:sourceSha "de7eb619310a522e44e9d6cf20e9460806b314ea" ;
+    eco:capability "APPLICATION_CONSTITUTION_RESEARCH" ;
+    eco:disposition "CANDIDATE_ABSORB" ;
+    eco:runtimePlacement "APPLICATION_RESEARCH_DONOR_ONLY" ;
+    eco:projectionTarget c:intake ;
+    eco:falsifier "A local application constitutional plane becomes an alternate CASTLE consequence crown." .
