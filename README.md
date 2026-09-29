@@ -1,6 +1,28 @@
 # CASTLE
 
-CASTLE is a continuously self-adversarial system for owned or explicitly authorized infrastructure. It derives vulnerability conditions backward from prohibited goals, CONSTRUCTs dependency compromise worlds, fans planning problems across a planner ensemble, compiles witnesses into POWL-style partial orders, executes admitted tests through a bounded GymAct interface, records OCEL v2 evidence, and binds artifacts to BLAKE3-256 receipts with origin signatures.
+CASTLE is a board-governed consequence and strategic-command system. A board defines the corporation's objectives, prohibited outcomes, delegated authority, nondelegable decisions, capital-at-risk bounds, escalation/withdrawal conditions, and evidence requirements; CASTLE lets the organization explore and replan broadly while keeping consequential commitment behind a separate admitted boundary.
+
+The implementation remains continuously self-adversarial for owned or explicitly authorized infrastructure: it derives vulnerability conditions backward from prohibited goals, CONSTRUCTs dependency compromise worlds, fans planning problems across a planner ensemble, compiles witnesses into POWL-style partial orders, executes admitted tests through a bounded GymAct interface, records OCEL v2 evidence, and binds artifacts to cryptographic receipts. The board-facing product contract is documented in `docs/WBPR_CASTLE_BOARD_V26_9_28.md`.
+
+## Board strategic command
+
+`src/strategic_command.rs` implements the non-actuating strategic layer introduced in v26.9.28. It reuses the Berthier campaign-compiler semantics developed in `chatman-ecosystem` PR #285 without importing that closed/unmerged branch as runtime authority.
+
+The board path is:
+
+    BoardConstitution
+      -> StrategyDoctrine
+      -> sealed StrategyPartition[]
+      -> CampaignCandidate[]
+      -> fail-closed campaign courts
+      -> explicit board SELECT
+      -> StrategicMandatePacket(actuation=NONE, authority_ceiling=CONSTRUCT)
+      -> BRCE
+      -> existing CASTLE DO boundary
+
+The strategy operator catalog carries provenance from the prior 33SW, Napoleon/Berthier, DfCM, and Fuller work. Operators are candidate state transformations only; they grant no authority. Global premise drift triggers strategic recompilation, local premise drift invalidates only dependent strategy partitions, and runtime divergence follows the smallest lawful recovery ladder: policy branch -> suffix reuse -> tail repair -> bounded replan -> hierarchy recompile -> strategic recompile.
+
+There is deliberately no optimizer-to-DO edge. A machine may construct, falsify, compare, and replan campaigns. Material campaign selection is represented as a separate board act, and even that selection emits only an inert mandate for the existing consequence boundary.
 
 ## Canonical flow
 
