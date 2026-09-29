@@ -869,6 +869,66 @@ pub fn admit_board_selection(
     Ok(packet)
 }
 
+/// Bind an exact board-selected strategic mandate into CASTLE's existing
+/// inert CONSTRUCT request. The mandate does not gain DO authority here; its
+/// digest becomes part of the config graph that the normal CASTLE construct
+/// receipt already hashes and signs.
+///
+/// The selection-authority digest is a reference to independently admitted
+/// board authority evidence. This layer binds that identity but does not
+/// implement key custody or signature verification; those remain external
+/// evidence/authority concerns and the existing BRCE gate still decides DO.
+pub fn bind_strategic_mandate_construct_request(
+    mut request: crate::castle::ConstructRequest,
+    mandate: &StrategicMandatePacket,
+) -> Result<crate::castle::ConstructRequest, String> {
+    if mandate.subject != request.subject {
+        return Err("REFUSED:STRATEGIC_MANDATE_SUBJECT_MISMATCH".to_string());
+    }
+    if mandate.authority_ceiling != STRATEGIC_AUTHORITY_CEILING
+        || mandate.actuation != STRATEGIC_ACTUATION
+        || mandate.successor_boundary != STRATEGIC_SUCCESSOR_BOUNDARY
+    {
+        return Err("REFUSED:STRATEGIC_MANDATE_AUTHORITY_DRIFT".to_string());
+    }
+    if !lowercase_hex_64(&mandate.constitution_digest)
+        || !lowercase_hex_64(&mandate.candidate_digest)
+        || !lowercase_hex_64(&mandate.selection_authority_digest)
+        || !lowercase_hex_64(&mandate.packet_digest)
+    {
+        return Err("REFUSED:INVALID_STRATEGIC_MANDATE_DIGEST".to_string());
+    }
+    if canonical_digest(&mandate.core_json())? != mandate.packet_digest {
+        return Err("REFUSED:STRATEGIC_MANDATE_CONTENT_MISMATCH".to_string());
+    }
+
+    let Value::Object(mut config) = request.config_graph else {
+        return Err("REFUSED:CONFIG_GRAPH_NOT_OBJECT".to_string());
+    };
+    if config.contains_key("_castle_board_mandate") {
+        return Err("REFUSED:STRATEGIC_MANDATE_ALREADY_BOUND".to_string());
+    }
+
+    config.insert(
+        "_castle_board_mandate".to_string(),
+        json!({
+            "mandate_id": mandate.mandate_id,
+            "constitution_digest": mandate.constitution_digest,
+            "candidate_id": mandate.candidate_id,
+            "candidate_digest": mandate.candidate_digest,
+            "selection_authority_digest": mandate.selection_authority_digest,
+            "selected_by": mandate.selected_by,
+            "selected_at": mandate.selected_at,
+            "packet_digest": mandate.packet_digest,
+            "authority_ceiling": mandate.authority_ceiling,
+            "actuation": mandate.actuation,
+            "successor_boundary": mandate.successor_boundary,
+        }),
+    );
+    request.config_graph = Value::Object(config);
+    Ok(request)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RecompileScope {
     None,
