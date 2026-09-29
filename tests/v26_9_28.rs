@@ -156,7 +156,7 @@ fn recovery_excludes_failed_edge_without_stopping_graph() {
     let routed = route_edge_local_recovery("subject:exact", &providers, &failed).unwrap();
     assert_eq!(routed.subject, "subject:exact");
     assert_eq!(routed.selected_provider, "p3");
-    assert_eq!(routed.excluded_failed_providers, vec!["p1", "p2"]);
+    assert_eq!(routed.excluded_failed_providers, vec!["p1".to_string(), "p2".to_string()]);
 
     let exhausted = BTreeSet::from(["p1".to_string(), "p2".to_string(), "p3".to_string()]);
     assert_eq!(
