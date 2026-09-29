@@ -626,6 +626,7 @@ impl StrategicStanding {
 pub struct CampaignVerdict {
     pub standing: StrategicStanding,
     pub candidate_id: String,
+    pub candidate_digest: String,
     pub refusals: Vec<String>,
 }
 
@@ -722,6 +723,14 @@ pub fn judge_campaign_candidate(
         }
     }
 
+    let candidate_digest = match candidate.candidate_digest() {
+        Ok(digest) => digest,
+        Err(reason) => {
+            refusals.push(reason);
+            String::new()
+        }
+    };
+
     refusals.sort();
     refusals.dedup();
     CampaignVerdict {
@@ -731,6 +740,7 @@ pub fn judge_campaign_candidate(
             StrategicStanding::Refused
         },
         candidate_id: candidate.candidate_id.clone(),
+        candidate_digest,
         refusals,
     }
 }
@@ -803,14 +813,30 @@ pub fn admit_board_selection(
     if request.selected_by.trim().is_empty() || request.selected_at.trim().is_empty() {
         return Err("REFUSED:INCOMPLETE_BOARD_SELECTION".to_string());
     }
-    let candidate = candidates
+    let matching_candidates: Vec<&CampaignCandidate> = candidates
         .iter()
-        .find(|candidate| candidate.candidate_id == request.candidate_id)
-        .ok_or_else(|| "REFUSED:UNKNOWN_CAMPAIGN_CANDIDATE".to_string())?;
-    let verdict = verdicts
+        .filter(|candidate| candidate.candidate_id == request.candidate_id)
+        .collect();
+    if matching_candidates.is_empty() {
+        return Err("REFUSED:UNKNOWN_CAMPAIGN_CANDIDATE".to_string());
+    }
+    if matching_candidates.len() != 1 {
+        return Err("REFUSED:AMBIGUOUS_CAMPAIGN_CANDIDATE".to_string());
+    }
+    let candidate = matching_candidates[0];
+
+    let matching_verdicts: Vec<&CampaignVerdict> = verdicts
         .iter()
-        .find(|verdict| verdict.candidate_id == request.candidate_id)
-        .ok_or_else(|| "REFUSED:MISSING_CAMPAIGN_VERDICT".to_string())?;
+        .filter(|verdict| verdict.candidate_id == request.candidate_id)
+        .collect();
+    if matching_verdicts.is_empty() {
+        return Err("REFUSED:MISSING_CAMPAIGN_VERDICT".to_string());
+    }
+    if matching_verdicts.len() != 1 {
+        return Err("REFUSED:AMBIGUOUS_CAMPAIGN_VERDICT".to_string());
+    }
+    let verdict = matching_verdicts[0];
+
     if verdict.standing != StrategicStanding::Alive {
         return Err("REFUSED:BOARD_SELECTED_REFUSED_CAMPAIGN".to_string());
     }
@@ -819,13 +845,17 @@ pub fn admit_board_selection(
     {
         return Err("REFUSED:MANDATE_DRIFT".to_string());
     }
+    let candidate_digest = candidate.candidate_digest()?;
+    if verdict.candidate_digest != candidate_digest {
+        return Err("REFUSED:STALE_CAMPAIGN_VERDICT".to_string());
+    }
 
     let mut packet = StrategicMandatePacket {
         subject: constitution.subject.clone(),
         mandate_id: constitution.mandate_id.clone(),
         constitution_digest: constitution.constitution_digest.clone(),
         candidate_id: candidate.candidate_id.clone(),
-        candidate_digest: candidate.candidate_digest()?,
+        candidate_digest,
         selection_authority_digest: request.selection_authority_digest,
         selected_by: request.selected_by.trim().to_string(),
         selected_at: request.selected_at.trim().to_string(),
