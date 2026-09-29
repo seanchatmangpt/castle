@@ -1,1 +1,1 @@
-{"version":1,"principal":"principal:alice","effect_kind":"http","resource":"https://example.invalid/orders/42","operation":"POST","payload_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","idempotency_key":"order-42"}
+{"version":1,"principal":"principal:alice","capability":"payments","subject":{"id":42,"kind":"order"},"payload":{"amount":100,"currency":"USD"}}
