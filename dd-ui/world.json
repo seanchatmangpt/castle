@@ -1,0 +1,55 @@
+{
+  "grammarVersion": "dd-ui/2",
+  "avatar": "CEO",
+  "context": "normal",
+  "authority": [],
+  "asOf": "2026-08-18T22:06:00-07:00",
+  "events": [
+    {
+      "id": "castle-e1",
+      "at": "2026-08-18T22:06:00-07:00",
+      "type": "claim.observed",
+      "claim": {
+        "id": "inverse-construction",
+        "title": "DfCM inverse construction",
+        "domain": "GOVERNANCE",
+        "standing": "OBSERVED",
+        "systemStanding": "UNKNOWN",
+        "kind": "TechnologyStanding",
+        "materiality": 100,
+        "owner": "CASTLE",
+        "businessImpact": "CASTLE contributes prohibited-goal, vulnerability-condition, CONSTRUCT, admission, evidence, and replay state to DDUI while keeping hypothetical capability graphs reversible.",
+        "evidence": [
+          "repo:seanchatmangpt/castle@545c2837c2dae6623d5d4b8615f4e683ae76f09c",
+          "path:README.md#canonical-flow"
+        ],
+        "metrics": [],
+        "actions": [
+          {"id": "inspect-construct", "label": "Inspect CONSTRUCT evidence", "consequence": "SELECT"}
+        ]
+      }
+    },
+    {
+      "id": "castle-e2",
+      "at": "2026-08-18T22:06:01-07:00",
+      "type": "claim.observed",
+      "claim": {
+        "id": "zero-unreceipted-do",
+        "title": "Zero unreceipted consequential DO",
+        "domain": "GOVERNANCE",
+        "standing": "OBSERVED",
+        "systemStanding": "UNKNOWN",
+        "kind": "Risk",
+        "materiality": 100,
+        "owner": "CASTLE",
+        "businessImpact": "Planner, model, replay, raw input, and unsigned configuration have no fallback edge into CASTLE's official DO path; DDUI therefore exposes explanation and intent only.",
+        "evidence": [
+          "path:README.md#dfcm-construct-origin-law",
+          "path:README.md#source-authority"
+        ],
+        "metrics": [],
+        "actions": []
+      }
+    }
+  ]
+}
