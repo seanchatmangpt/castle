@@ -1,0 +1,1 @@
+{"prepared_principal":"principal:alice","certificate_principal":"principal:service","expected":"REFUSED:PrincipalMismatch"}
