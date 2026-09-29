@@ -1,0 +1,24 @@
+PREFIX c: <https://ggen-igniter.dev/sjira/castle-26.9.28#>
+PREFIX sj: <https://ggen-igniter.dev/ontology/semantic-jira#>
+
+# Violation query. Zero rows is the only admitted result.
+# XaaS must be the unique owner of RUNTIME_EXISTENCE, and CASTLE must be the
+# unique owner of CONSEQUENTIAL_ADMISSIBILITY.
+SELECT ?violation ?repo
+WHERE {
+  {
+    ?s a c:RepositorySubject ;
+       sj:repository ?repo ;
+       c:ownsCapability "RUNTIME_EXISTENCE" .
+    FILTER(?repo != "seanchatmangpt/xaas")
+    BIND("NON_XAAS_RUNTIME_CROWN" AS ?violation)
+  }
+  UNION
+  {
+    ?s a c:RepositorySubject ;
+       sj:repository ?repo ;
+       c:ownsCapability "CONSEQUENTIAL_ADMISSIBILITY" .
+    FILTER(?repo != "seanchatmangpt/castle")
+    BIND("NON_CASTLE_CONSEQUENCE_CROWN" AS ?violation)
+  }
+}

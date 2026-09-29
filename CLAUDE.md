@@ -89,6 +89,24 @@ derive_vulnerabilities()       DfCM: goal -> minimal predicate/witness sets (sub
 `dyn` objects, and `run_planner_ensemble` needs heterogeneous `&[Box<dyn Planner>]`) — this is the one place
 `async-trait` earns its keep as a dependency; prefer plain generics over trait objects elsewhere.
 
+### Semantic Jira crown (`docs/sjira/v26.9.28`)
+
+`goal.ttl` is the stable governing GoalCheckpoint graph. Do not hand-author
+`sj:WorkOrder` or `sj:Receipt` instances into it: WorkOrders are compiler
+projections and receipts are observed evidence. All checkpoints stop at
+`authorityCeiling "CONSTRUCT"`.
+
+`repos.ttl` is the exact-subject fleet registry. `RUNTIME_EXISTENCE` belongs
+only to `seanchatmangpt/xaas`; `CONSEQUENTIAL_ADMISSIBILITY` belongs only to
+`seanchatmangpt/castle`. Retained irreducible capabilities must have one owner.
+`SUPPORTING_CANDIDATE` repositories may not claim ownership until they are
+explicitly dispositioned.
+
+The sJira stop court is receipt-driven. Never declare a gate ALIVE in
+`goal.ttl`; attach external receipts and evaluate the stop query over goal +
+generated orders + receipts. BRCE remains the sole protected CONSTRUCT -> DO
+boundary.
+
 ### Board strategic command (`src/strategic_command.rs`)
 
 This is the product-level strategic layer, separate from the generated Fortune-5 readiness inventory. It reuses the semantics proven in the earlier Berthier campaign compiler without making that closed/unmerged branch an authority dependency.

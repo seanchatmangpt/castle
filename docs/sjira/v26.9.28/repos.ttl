@@ -1,0 +1,317 @@
+@prefix sj: <https://ggen-igniter.dev/ontology/semantic-jira#> .
+@prefix c: <https://ggen-igniter.dev/sjira/castle-26.9.28#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Exact repository subjects observed while constructing GC-CASTLE-26.9.28.
+# One retained runtime capability has one irreducible owner. Repositories with
+# disposition SUPPORTING_CANDIDATE are not permanent dependencies until they
+# prove a unique capability.
+
+c:repo-castle a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/castle" ;
+    sj:baseSha "d854333ead2b5f47cc38bbf5680dd7db13fbf009" ;
+    c:branch "main" ;
+    c:disposition "KEEP" ;
+    c:ownsCapability "CONSEQUENTIAL_ADMISSIBILITY" .
+
+c:repo-xaas a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/xaas" ;
+    sj:baseSha "f8ea07db9c588633ea6a2453dfd133977aa7a0d3" ;
+    c:branch "main" ;
+    c:disposition "KEEP" ;
+    c:ownsCapability "RUNTIME_EXISTENCE" .
+
+c:repo-beam4pm a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/beam4pm" ;
+    sj:baseSha "34ce4a23d0c59edab2391f149413bc5fb1e375c3" ;
+    c:branch "main" ;
+    c:disposition "KEEP" ;
+    c:ownsCapability "PROCESS_COORDINATION" .
+
+c:repo-ash-a2a a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/ash_a2a" ;
+    sj:baseSha "e2e02ebd9d674a70f1d1cdc0e08fc22a07e4b108" ;
+    c:branch "main" ;
+    c:disposition "KEEP" ;
+    c:ownsCapability "SA2A_TRANSPORT" .
+
+c:repo-graphlaw a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/graphlaw" ;
+    sj:baseSha "4acb6cb4929f1a851d1e266713d854caa3bc7015" ;
+    c:branch "main" ;
+    c:disposition "KEEP" ;
+    c:ownsCapability "SEMANTIC_LAW_DERIVATION" .
+
+c:repo-ash-graphlaw a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/ash_graphlaw" ;
+    sj:baseSha "287d2a9adf053310b1565b86af61bc23a83c49f4" ;
+    c:branch "main" ;
+    c:disposition "KEEP" ;
+    c:ownsCapability "BEAM_GRAPHLaw_MEMBRANE" .
+
+c:repo-affidavit a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/affidavit" ;
+    sj:baseSha "7eaf86b796fccec4fe1c1c1c81d221501401a24d" ;
+    c:branch "main" ;
+    c:disposition "KEEP" ;
+    c:ownsCapability "CRYPTOGRAPHIC_STANDING" .
+
+c:repo-ash-r2rml a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/ash_r2rml" ;
+    sj:baseSha "05b4a009376d63dc853f78636047240ec6aca1be" ;
+    c:branch "main" ;
+    c:disposition "KEEP" ;
+    c:ownsCapability "SEMANTIC_PROJECTION" .
+
+c:repo-ferroplan a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/ferroplan" ;
+    sj:baseSha "14b8903925248d4db4fc9ba3726708730c7a616e" ;
+    c:branch "main" ;
+    c:disposition "KEEP" ;
+    c:ownsCapability "PLANNER_SEARCH" .
+
+c:repo-ash-pplan a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/ash_pplan" ;
+    sj:baseSha "b9da1ad7590d70afac5eace3bd7ba1a644f7249f" ;
+    c:branch "main" ;
+    c:disposition "KEEP" ;
+    c:ownsCapability "PLANNING_SEMANTICS" .
+
+c:repo-wasm4pm a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/wasm4pm" ;
+    sj:baseSha "2ec870ef6f2411beab238f56859c3ca438455c1c" ;
+    c:branch "main" ;
+    c:disposition "KEEP" ;
+    c:ownsCapability "DETERMINISTIC_WASM_RUNTIME" .
+
+c:repo-dspy-wasm a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/dspy-wasm" ;
+    sj:baseSha "336482ce19464a3a752936f9c866ff6fea2780d3" ;
+    c:branch "main" ;
+    c:disposition "KEEP" ;
+    c:ownsCapability "COMPILED_MODEL_PROGRAMS" .
+
+c:repo-bcinr a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/bcinr" ;
+    sj:baseSha "da50f4706aef47c3720868f33f1f29d585dc6466" ;
+    c:branch "main" ;
+    c:disposition "KEEP" ;
+    c:ownsCapability "BOUNDED_RESOURCE_ALLOCATION" .
+
+c:repo-gymact a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/gymact" ;
+    sj:baseSha "dac36298462de98b1fc7a8f1f7bb6ec6bca09b70" ;
+    c:branch "main" ;
+    c:disposition "KEEP" ;
+    c:ownsCapability "BOUNDED_ADVERSARIAL_EXECUTION" .
+
+c:repo-autofde-lab a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/autofde-lab" ;
+    sj:baseSha "d42a5af94481a3128bf3e35d5f2a0a9a70f22e41" ;
+    c:branch "master" ;
+    c:disposition "KEEP" ;
+    c:ownsCapability "FAILURE_DISCOVERY" .
+
+c:repo-ggen-igniter a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/ggen_igniter" ;
+    sj:baseSha "4c5eed22252203980060dbc757c447823179253f" ;
+    c:branch "main" ;
+    c:disposition "KEEP" ;
+    c:ownsCapability "SEMANTIC_MANUFACTURE" .
+
+c:repo-ggen-marketplace a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/ggen-marketplace" ;
+    sj:baseSha "20ac5c935e46b7f0ff1336e7876e7730c935ebde" ;
+    c:branch "main" ;
+    c:disposition "KEEP" ;
+    c:ownsCapability "SEMANTIC_CAPITAL_REGISTRY" .
+
+c:repo-ggen-ecosystem a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/ggen-ecosystem" ;
+    sj:baseSha "2be5597e6c9658e66df8c3c247cde0f7cbcc0cdc" ;
+    c:branch "main" ;
+    c:disposition "KEEP" ;
+    c:ownsCapability "FLEET_MANUFACTURE_QUALIFICATION" .
+
+c:repo-ggen a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/ggen" ;
+    sj:baseSha "ff96f04e8c7b851e5cca53f3faf5ce1d5f43ce6e" ;
+    c:branch "main" ;
+    c:disposition "REPLACE" ;
+    c:role "LEGACY_MANUFACTURE_SOURCE" .
+
+c:repo-ash-kudzu a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/ash_kudzu" ;
+    sj:baseSha "6561ee0949a680c87ca43471a035f1aab773637d" ;
+    c:branch "feat/shacl-admission-gate" ;
+    c:disposition "KEEP" ;
+    c:ownsCapability "LEGACY_EXTRACTION" .
+
+c:repo-process-intelligence a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/process-intelligence" ;
+    sj:baseSha "d0cc5db5f612d05b24a63e6fb3b4bc27c799dfca" ;
+    c:branch "main" ;
+    c:disposition "KEEP" ;
+    c:ownsCapability "PROCESS_ANALYTICS" .
+
+c:repo-mfact a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/mfact" ;
+    sj:baseSha "8a62a7c28e935b9afd05c68f455f475423ec0a7a" ;
+    c:branch "main" ;
+    c:disposition "KEEP" ;
+    c:ownsCapability "EVIDENCE_FACT_MODEL" .
+
+c:repo-gitvan a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/gitvan" ;
+    sj:baseSha "3428b7f05ad2e1567ceaa3aeeeb7ebd59fb85458" ;
+    c:branch "main" ;
+    c:disposition "KEEP" ;
+    c:ownsCapability "GIT_EVENT_EVIDENCE" .
+
+c:repo-unrdf a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/unrdf" ;
+    sj:baseSha "0550d9630da94b170c931f17a1580ea90091cbb4" ;
+    c:branch "main" ;
+    c:disposition "WRAP" ;
+    c:role "RDF_SEMANTIC_KERNEL" .
+
+c:repo-ex4pm a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/ex4pm" ;
+    sj:baseSha "d1ff769ca7763168ff154b1def980dfaec0cb15c" ;
+    c:branch "main" ;
+    c:disposition "WRAP" ;
+    c:role "PROCESS_EXECUTION_KERNEL" .
+
+c:repo-ash-ex4pm a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/ash_ex4pm" ;
+    sj:baseSha "64a21504d3aab0165275cb3e1c9e2fc124d83413" ;
+    c:branch "main" ;
+    c:disposition "WRAP" ;
+    c:role "ASH_PROCESS_PROJECTION" .
+
+c:repo-zcode-cli a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/zcode-cli" ;
+    sj:baseSha "a568c3c3ee4b377e98fe9db0f37fa90da760734f" ;
+    c:branch "main" ;
+    c:disposition "WRAP" ;
+    c:role "EXTERNAL_WORKER_PROVIDER" .
+
+c:repo-chatgpt-cloud-elixir a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/chatgpt-cloud-elixir" ;
+    sj:baseSha "8efaa40b69c8162d22fe2dc5e59657f8dcff529e" ;
+    c:branch "main" ;
+    c:disposition "WRAP" ;
+    c:role "MODEL_PROVIDER_BRIDGE" .
+
+c:repo-ash-atlassian a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/ash_atlassian" ;
+    sj:baseSha "43e3d21b7c4e4571493fcf3757392ed16f2dd967" ;
+    c:branch "main" ;
+    c:disposition "WRAP" ;
+    c:role "ATLASSIAN_ADAPTER" .
+
+c:repo-ash-surface a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/ash_surface" ;
+    sj:baseSha "c066a55f452f23b348df375c00aae7811f6f72be" ;
+    c:branch "main" ;
+    c:disposition "WRAP" ;
+    c:role "HUMAN_SURFACE" .
+
+c:repo-ash-expo a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/ash_expo" ;
+    sj:baseSha "024852b92330c76e12d0ab26531ef1e511c71041" ;
+    c:branch "main" ;
+    c:disposition "WRAP" ;
+    c:role "MOBILE_SURFACE" .
+
+c:repo-ash-planning-center a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/ash_planning_center" ;
+    sj:baseSha "5ee26cbdc8fef26c92c7691355c76f5aed2e7b2c" ;
+    c:branch "main" ;
+    c:disposition "WRAP" ;
+    c:role "PLANNING_CENTER_ADAPTER" .
+
+c:repo-zoela a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/zoela" ;
+    sj:baseSha "cae4a862744380f6a78b962e3f345ede8bd860dd" ;
+    c:branch "main" ;
+    c:disposition "WRAP" ;
+    c:role "DOMAIN_APPLICATION" .
+
+c:repo-cargo-cicd a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/cargo-cicd" ;
+    sj:baseSha "59214d6a1293d794b7a27095276047cdff73a9ec" ;
+    c:branch "main" ;
+    c:disposition "WRAP" ;
+    c:role "SOFTWARE_CONSEQUENCE_ADAPTER" .
+
+c:repo-chatman-ecosystem a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/chatman-ecosystem" ;
+    sj:baseSha "92cb17cda899a8d85abdaa04db10a3d2334e116d" ;
+    c:branch "main" ;
+    c:disposition "KEEP_KNOWLEDGE_PLANE" ;
+    c:role "STRATEGY_AND_DOCTRINE_PRIOR_ART" .
+
+c:repo-engineering-standards a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/engineering-standards" ;
+    sj:baseSha "0f23708a07349e110f7c2ec567eea778f934915d" ;
+    c:branch "main" ;
+    c:disposition "KEEP_KNOWLEDGE_PLANE" ;
+    c:role "ENGINEERING_CONSTITUTION" .
+
+c:repo-agile-protocol a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/agile-protocol-specification" ;
+    sj:baseSha "1b731a6e963fa249c4e3e8bcbe932025c5e38bb5" ;
+    c:branch "main" ;
+    c:disposition "KEEP_KNOWLEDGE_PLANE" ;
+    c:role "PROTOCOL_SPECIFICATION" .
+
+c:repo-praxis a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/praxis" ;
+    sj:baseSha "c78783b4ea3124fc9d1179a9e47d43c522b529f2" ;
+    c:branch "main" ;
+    c:disposition "ABSORB" ;
+    c:role "HISTORICAL_SEMANTIC_SOURCE" .
+
+c:repo-mfw a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/mfw" ;
+    sj:baseSha "c5a10b00bc8cbc27052840c0b9b51607c2ff85b1" ;
+    c:branch "main" ;
+    c:disposition "SUPPORTING_CANDIDATE" .
+
+c:repo-ostar a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/ostar" ;
+    sj:baseSha "a392e009400c83d5e175b508c4e3008e189945d3" ;
+    c:branch "main" ;
+    c:disposition "SUPPORTING_CANDIDATE" .
+
+c:repo-mmdio a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/mmdio" ;
+    sj:baseSha "afc1f6e890a6d1c17b84d5931b21d3c74a851ebc" ;
+    c:branch "main" ;
+    c:disposition "SUPPORTING_CANDIDATE" .
+
+c:repo-wasm4pm-compat a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/wasm4pm-compat" ;
+    sj:baseSha "c90e2d974c6bb9b2edc5bb25ac1d9e7364148a25" ;
+    c:branch "main" ;
+    c:disposition "SUPPORTING_CANDIDATE" .
+
+c:repo-dteam a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/dteam" ;
+    sj:baseSha "5c00d757ebc614e1db1dd0d564dd0c34896d57a0" ;
+    c:branch "main" ;
+    c:disposition "SUPPORTING_CANDIDATE" .
+
+c:repo-mcpp a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/mcpp" ;
+    sj:baseSha "5f5ee2175424c63edc6cdc211d3a5289a1c5556f" ;
+    c:branch "master" ;
+    c:disposition "SUPPORTING_CANDIDATE" .
+
+c:repo-chatman-nano-stack a c:RepositorySubject ;
+    sj:repository "seanchatmangpt/chatman-nano-stack" ;
+    sj:baseSha "de7eb619310a522e44e9d6cf20e9460806b314ea" ;
+    c:branch "master" ;
+    c:disposition "SUPPORTING_CANDIDATE" .
