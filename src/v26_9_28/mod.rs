@@ -45,12 +45,26 @@ pub struct ExcludedPr {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct ReviewWindow {
+    pub timezone: String,
+    pub local_start: String,
+    pub task_cutoff: String,
+    pub utc_start: String,
+    pub utc_cutoff: String,
+    pub pr_count: u64,
+    pub merged_pr_count: u64,
+    pub open_pr_count: u64,
+    pub closed_unmerged_pr_count: u64,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct EcosystemManifest {
     pub kind: String,
     pub release_epoch: String,
     pub reviewed_local_date: String,
     pub timezone: String,
     pub castle_base_sha: String,
+    pub review_window: ReviewWindow,
     pub marketplace_pack: MarketplacePack,
     pub subjects: Vec<SourceSubject>,
     pub excluded_open_prs: Vec<ExcludedPr>,
@@ -346,14 +360,17 @@ pub fn qualify_v26_9_28_upgrade(manifest: &EcosystemManifest) -> UpgradeQualific
         "graphlaw-v26.9.28",
         "ggen-v26.9.28",
         "ash-r2rml-v26.9.28",
+        "ash-r2rml-pr48",
         "affidavit-pr89",
-        "wasm4pm-pr642",
+        "wasm4pm-pr646",
         "dspy-wasm-pr8",
         "autofde-lab-pr207",
-        "ash-a2a-pr56",
-        "beam4pm-pr102",
+        "ash-pplan-pr15",
+        "ash-a2a-pr60",
+        "gymact-pr154",
+        "beam4pm-pr104",
         "ferroplan-pr49",
-        "ash-pplan-pr8",
+        "xaas-pr98",
         "xaas-pr95",
     ];
     let present: BTreeSet<&str> = manifest.subjects.iter().map(|s| s.id.as_str()).collect();
@@ -363,8 +380,16 @@ pub fn qualify_v26_9_28_upgrade(manifest: &EcosystemManifest) -> UpgradeQualific
         .map(|id| (*id).to_string())
         .collect();
 
+    let reviewed_total = manifest.review_window.merged_pr_count
+        + manifest.review_window.open_pr_count
+        + manifest.review_window.closed_unmerged_pr_count;
     let standing = if manifest.release_epoch != ECOSYSTEM_EPOCH {
         EvidenceStanding::Refused("REFUSED:ECOSYSTEM_EPOCH_DRIFT".to_string())
+    } else if manifest.review_window.timezone != "America/Los_Angeles"
+        || manifest.review_window.pr_count != 66
+        || reviewed_total != manifest.review_window.pr_count
+    {
+        EvidenceStanding::Refused("REFUSED:REVIEW_WINDOW_DRIFT".to_string())
     } else if !lowercase_hex(&manifest.castle_base_sha, 40) {
         EvidenceStanding::Refused("REFUSED:INVALID_CASTLE_BASE".to_string())
     } else if !lowercase_hex(&manifest.marketplace_pack.commit_sha, 40) {
