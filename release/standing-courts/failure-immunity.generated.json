@@ -3,7 +3,7 @@
   "schema": "https://chatman.dev/standing-court/failure-immunity-consumer/v2",
   "canonical_owner": "seanchatmangpt/chatman-ecosystem",
   "canonical_source": "release/v26.9.30/failure-immunity.json",
-  "canonical_commit": "2e4e206b1eaffdde60d69aeb46f440d558ba18d4",
+  "canonical_commit": "1bfcd6764ad714e9771f7dc82cbe69b87abe14c9",
   "consumer_subject": "seanchatmangpt/castle",
   "consumer_base_sha": "c18bf1d89ed5395d5ffb00f875d901a26f16b2fe",
   "inherited_failure_classes": [
