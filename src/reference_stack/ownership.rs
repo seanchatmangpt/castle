@@ -20,6 +20,9 @@ pub enum ReferenceStage {
     XaasRuntimeComposition,
 }
 
+pub const GRAPHLAW_REFERENCE_HEAD: &str = "48a7bbd801b8df1d7ffab879b10d58d7f14ef7bc";
+pub const ECOSYSTEM_REFERENCE_HEAD: &str = "bebffdeb2ea4dd6eace31d69298bfb51a073b265";
+
 pub const REFERENCE_STAGES: &[ReferenceStage] = &[
     ReferenceStage::SemanticState,
     ReferenceStage::GraphLaw,
