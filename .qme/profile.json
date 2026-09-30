@@ -1,0 +1,20 @@
+{
+  "qme_profile": "QME-1/EcosystemReference",
+  "version": "26.9.29",
+  "canonical_spec_subject": "seanchatmangpt/chatman-ecosystem@32c47032a9cefd0ab4f0980efc32fa84505031b2",
+  "local_subject": "seanchatmangpt/castle@f596deea634d705c94623d2f97e650ae3252ba28",
+  "role": "product-level consequential constitution",
+  "normative": false,
+  "weakens_core": false,
+  "authority_granted_by_projection": "none",
+  "inheritance": [
+    "exact-subject",
+    "canonical-ownership",
+    "consequence-separation",
+    "independent-observation",
+    "replay-non-actuation",
+    "negative-knowledge",
+    "semantic-manufacture-provenance",
+    "mxinf-fail-closed"
+  ]
+}
