@@ -12,5 +12,7 @@
   "operational_realization": "Reactor/CommandBus",
   "do_boundary": "castle:BRCE",
   "feedback": "beam4pm",
-  "runtime_composition": "xaas"
+  "runtime_composition": "xaas",
+  "graphlaw_head": "48a7bbd801b8df1d7ffab879b10d58d7f14ef7bc",
+  "ecosystem_head": "bebffdeb2ea4dd6eace31d69298bfb51a073b265"
 }
