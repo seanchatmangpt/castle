@@ -1,21 +1,102 @@
-use castle::reference_stack::*;
+use std::collections::BTreeSet;
 
-fn happy() -> Result<ProcessFeedback, String> {
-    let hook = project_knowledge_hook(&fibo::delta(), "hook-1")?;
-    let intent = derive_intent(&hook, "intent-1");
-    let standing = record_standing(&intent, true);
-    let real = realize(&standing, "reactor", &[fibo::BRCE_PATH])?;
-    let handoff = hand_off_to_brce(&real)?;
-    assert_eq!(handoff.authority_ceiling(), "CONSTRUCT");
-    assert_eq!(handoff.actuation(), "NONE");
-    let post = observe_postcondition(&handoff, &real, "independent-observer", true)?;
-    let receipt = reference_receipt(&post, "rcpt-1", "seanchatmangpt/castle")?;
-    Ok(feed_back(&receipt, true))
+use castle::castle::*;
+use castle::reference_stack::*;
+use ed25519_dalek::{Signer as _, SigningKey, Verifier as _, VerifyingKey};
+use serde_json::json;
+
+struct RealBlake3;
+impl Blake3Provider for RealBlake3 {
+    fn digest_utf8(&self, input: &str) -> String {
+        blake3::hash(input.as_bytes()).to_hex().to_string()
+    }
 }
 
-#[test]
-fn fibo_case_runs_through_current_owners_without_new_authority() {
-    assert!(happy().unwrap().conforms);
+fn hex_decode(h: &str) -> Vec<u8> {
+    (0..h.len()).step_by(2).map(|i| u8::from_str_radix(&h[i..i + 2], 16).unwrap()).collect()
+}
+
+struct Signer(SigningKey);
+impl ReceiptSigner for Signer {
+    fn key_id(&self) -> &str {
+        "construct-root"
+    }
+    fn sign_digest(&self, d: &str) -> String {
+        self.0.sign(&hex_decode(d)).to_bytes().iter().map(|b| format!("{b:02x}")).collect()
+    }
+}
+
+struct Verifier(VerifyingKey);
+impl ReceiptVerifier for Verifier {
+    fn verify_digest(&self, key_id: &str, d: &str, sig: &str) -> bool {
+        let Ok(bytes): Result<[u8; 64], _> = hex_decode(sig).try_into() else { return false };
+        key_id == "construct-root" && self.0.verify(&hex_decode(d), &ed25519_dalek::Signature::from_bytes(&bytes)).is_ok()
+    }
+}
+
+struct Gym;
+#[async_trait::async_trait]
+impl GymActAdapter for Gym {
+    async fn execute(&self, a: &PowlActivity, _s: &WorldState, _p: &ActuationPermit) -> GymActResult {
+        GymActResult {
+            transition_id: a.transition_id.clone(),
+            status: GymActStatus::Observed,
+            objects: vec![OcelObject { id: format!("object:{}", a.transition_id), kind: "SyntheticPayment".to_string() }],
+            attributes: Default::default(),
+        }
+    }
+}
+
+fn chain() -> (Realization, BrceHandoff) {
+    let hook = project_knowledge_hook(&fibo::delta(), "hook-1").unwrap();
+    let standing = record_standing(&derive_intent(&hook, "intent-1"), true);
+    let real = realize(&standing, "reactor", &[fibo::BRCE_PATH]).unwrap();
+    let handoff = hand_off_to_brce(&real).unwrap();
+    assert_eq!((handoff.authority_ceiling(), handoff.actuation()), ("CONSTRUCT", "NONE"));
+    (real, handoff)
+}
+
+fn process_and_envelope() -> (PowlProcess, TestEnvelope) {
+    let rule = TransitionRule { id: "release-payment".into(), preconditions: vec![], effects: vec!["goal:payment-released".into()], cost: None, planner_hint: None };
+    let goal = AdversarialGoal { id: "g".into(), predicate: "goal:payment-released".into(), consequence: 1 };
+    let vuln = derive_vulnerabilities(&goal, &[rule.clone()], 2).remove(0);
+    let process = compile_witness_to_powl("fibo-payment", &vuln, &[rule]);
+    let envelope = TestEnvelope { system_id: "system:fibo-synthetic".into(), allowed_transition_ids: BTreeSet::from(["release-payment".to_string()]), max_steps: 1, expires_at_epoch_ms: 10_000 };
+    (process, envelope)
+}
+
+/// Full chain over the REAL castle CONSTRUCT -> admission -> GymAct -> OCEL receipt path.
+#[tokio::test]
+async fn fibo_case_runs_through_real_castle_brce_without_new_authority() {
+    let key = SigningKey::from_bytes(&[7u8; 32]);
+    let (signer, verifier, b3) = (Signer(key.clone()), Verifier(key.verifying_key()), RealBlake3);
+    let (real, handoff) = chain();
+    let (process, envelope) = process_and_envelope();
+    let cap = manufacture_construct_capability(
+        construct_request(&handoff, &real, "defensive-test", json!({"zeroUnreceiptedActuation": true}), json!({"version": "castle-pack-v1"}), process.clone(), envelope.clone()),
+        &b3,
+        &signer,
+    )
+    .unwrap();
+    let policy = ConstructTrustPolicy { trusted_origin_key_ids: BTreeSet::from(["construct-root".to_string()]), allowed_authorities: BTreeSet::from(["defensive-test".to_string()]) };
+    let admission = admit_construct_for_do(&cap, &process, &envelope, &b3, &verifier, &policy, || 1).unwrap();
+    let state = WorldState { system_id: envelope.system_id.clone(), facts: BTreeSet::new() };
+    let log = execute_powl_with_gym_act(&process, &state, &envelope, &Gym, DoAuthorizationContext { admission: &admission, blake3: &b3, receipt_signer: &signer, now: Box::new(|| 5) }).await.unwrap();
+
+    let post = observe_postcondition(&handoff, &real, "independent-observer", true).unwrap();
+    let receipt = reference_receipt(&post, &handoff, &real, &admission, &log, &b3).unwrap();
+    assert_eq!(receipt.receipt_digest, log.receipt.receipt_digest);
+    assert!(feed_back(&receipt, true).conforms);
+
+    // A different chain's provenance is refused against this admission.
+    let hook2 = project_knowledge_hook(&fibo::delta(), "hook-OTHER").unwrap();
+    let st2 = record_standing(&derive_intent(&hook2, "intent-1"), true);
+    let real2 = realize(&st2, "reactor", &[fibo::BRCE_PATH]).unwrap();
+    let handoff2 = hand_off_to_brce(&real2).unwrap();
+    assert_eq!(reference_receipt(&post, &handoff2, &real2, &admission, &log, &b3).unwrap_err(), "REFUSED:PROVENANCE_NOT_BOUND");
+    // A failed postcondition never yields a receipt reference.
+    let bad = observe_postcondition(&handoff, &real, "independent-observer", false).unwrap();
+    assert_eq!(reference_receipt(&bad, &handoff, &real, &admission, &log, &b3).unwrap_err(), "REFUSED:POSTCONDITION_FAILED");
 }
 
 #[test]
@@ -43,16 +124,12 @@ fn exactly_one_consequential_path_terminating_in_brce() {
 }
 
 #[test]
-fn postcondition_must_be_independent_and_receipt_castle_minted() {
+fn postcondition_must_be_independent() {
     let hook = project_knowledge_hook(&fibo::delta(), "h").unwrap();
     let st = record_standing(&derive_intent(&hook, "i"), true);
     let r = realize(&st, "reactor", &[fibo::BRCE_PATH]).unwrap();
     let h = hand_off_to_brce(&r).unwrap();
     assert_eq!(observe_postcondition(&h, &r, "reactor", true).unwrap_err(), "REFUSED:POSTCONDITION_NOT_INDEPENDENT");
-    let p = observe_postcondition(&h, &r, "obs", true).unwrap();
-    assert_eq!(reference_receipt(&p, "x", "seanchatmangpt/beam4pm").unwrap_err(), "REFUSED:RECEIPT_NOT_CASTLE_MINTED");
-    let bad = observe_postcondition(&h, &r, "obs", false).unwrap();
-    assert_eq!(reference_receipt(&bad, "x", "seanchatmangpt/castle").unwrap_err(), "REFUSED:POSTCONDITION_FAILED");
 }
 
 #[test]

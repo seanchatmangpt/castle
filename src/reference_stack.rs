@@ -9,7 +9,13 @@
 //! owner named in [`OWNERS`]. The chain ends at authority ceiling `CONSTRUCT`; the
 //! consequential step is a handoff to `admit_construct_for_do`, not a `DO`.
 
+use serde_json::{json, Value};
+
 use crate::blake3::blake3_hex_utf8;
+use crate::castle::{
+    canonical_json, Blake3Provider, ConstructAdmission, ConstructRequest, EpistemicClass, PowlProcess,
+    ReceiptedOcelLog, TestEnvelope,
+};
 
 /// Maximum authority this chain may carry.
 pub const AUTHORITY_CEILING: &str = "CONSTRUCT";
@@ -112,18 +118,19 @@ pub struct Postcondition {
     pub holds: bool,
 }
 
-/// Reference to a CASTLE-minted receipt/OCEL log. This module never mints one.
+/// Reference to a real CASTLE-minted receipt (`castle::Receipt`) over the OCEL log.
+/// This module never mints one; it only binds and checks it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReceiptRef {
-    pub receipt_id: String,
-    pub minted_by: String,
+    pub receipt_digest: String,
+    pub construct_digest: String,
     pub postcondition_digest: String,
 }
 
 /// Beam4PM feedback derived from the receipt reference; grants nothing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcessFeedback {
-    pub receipt_id: String,
+    pub receipt_digest: String,
     pub conforms: bool,
 }
 
@@ -196,26 +203,67 @@ pub fn observe_postcondition(handoff: &BrceHandoff, realization: &Realization, o
     })
 }
 
+impl BrceHandoff {
+    /// Chain provenance bound into the CONSTRUCT's `o_star`, so the real receipt DAG
+    /// (not this module) carries the delta -> hook -> intent -> standing lineage.
+    #[must_use]
+    pub fn provenance(&self, realization: &Realization) -> Value {
+        json!({
+            "kind": "CASTLE_REFERENCE_STACK_V1",
+            "realization_digest": self.realization_digest,
+            "standing_digest": realization.standing_digest,
+            "path": self.path,
+            "authority_ceiling": AUTHORITY_CEILING,
+        })
+    }
+}
+
+/// Build the real `ConstructRequest` for the handoff. Manufacturing and admitting it stay
+/// with `manufacture_construct_capability` / `admit_construct_for_do`.
+#[must_use]
+pub fn construct_request(handoff: &BrceHandoff, realization: &Realization, authority: &str, config_graph: Value, ontology: Value, process: PowlProcess, envelope: TestEnvelope) -> ConstructRequest {
+    ConstructRequest {
+        subject: envelope.system_id.clone(),
+        authority: authority.to_string(),
+        o_star: handoff.provenance(realization),
+        config_graph,
+        ontology,
+        process,
+        envelope,
+    }
+}
+
+/// Bind a real CASTLE receipted OCEL log to the chain.
+///
 /// # Errors
-/// `REFUSED:RECEIPT_NOT_CASTLE_MINTED` unless minted by CASTLE; `REFUSED:POSTCONDITION_FAILED`
-/// when the postcondition does not hold.
-pub fn reference_receipt(post: &Postcondition, receipt_id: &str, minted_by: &str) -> Result<ReceiptRef, String> {
-    if owner_of("RECEIPT_TRUTH") != Some(minted_by) {
-        return Err("REFUSED:RECEIPT_NOT_CASTLE_MINTED".to_string());
+/// `REFUSED:PROVENANCE_NOT_BOUND` if the admitted construct's `o_star` is not this chain;
+/// `REFUSED:RECEIPT_NOT_BOUND_TO_ADMISSION` if the log's receipt is not an `Observed`
+/// receipt whose sole parent is the admitted construct;
+/// `REFUSED:POSTCONDITION_FAILED` if the independent postcondition does not hold.
+pub fn reference_receipt(post: &Postcondition, handoff: &BrceHandoff, realization: &Realization, admission: &ConstructAdmission, log: &ReceiptedOcelLog, blake3: &dyn Blake3Provider) -> Result<ReceiptRef, String> {
+    let expected = blake3.digest_utf8(&canonical_json(&handoff.provenance(realization)));
+    if admission.o_star_digest != expected {
+        return Err("REFUSED:PROVENANCE_NOT_BOUND".to_string());
+    }
+    if log.construct_digest != admission.construct_digest
+        || log.receipt.epistemic_class != EpistemicClass::Observed
+        || log.receipt.parent_digests != [admission.construct_digest.clone()]
+    {
+        return Err("REFUSED:RECEIPT_NOT_BOUND_TO_ADMISSION".to_string());
     }
     if !post.holds {
         return Err("REFUSED:POSTCONDITION_FAILED".to_string());
     }
     Ok(ReceiptRef {
-        receipt_id: receipt_id.to_string(),
-        minted_by: minted_by.to_string(),
+        receipt_digest: log.receipt.receipt_digest.clone(),
+        construct_digest: admission.construct_digest.clone(),
         postcondition_digest: digest(&[&post.observer_id, &post.handoff_digest]),
     })
 }
 
 #[must_use]
 pub fn feed_back(receipt: &ReceiptRef, conforms: bool) -> ProcessFeedback {
-    ProcessFeedback { receipt_id: receipt.receipt_id.clone(), conforms }
+    ProcessFeedback { receipt_digest: receipt.receipt_digest.clone(), conforms }
 }
 
 /// Synthetic FIBO payment-authorization reference case (no real financial data).
