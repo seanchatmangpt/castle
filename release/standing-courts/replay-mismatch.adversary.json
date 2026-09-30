@@ -16,6 +16,6 @@
   "expected_guard": "REPLAY_DIVERGED",
   "canonical_falsifier": "dm_replay_mismatch",
   "canonical_repository": "seanchatmangpt/chatman-ecosystem",
-  "canonical_commit": "2e4e206b1eaffdde60d69aeb46f440d558ba18d4",
+  "canonical_commit": "1bfcd6764ad714e9771f7dc82cbe69b87abe14c9",
   "authority": "NONE"
 }
