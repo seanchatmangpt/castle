@@ -14,5 +14,6 @@ pub use fibo::{
     KnowledgeHookCandidate, FIBO_PAYMENT_CAPABILITY, GRAPHLAW_HOOK_CONTRACT,
 };
 pub use ownership::{
-    canonical_owners, ReferenceOwner, ReferenceStage, INHERITED_COURTS, REFERENCE_STAGES,
+    canonical_owners, ReferenceOwner, ReferenceStage, ECOSYSTEM_REFERENCE_HEAD,
+    GRAPHLAW_REFERENCE_HEAD, INHERITED_COURTS, REFERENCE_STAGES,
 };
