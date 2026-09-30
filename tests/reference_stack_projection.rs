@@ -1,6 +1,7 @@
 use castle::reference_stack::{
     bind_verification_receipt, canonical_owners, project_fibo_payment, KnowledgeHookCandidate,
-    FIBO_PAYMENT_CAPABILITY, GRAPHLAW_HOOK_CONTRACT, INHERITED_COURTS,
+    ECOSYSTEM_REFERENCE_HEAD, FIBO_PAYMENT_CAPABILITY, GRAPHLAW_HOOK_CONTRACT,
+    GRAPHLAW_REFERENCE_HEAD, INHERITED_COURTS,
 };
 use castle::sa2a_security::VerificationReceipt;
 use serde_json::json;
@@ -61,4 +62,6 @@ fn compounding_stack_has_one_owner_per_meaning() {
     assert_eq!(owners.iter().filter(|o| o.layer == "consequence-thin-waist").count(), 1);
     assert_eq!(owners.iter().filter(|o| o.layer == "product-constitution").count(), 1);
     assert!(INHERITED_COURTS.len() >= 8);
+    assert_eq!(GRAPHLAW_REFERENCE_HEAD, "48a7bbd801b8df1d7ffab879b10d58d7f14ef7bc");
+    assert_eq!(ECOSYSTEM_REFERENCE_HEAD, "bebffdeb2ea4dd6eace31d69298bfb51a073b265");
 }
