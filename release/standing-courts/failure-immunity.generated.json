@@ -1,0 +1,18 @@
+{
+  "GENERATED": "from seanchatmangpt/chatman-ecosystem release/v26.9.30/failure-immunity.json; do not hand-edit",
+  "schema": "https://chatman.dev/standing-court/failure-immunity-consumer/v1",
+  "canonical_owner": "seanchatmangpt/chatman-ecosystem",
+  "canonical_source": "release/v26.9.30/failure-immunity.json",
+  "canonical_commit": "31dcb53edf026cce9a297fd08924b0b5d5ff2b94",
+  "consumer_subject": "seanchatmangpt/castle",
+  "consumer_base_sha": "c18bf1d89ed5395d5ffb00f875d901a26f16b2fe",
+  "inherited_guards": [
+    "REPLAY_DIVERGED"
+  ],
+  "first_witness": {
+    "failure_class": "REPLAY_MISMATCH",
+    "producer_mutant": "dm_replay_mismatch"
+  },
+  "bespoke_consumer_tests": false,
+  "authority": "NONE"
+}
