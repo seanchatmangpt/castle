@@ -758,6 +758,7 @@ pub struct ConstructCapability {
     pub receipt: Receipt,
 }
 
+#[derive(Debug)]
 pub struct ConstructRequest {
     pub subject: String,
     pub authority: String,
