@@ -1,0 +1,28 @@
+name: Factory B inherited failure immunity
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  replay-mismatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout consumer
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Checkout canonical court
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: seanchatmangpt/chatman-ecosystem
+          ref: 2e4e206b1eaffdde60d69aeb46f440d558ba18d4
+          path: canonical
+      - name: Execute canonical inherited replay-mismatch witness
+        run: |
+          python3 canonical/scripts/release_train/verify_failure_immunity_consumer.py \
+            --canonical-root canonical \
+            --projection release/standing-courts/failure-immunity.generated.json \
+            --adversary release/standing-courts/replay-mismatch.adversary.json \
+            --consumer-repository seanchatmangpt/castle \
+            --consumer-head "$GITHUB_SHA" \
+            --output /tmp/inherited-negative-receipt.json
+          cat /tmp/inherited-negative-receipt.json
