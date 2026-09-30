@@ -1,0 +1,18 @@
+{
+  "schema": "castle/reference-stack/fibo-payment/v1",
+  "graphlaw_hook_contract": "https://graphlaw.dev/knowledge-hook#HookCandidate",
+  "capability": "fibo:PaymentExecution",
+  "subject": "system:fibo:payment:001",
+  "source_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "replay_identity": "replay:fibo:payment:001",
+  "authority": "NONE",
+  "observation_membrane": "ash_r2rml",
+  "consequence_thin_waist": "ash_a2a",
+  "trust_plane": "affidavit",
+  "operational_realization": "Reactor/CommandBus",
+  "do_boundary": "castle:BRCE",
+  "feedback": "beam4pm",
+  "runtime_composition": "xaas",
+  "graphlaw_head": "48a7bbd801b8df1d7ffab879b10d58d7f14ef7bc",
+  "ecosystem_head": "bebffdeb2ea4dd6eace31d69298bfb51a073b265"
+}
