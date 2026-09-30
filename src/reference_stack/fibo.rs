@@ -75,8 +75,8 @@ pub fn project_fibo_payment(candidate: KnowledgeHookCandidate) -> Result<FiboPay
         subject: candidate.exact_subject,
         payload: json!({
             "graphlaw_hook_contract": GRAPHLAW_HOOK_CONTRACT,
-            "semantic_source_digest": source_digest,
-            "replay_identity": replay_identity,
+            "semantic_source_digest": source_digest.clone(),
+            "replay_identity": replay_identity.clone(),
             "input": candidate.payload,
         }),
     };
