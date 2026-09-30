@@ -14,7 +14,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: seanchatmangpt/chatman-ecosystem
-          ref: 2e4e206b1eaffdde60d69aeb46f440d558ba18d4
+          ref: 1bfcd6764ad714e9771f7dc82cbe69b87abe14c9
           path: canonical
       - name: Execute canonical inherited replay-mismatch witness
         run: |
