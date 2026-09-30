@@ -1,8 +1,8 @@
 {
   "qme_profile": "QME-1/EcosystemReference",
   "version": "26.9.29",
-  "canonical_spec_subject": "seanchatmangpt/chatman-ecosystem@32c47032a9cefd0ab4f0980efc32fa84505031b2",
-  "local_subject": "seanchatmangpt/castle@f596deea634d705c94623d2f97e650ae3252ba28",
+  "canonical_spec_subject": "seanchatmangpt/chatman-ecosystem@88b276f71e2c8e606553942cb721bceb6836a87e",
+  "local_subject": "seanchatmangpt/castle@71f8efd48d5ed629307758dbca3b9c2d7ef032f6",
   "role": "product-level consequential constitution",
   "normative": false,
   "weakens_core": false,

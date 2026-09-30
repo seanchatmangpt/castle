@@ -1,6 +1,6 @@
 # QME-1 ecosystem reference
 
-Canonical specification: `seanchatmangpt/chatman-ecosystem@32c47032a9cefd0ab4f0980efc32fa84505031b2`
+Canonical specification: `seanchatmangpt/chatman-ecosystem@88b276f71e2c8e606553942cb721bceb6836a87e`
 
 This repository participates in QME-1 as **product-level consequential constitution**.
 
