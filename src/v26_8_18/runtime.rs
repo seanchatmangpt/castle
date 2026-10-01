@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::path::Path;
 
 use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
@@ -11,7 +12,7 @@ use crate::castle::{
 };
 
 use super::{
-    execute_command_process, persist_evidence, BrceTransitionRecord, CommandAdapterPolicy,
+    execute_command_process_durable, persist_evidence, BrceTransitionRecord, CommandAdapterPolicy,
     DurableEvidenceRecord, EvidenceCommit, ReleaseStanding,
 };
 
@@ -240,6 +241,11 @@ pub struct RuntimeDoSummary {
 /// This function recomputes that CONSTRUCT, compares identity, performs the
 /// normal opaque ConstructAdmission, enters the private real-provider rail,
 /// and only returns ALIVE after post-BRCE/OCEL evidence is durably committed.
+///
+/// Before any provider command can spawn, every signed BRCE PREPARE receipt is
+/// durably fsynced beneath `<evidence_dir>/brce`. A crash after that point is an
+/// observable incomplete transition and must never be interpreted as permission
+/// to retry blindly.
 pub async fn execute_runtime_request(
     request: &RuntimeExecutionRequest,
     key_id: String,
@@ -270,12 +276,14 @@ pub async fn execute_runtime_request(
         || now_epoch_ms,
     )?;
     let state = WorldState { system_id: request.subject.clone(), facts: BTreeSet::new() };
-    let (log, journal): (_, Vec<BrceTransitionRecord>) = execute_command_process(
+    let brce_journal_root = Path::new(&request.evidence_dir).join("brce");
+    let (log, journal): (_, Vec<BrceTransitionRecord>) = execute_command_process_durable(
         &manufactured.process,
         &state,
         &manufactured.envelope,
         &admission,
         request.adapter_policy.clone(),
+        &brce_journal_root,
         &blake3,
         &manufactured.signer,
         || now_epoch_ms,

@@ -1,4 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs::{self, OpenOptions};
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::thread;
@@ -25,19 +28,160 @@ pub struct BrceTransitionRecord {
     pub reason: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DurableBrceReceipt {
+    pub algorithm: String,
+    pub artifact_digest: String,
+    pub receipt_digest: String,
+    pub epistemic_class: String,
+    pub subject: String,
+    pub parent_digests: Vec<String>,
+    pub origin_key_id: String,
+    pub origin_signature: String,
+}
+
+impl DurableBrceReceipt {
+    fn from_receipt(receipt: &Receipt) -> Self {
+        Self {
+            algorithm: receipt.algorithm.to_string(),
+            artifact_digest: receipt.artifact_digest.clone(),
+            receipt_digest: receipt.receipt_digest.clone(),
+            epistemic_class: format!("{:?}", receipt.epistemic_class).to_uppercase(),
+            subject: receipt.subject.clone(),
+            parent_digests: receipt.parent_digests.clone(),
+            origin_key_id: receipt.origin_key_id.clone(),
+            origin_signature: receipt.origin_signature.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DurableBrcePrepareRecord {
+    pub kind: String,
+    pub release: String,
+    pub transition_id: String,
+    pub subject: String,
+    pub construct_digest: String,
+    pub process_digest: String,
+    pub prepare_receipt: DurableBrceReceipt,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DurableBrceOutcomeRecord {
+    pub kind: String,
+    pub release: String,
+    pub transition_id: String,
+    pub prepare_receipt_digest: String,
+    pub outcome_receipt: DurableBrceReceipt,
+    pub provider_status: String,
+}
+
+fn persist_journal_record(root: &Path, filename: &str, bytes: &[u8]) -> Result<(), String> {
+    fs::create_dir_all(root).map_err(|error| format!("BLOCKED:BRCE_JOURNAL_DIRECTORY_FAILED:{error}"))?;
+    let path = root.join(filename);
+
+    match OpenOptions::new().write(true).create_new(true).open(&path) {
+        Ok(mut file) => {
+            file.write_all(bytes).map_err(|error| format!("BLOCKED:BRCE_JOURNAL_WRITE_FAILED:{error}"))?;
+            file.sync_all().map_err(|error| format!("BLOCKED:BRCE_JOURNAL_FILE_SYNC_FAILED:{error}"))?;
+            if let Ok(dir) = OpenOptions::new().read(true).open(root) {
+                dir.sync_all().map_err(|error| format!("BLOCKED:BRCE_JOURNAL_DIRECTORY_SYNC_FAILED:{error}"))?;
+            }
+            Ok(())
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            let mut existing = Vec::new();
+            OpenOptions::new()
+                .read(true)
+                .open(&path)
+                .and_then(|mut file| file.read_to_end(&mut existing))
+                .map_err(|read_error| format!("BLOCKED:BRCE_JOURNAL_REPLAY_READ_FAILED:{read_error}"))?;
+            if existing == bytes {
+                Ok(())
+            } else {
+                Err("REFUSED:BRCE_JOURNAL_IDENTITY_COLLISION".to_string())
+            }
+        }
+        Err(error) => Err(format!("BLOCKED:BRCE_JOURNAL_CREATE_FAILED:{error}")),
+    }
+}
+
+fn persist_prepare(
+    root: &Path,
+    activity: &PowlActivity,
+    permit: &ActuationPermit,
+    receipt: &Receipt,
+) -> Result<(), String> {
+    let record = DurableBrcePrepareRecord {
+        kind: "CASTLE_DURABLE_BRCE_PREPARE_V1".to_string(),
+        release: RELEASE_VERSION.to_string(),
+        transition_id: activity.transition_id.clone(),
+        subject: permit.subject.clone(),
+        construct_digest: permit.construct_digest.clone(),
+        process_digest: permit.process_digest.clone(),
+        prepare_receipt: DurableBrceReceipt::from_receipt(receipt),
+    };
+    let bytes = serde_json::to_vec(&record)
+        .map_err(|error| format!("BLOCKED:BRCE_PREPARE_SERIALIZATION_FAILED:{error}"))?;
+    persist_journal_record(root, &format!("{}.prepare.json", receipt.receipt_digest), &bytes)
+}
+
+fn persist_outcome(
+    root: &Path,
+    transition_id: &str,
+    prepare: &Receipt,
+    outcome: &Receipt,
+    status: GymActStatus,
+) -> Result<(), String> {
+    let record = DurableBrceOutcomeRecord {
+        kind: "CASTLE_DURABLE_BRCE_OUTCOME_V1".to_string(),
+        release: RELEASE_VERSION.to_string(),
+        transition_id: transition_id.to_string(),
+        prepare_receipt_digest: prepare.receipt_digest.clone(),
+        outcome_receipt: DurableBrceReceipt::from_receipt(outcome),
+        provider_status: match status {
+            GymActStatus::Observed => "OBSERVED",
+            GymActStatus::Refused => "REFUSED",
+        }
+        .to_string(),
+    };
+    let bytes = serde_json::to_vec(&record)
+        .map_err(|error| format!("BLOCKED:BRCE_OUTCOME_SERIALIZATION_FAILED:{error}"))?;
+    persist_journal_record(root, &format!("{}.outcome.json", outcome.receipt_digest), &bytes)
+}
+
 /// BRCE wrapper around any GymAct adapter. Receipt manufacture happens before
-/// the inner adapter can execute. REFUSED provider outcomes are receipted too.
+/// the inner adapter can execute. Runtime callers may additionally provide a
+/// durable journal root; in that mode the signed PREPARE record is fsynced before
+/// the provider command can spawn, closing the ambiguous unreceipted-actuation gap.
 pub struct BrceGymActAdapter<'a> {
     inner: &'a dyn GymActAdapter,
     blake3: &'a dyn Blake3Provider,
     signer: &'a dyn ReceiptSigner,
     journal: Mutex<Vec<BrceTransitionRecord>>,
+    durable_journal_root: Option<PathBuf>,
 }
 
 impl<'a> BrceGymActAdapter<'a> {
     #[must_use]
     pub fn new(inner: &'a dyn GymActAdapter, blake3: &'a dyn Blake3Provider, signer: &'a dyn ReceiptSigner) -> Self {
-        Self { inner, blake3, signer, journal: Mutex::new(Vec::new()) }
+        Self { inner, blake3, signer, journal: Mutex::new(Vec::new()), durable_journal_root: None }
+    }
+
+    #[must_use]
+    pub fn new_durable(
+        inner: &'a dyn GymActAdapter,
+        blake3: &'a dyn Blake3Provider,
+        signer: &'a dyn ReceiptSigner,
+        durable_journal_root: PathBuf,
+    ) -> Self {
+        Self {
+            inner,
+            blake3,
+            signer,
+            journal: Mutex::new(Vec::new()),
+            durable_journal_root: Some(durable_journal_root),
+        }
     }
 
     #[must_use]
@@ -98,6 +242,20 @@ impl GymActAdapter for BrceGymActAdapter<'_> {
             }
         };
 
+        if let Some(root) = &self.durable_journal_root {
+            if let Err(error) = persist_prepare(root, activity, permit, &prepare) {
+                return GymActResult {
+                    transition_id: activity.transition_id.clone(),
+                    status: GymActStatus::Refused,
+                    objects: Vec::new(),
+                    attributes: BTreeMap::from([
+                        ("reason".to_string(), json!("BLOCKED:BRCE_PREPARE_NOT_DURABLE")),
+                        ("detail".to_string(), json!(error)),
+                    ]),
+                };
+            }
+        }
+
         {
             let Ok(mut journal) = self.journal.lock() else {
                 return GymActResult {
@@ -128,6 +286,27 @@ impl GymActAdapter for BrceGymActAdapter<'_> {
 
         match outcome {
             Ok(outcome_receipt) => {
+                if let Some(root) = &self.durable_journal_root {
+                    if let Err(error) = persist_outcome(
+                        root,
+                        &activity.transition_id,
+                        &prepare,
+                        &outcome_receipt,
+                        result.status,
+                    ) {
+                        result.status = GymActStatus::Refused;
+                        result.attributes.insert("reason".to_string(), json!("BLOCKED:BRCE_OUTCOME_NOT_DURABLE"));
+                        result.attributes.insert("detail".to_string(), json!(error));
+                        if let Ok(mut journal) = self.journal.lock() {
+                            if let Some(record) = journal.last_mut() {
+                                record.standing = ReleaseStanding::Blocked;
+                                record.reason = "BLOCKED:BRCE_OUTCOME_NOT_DURABLE".to_string();
+                            }
+                        }
+                        return result;
+                    }
+                }
+
                 result.attributes.insert("brce_prepare_receipt_digest".to_string(), json!(prepare.receipt_digest));
                 result.attributes.insert("brce_outcome_receipt_digest".to_string(), json!(outcome_receipt.receipt_digest));
                 let standing = if result.status == GymActStatus::Observed { ReleaseStanding::Alive } else { ReleaseStanding::Refused };
@@ -213,6 +392,33 @@ pub fn validate_command_adapter_policy(policy: &CommandAdapterPolicy) -> Release
     }
 }
 
+async fn execute_with_brce(
+    process: &PowlProcess,
+    state: &WorldState,
+    envelope: &TestEnvelope,
+    admission: &ConstructAdmission,
+    brce: &BrceGymActAdapter<'_>,
+    blake3: &dyn Blake3Provider,
+    signer: &dyn ReceiptSigner,
+    now: impl Fn() -> i64,
+) -> Result<(ReceiptedOcelLog, Vec<BrceTransitionRecord>), String> {
+    let log = execute_powl_with_gym_act(
+        process,
+        state,
+        envelope,
+        brce,
+        DoAuthorizationContext { admission, blake3, receipt_signer: signer, now: Box::new(now) },
+    )
+    .await?;
+    let journal = brce.journal();
+    if journal.len() != log.log.events.len()
+        || journal.iter().any(|record| record.standing != ReleaseStanding::Alive || record.outcome_receipt.is_none())
+    {
+        return Err("BLOCKED:BRCE_JOURNAL_INCOMPLETE".to_string());
+    }
+    Ok((log, journal))
+}
+
 /// Official real-provider actuation entrypoint. A genuine opaque
 /// ConstructAdmission is mandatory and execution goes back through the
 /// existing exclusive POWL DO function with BRCE wrapped around every
@@ -230,21 +436,31 @@ pub async fn execute_command_process(
 ) -> Result<(ReceiptedOcelLog, Vec<BrceTransitionRecord>), String> {
     let adapter = CommandGymActAdapter::new(policy)?;
     let brce = BrceGymActAdapter::new(&adapter, blake3, signer);
-    let log = execute_powl_with_gym_act(
-        process,
-        state,
-        envelope,
-        &brce,
-        DoAuthorizationContext { admission, blake3, receipt_signer: signer, now: Box::new(now) },
-    )
-    .await?;
-    let journal = brce.journal();
-    if journal.len() != log.log.events.len()
-        || journal.iter().any(|record| record.standing != ReleaseStanding::Alive || record.outcome_receipt.is_none())
-    {
-        return Err("BLOCKED:BRCE_JOURNAL_INCOMPLETE".to_string());
-    }
-    Ok((log, journal))
+    execute_with_brce(process, state, envelope, admission, &brce, blake3, signer, now).await
+}
+
+/// Runtime variant whose PREPARE and OUTCOME receipts are durably journaled.
+/// The PREPARE file is fsynced before the provider adapter can execute.
+#[allow(clippy::too_many_arguments)]
+pub async fn execute_command_process_durable(
+    process: &PowlProcess,
+    state: &WorldState,
+    envelope: &TestEnvelope,
+    admission: &ConstructAdmission,
+    policy: CommandAdapterPolicy,
+    durable_journal_root: impl AsRef<Path>,
+    blake3: &dyn Blake3Provider,
+    signer: &dyn ReceiptSigner,
+    now: impl Fn() -> i64,
+) -> Result<(ReceiptedOcelLog, Vec<BrceTransitionRecord>), String> {
+    let adapter = CommandGymActAdapter::new(policy)?;
+    let brce = BrceGymActAdapter::new_durable(
+        &adapter,
+        blake3,
+        signer,
+        durable_journal_root.as_ref().to_path_buf(),
+    );
+    execute_with_brce(process, state, envelope, admission, &brce, blake3, signer, now).await
 }
 
 #[async_trait]
