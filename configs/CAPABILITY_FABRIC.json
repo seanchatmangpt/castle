@@ -9,15 +9,43 @@
     "capability://agent/actuate"
   ],
   "failureClasses": {
-    "REALIZATION_FAILED": {"fallsOver": true},
-    "CAPABILITY_UNAVAILABLE": {"fallsOver": false},
-    "SEMANTIC_REFUSAL": {"fallsOver": false},
-    "AUTHORITY_REFUSAL": {"fallsOver": false},
-    "PROCESS_INVALID": {"fallsOver": false},
-    "TRANSPORT_FAILED": {"fallsOver": true},
-    "EVIDENCE_INSUFFICIENT": {"fallsOver": false},
-    "UNSUPPORTED": {"fallsOver": true}
+    "SEMANTIC_REFUSAL": {
+      "fallsOver": false
+    },
+    "AUTHORITY_REFUSAL": {
+      "fallsOver": false
+    },
+    "PROCESS_INVALID": {
+      "fallsOver": false
+    },
+    "REALIZATION_FAILED": {
+      "fallsOver": true
+    },
+    "EVIDENCE_INSUFFICIENT": {
+      "fallsOver": false
+    },
+    "UNSUPPORTED": {
+      "fallsOver": false
+    },
+    "CAPABILITY_UNAVAILABLE": {
+      "fallsOver": false
+    }
   },
-  "typedRefusals": ["REFUSED:CONTRACT_URI_INVALID", "REFUSED:QRI_CONTRACT_MISMATCH", "REFUSED:<FAILURE_CLASS>:<detail>"],
-  "doNeverFallsOver": true
+  "typedRefusals": [
+    "REFUSED:<code>",
+    "BLOCKED:<code>"
+  ],
+  "doNeverFallsOver": true,
+  "runtimeOwner": "seanchatmangpt/xaas (Xaas.Fabric)",
+  "castleOwns": [
+    "operation_envelope"
+  ],
+  "cliFailureContract": {
+    "stdout": "{\"ok\":false,\"class\":\"refused|blocked|standing|error\",...}",
+    "exit": {
+      "2": "REFUSED/BLOCKED",
+      "3": "non-settled standing",
+      "1": "other"
+    }
+  }
 }
