@@ -394,3 +394,20 @@ fn cli_sources_contain_no_float_amount_handling() {
         }
     }
 }
+
+// ---- machine-readable failure contract (consumed by XaaS effectors) ----
+
+#[test]
+fn typed_refusal_prints_json_on_stdout_and_exits_2() {
+    let out = Command::new(env!("CARGO_BIN_EXE_castle"))
+        .args(["payments", "prepare", "--principal", "p", "--payer", "a", "--payee", "b", "--amount-minor", "0", "--currency", "USD", "--obligation-id", "o", "--purpose", "x"])
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value = serde_json::from_str(stdout.lines().last().unwrap_or("")).unwrap_or_else(|e| panic!("stdout not JSON ({e}): {stdout}"));
+    assert_eq!(v["ok"], false);
+    assert_eq!(v["class"], "refused");
+    assert_eq!(v["code"], "REFUSED:PAYMENT_AMOUNT_ZERO");
+    assert_eq!(out.status.code(), Some(2));
+}
