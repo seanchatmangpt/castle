@@ -3,6 +3,7 @@ pub mod board;
 pub mod capability_intake;
 pub mod castle;
 pub mod dd_ui;
+pub mod fabric;
 pub mod fortune5;
 pub mod fortune5_generated;
 pub mod generated;

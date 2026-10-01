@@ -1,0 +1,23 @@
+{
+  "schema": "castle.fabric.v1",
+  "version": "26.9.30",
+  "requiredUris": [
+    "capability://projection/map",
+    "capability://process/conformance",
+    "capability://law/admit",
+    "capability://evidence/attest",
+    "capability://agent/actuate"
+  ],
+  "failureClasses": {
+    "REALIZATION_FAILED": {"fallsOver": true},
+    "CAPABILITY_UNAVAILABLE": {"fallsOver": false},
+    "SEMANTIC_REFUSAL": {"fallsOver": false},
+    "AUTHORITY_REFUSAL": {"fallsOver": false},
+    "PROCESS_INVALID": {"fallsOver": false},
+    "TRANSPORT_FAILED": {"fallsOver": true},
+    "EVIDENCE_INSUFFICIENT": {"fallsOver": false},
+    "UNSUPPORTED": {"fallsOver": true}
+  },
+  "typedRefusals": ["REFUSED:CONTRACT_URI_INVALID", "REFUSED:QRI_CONTRACT_MISMATCH", "REFUSED:<FAILURE_CLASS>:<detail>"],
+  "doNeverFallsOver": true
+}

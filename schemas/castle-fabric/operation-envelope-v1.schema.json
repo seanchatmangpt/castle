@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "castle.fabric.operation-envelope.v1",
+  "type": "object",
+  "required": ["operation_id", "subject", "intent", "capability", "context", "ontology_refs", "input", "actor", "authority", "effect_class", "standing_requirements", "prior_receipts", "correlation"],
+  "additionalProperties": false,
+  "properties": {
+    "operation_id": {"type": "string", "minLength": 1},
+    "subject": {"type": "string", "minLength": 1},
+    "intent": {"type": "string"},
+    "capability": {"type": "string", "pattern": "^capability://"},
+    "context": {"type": "object"},
+    "ontology_refs": {"type": "array", "items": {"type": "string"}},
+    "input": {},
+    "actor": {"type": "string"},
+    "authority": {"type": "string"},
+    "effect_class": {"enum": ["OBSERVE", "SELECT", "CONSTRUCT", "DO"]},
+    "standing_requirements": {"type": "array", "items": {"type": "string"}},
+    "prior_receipts": {"type": "array", "items": {"type": "string"}},
+    "correlation": {"type": "string"}
+  }
+}

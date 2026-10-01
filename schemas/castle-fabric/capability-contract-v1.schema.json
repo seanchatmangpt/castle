@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "castle.fabric.capability-contract.v1",
+  "type": "object",
+  "required": ["uri", "semantic_id", "realization", "effect_class", "accepted_subjects", "invariants", "refusal_conditions", "evidence_requirements"],
+  "additionalProperties": false,
+  "properties": {
+    "uri": {"type": "string", "pattern": "^capability://"},
+    "semantic_id": {"type": "string", "minLength": 1},
+    "realization": {"type": "string", "minLength": 1},
+    "effect_class": {"enum": ["OBSERVE", "SELECT", "CONSTRUCT", "DO"]},
+    "accepted_subjects": {"type": "array", "items": {"type": "string"}},
+    "invariants": {"type": "array", "items": {"type": "string"}},
+    "refusal_conditions": {"type": "array", "items": {"type": "string"}},
+    "evidence_requirements": {"type": "array", "items": {"type": "string"}}
+  }
+}
