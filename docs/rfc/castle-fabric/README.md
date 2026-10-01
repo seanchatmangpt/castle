@@ -2,7 +2,9 @@
 
 Canonical architecture for CASTLE / XaaS / `ash_*` composition. CASTLE expresses product intent; the fabric
 resolves `capability://` URIs to independently qualified realizations; no plane integrates with another
-directly. Implementation: `src/fabric/`. Closure test ("CASTLE ALIVE"): `tests/castle_alive.rs`.
+directly. Ownership: runtime composition is XaaS (`~/xaas/lib/xaas/fabric`, `Xaas.Fabric.*`); CASTLE owns only the
+envelope (`src/operation_envelope.rs`). `tests/common/fabric/` is a Rust harness mirroring the XaaS fabric so
+CASTLE's payment providers can be exercised by the closure test ("CASTLE ALIVE", `tests/castle_alive.rs`).
 
 ## Model
 
@@ -12,11 +14,11 @@ OperationEnvelope --> Orchestrator --> Registry --resolve(uri)--> Capability rea
 
 | Artifact | Code | Schema |
 |---|---|---|
-| OperationEnvelope | `fabric::OperationEnvelope` | `schemas/castle-fabric/operation-envelope-v1.schema.json` |
-| CapabilityContract | `fabric::CapabilityContract` | `schemas/castle-fabric/capability-contract-v1.schema.json` |
-| Capability bus | `fabric::Capability` (describe, qualify, observe, select, construct, execute, receipt, replay, health) | n/a |
-| Registry + QRI | `fabric::Registry` | n/a |
-| Failure taxonomy, refusals | `fabric::FailureClass`, `configs/CAPABILITY_FABRIC.json` | n/a |
+| OperationEnvelope | `castle::operation_envelope::OperationEnvelope` | `schemas/castle-fabric/operation-envelope-v1.schema.json` |
+| CapabilityContract | `Xaas.Fabric.Contract` (harness: `tests/common/fabric/contract.rs`) | `schemas/castle-fabric/capability-contract-v1.schema.json` |
+| Capability bus | `Xaas.Fabric.Capability` (describe, qualify, observe, select, construct, execute, receipt, replay, health) | n/a |
+| Registry + QRI | `Xaas.Fabric.Registry` | n/a |
+| Failure taxonomy, refusals | `Xaas.Fabric.Capability` failure classes, `configs/CAPABILITY_FABRIC.json` | n/a |
 
 ## Planes (URIs)
 
@@ -43,7 +45,7 @@ separately; `Standing::Alive` requires a verified receipt and a conforming proce
   evidence requirements, else `REFUSED:QRI_CONTRACT_MISMATCH`.
 - Execution is not standing: no receipt means `Standing::Unknown`.
 - Replay reconstructs the decision and re-verifies the receipt; it never re-actuates.
-- The fabric source names no concrete realization (asserted by `castle_side_fabric_names_no_concrete_realization`).
+- CASTLE's envelope names no concrete realization (asserted by `castle_owns_only_the_envelope_and_names_no_realization`).
 
 ## Scope note
 
@@ -53,4 +55,4 @@ same contract.
 
 ## See Also
 
-`docs/payments/`, `configs/CONSTRUCT.json`, `src/castle.rs` (`admit_construct_for_do`)
+`docs/payments/`, `configs/CONSTRUCT.json`, `src/castle.rs` (`admit_construct_for_do`), `~/xaas/test/xaas/fabric/fabric_test.exs`

@@ -1,17 +1,14 @@
-//! CASTLE capability fabric (SRFC `docs/rfc/castle-fabric`): product intent is carried by an
-//! [`OperationEnvelope`], resolved by URI through a [`Registry`] to independently qualified
-//! [`Capability`] realizations, and driven by the [`Orchestrator`] through
-//! OBSERVE -> SELECT -> CONSTRUCT -> DO -> RECEIPT -> REPLAY -> STANDING.
-//!
-//! Nothing here names a concrete realization: the fabric is plane-agnostic by construction.
+//! Test-side harness mirroring `Xaas.Fabric.*` (~/xaas/lib/xaas/fabric): runtime composition
+//! (registry, resolver, orchestrator, replay) belongs to XaaS. CASTLE owns only the envelope
+//! (`castle::operation_envelope`); this harness lets CASTLE's own payment providers be exercised
+//! by the CASTLE ALIVE test until a XaaS-to-CASTLE transport exists.
 
 pub mod contract;
-pub mod envelope;
 pub mod orchestrator;
 pub mod registry;
 
 pub use contract::{Capability, CapabilityContract, CapError, CapResult, Facts, FailureClass};
-pub use envelope::{EffectClass, OperationEnvelope};
+pub use castle::operation_envelope::{EffectClass, OperationEnvelope};
 pub use orchestrator::{Orchestrator, Outcome, ReplayVerdict, Standing, Stage};
 pub use registry::Registry;
 

@@ -1,3 +1,5 @@
+//! CASTLE's product-intent envelope. Runtime composition (registry, resolver, orchestration, replay)
+//! is XaaS's (`Xaas.Fabric.*`); CASTLE only states intent and consumes outcomes.
 use serde_json::{json, Value};
 
 /// Effect classes are ordered: a capability may only be driven up to its declared class.

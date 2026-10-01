@@ -10,7 +10,7 @@ use std::sync::Mutex;
 use serde_json::{json, Value};
 
 use castle::castle::{create_receipt, verify_receipt, EpistemicClass, OcelEvent, OcelLog, Receipt};
-use castle::fabric::*;
+use crate::common::fabric::*;
 use castle::payments::replay::{replay_admission, AdmissionJournal, ReplayVerdict as PayReplay};
 use castle::payments::*;
 

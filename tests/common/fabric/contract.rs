@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 
 use serde_json::Value;
 
-use super::envelope::{EffectClass, OperationEnvelope};
+use super::{EffectClass, OperationEnvelope};
 
 /// PRD section 17: failures are typed; only some close an edge and fall over to another realization.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

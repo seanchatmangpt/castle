@@ -7,7 +7,7 @@ use common::payments::*;
 
 use std::sync::atomic::Ordering;
 
-use castle::fabric::*;
+use common::fabric::*;
 use castle::payments::*;
 use serde_json::json;
 
@@ -88,12 +88,12 @@ fn balances(fx: &Fixture) -> (u64, u64) {
 }
 
 #[test]
-fn castle_side_fabric_names_no_concrete_realization() {
-    for f in ["mod", "envelope", "contract", "registry", "orchestrator"] {
-        let src = std::fs::read_to_string(format!("{}/src/fabric/{f}.rs", env!("CARGO_MANIFEST_DIR"))).unwrap();
-        for banned in ["payments::", "Fixture", "PaymentAdmission", "ash_", "SimRail", "JournalLaw"] {
-            assert!(!src.contains(banned), "src/fabric/{f}.rs mentions `{banned}`");
-        }
+fn castle_owns_only_the_envelope_and_names_no_realization() {
+    let root = env!("CARGO_MANIFEST_DIR");
+    assert!(!std::path::Path::new(&format!("{root}/src/fabric")).exists(), "runtime composition belongs to XaaS");
+    let src = std::fs::read_to_string(format!("{root}/src/operation_envelope.rs")).unwrap();
+    for banned in ["payments::", "Fixture", "PaymentAdmission", "ash_", "SimRail", "Registry", "Orchestrator"] {
+        assert!(!src.contains(banned), "src/operation_envelope.rs mentions `{banned}`");
     }
 }
 
@@ -135,7 +135,7 @@ fn valid_payment_is_alive_with_exactly_one_do_and_independent_observation() {
     // Replay reproduces the decision and re-verifies the receipt without re-actuating.
     let receipt = out.receipt.clone().expect("receipt");
     let verdict = Orchestrator::new(&w.registry).replay(&env, &receipt);
-    assert_eq!(verdict, castle::fabric::ReplayVerdict { same_decision: true, receipt_valid: true, detail: "law=ok evidence=ok".into() });
+    assert_eq!(verdict, common::fabric::ReplayVerdict { same_decision: true, receipt_valid: true, detail: "law=ok evidence=ok".into() });
     assert_eq!(actuator.executions.load(Ordering::SeqCst), 1);
     assert_eq!(balances(&fx), (530_000, 470_000));
 }

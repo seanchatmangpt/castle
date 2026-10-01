@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use super::contract::{Capability, CapabilityContract, CapError, FailureClass};
-use super::envelope::EffectClass;
+use super::EffectClass;
 
 /// Resolves `capability://` URIs to qualified realizations. No switch over repositories:
 /// anything satisfying a contract may register.

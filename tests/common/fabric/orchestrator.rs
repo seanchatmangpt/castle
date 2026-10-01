@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use serde_json::{json, Value};
 
 use super::contract::{CapError, CapResult, Capability, Facts, FailureClass};
-use super::envelope::{EffectClass, OperationEnvelope};
+use super::{EffectClass, OperationEnvelope};
 use super::registry::Registry;
 use super::{URI_ACTUATION, URI_EVIDENCE, URI_LAW, URI_PROCESS, URI_PROJECTION};
 
