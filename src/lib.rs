@@ -1,5 +1,6 @@
 pub mod blake3;
 pub mod board;
+pub mod capability_intake;
 pub mod castle;
 pub mod dd_ui;
 pub mod fortune5;
@@ -11,6 +12,7 @@ pub mod reconstitution;
 pub mod payments;
 pub mod refusal_conformance;
 pub mod security_universe;
+pub mod reference_stack;
 pub mod sa2a_security;
 pub mod strategic_command;
 pub mod strategic_board;

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://castle.dev/schemas/reference-stack/fibo-payment-v1.schema.json",
+  "title": "CASTLE FIBO reference projection",
+  "type": "object",
+  "required": ["capability", "subject", "source_digest", "replay_identity", "authority"],
+  "properties": {
+    "capability": { "const": "fibo:PaymentExecution" },
+    "subject": { "type": "string", "minLength": 1 },
+    "source_digest": { "type": "string", "pattern": "^sha256:[0-9a-fA-F]{64}$" },
+    "replay_identity": { "type": "string", "minLength": 1 },
+    "authority": { "const": "NONE" }
+  },
+  "additionalProperties": true
+}

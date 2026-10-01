@@ -1,0 +1,21 @@
+{
+  "schema": "standing-courts/replay-adversary/v2",
+  "failure_class": "REPLAY_MISMATCH",
+  "expected": {
+    "subject": "factory-b-inherited-witness",
+    "transition": "admit",
+    "standing": "ALIVE",
+    "sequence": 1
+  },
+  "observed": {
+    "subject": "factory-b-inherited-witness",
+    "transition": "admit",
+    "standing": "ALIVE",
+    "sequence": 2
+  },
+  "expected_guard": "REPLAY_DIVERGED",
+  "canonical_falsifier": "dm_replay_mismatch",
+  "canonical_repository": "seanchatmangpt/chatman-ecosystem",
+  "canonical_commit": "1bfcd6764ad714e9771f7dc82cbe69b87abe14c9",
+  "authority": "NONE"
+}
