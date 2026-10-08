@@ -1,0 +1,147 @@
+{
+  "authorityCeiling": "CONSTRUCT",
+  "law": "receipt-driven STOP; SELECT never implies DO",
+  "skills": [
+    {
+      "ashAction": "gate_status",
+      "consequence": "NONE",
+      "description": "Status query for CASTLE-28-0 (Product crown: CASTLE owns board constitution and consequence admissibility). OBSERVE surface: receipt-driven STOP; SELECT never implies DO.",
+      "exposed": true,
+      "generatedBy": "https://ggen-igniter.dev/sjira/castle-26.10.8#gate-skill-generator",
+      "label": "Crown gate 0: Product crown: CASTLE owns board constitution and consequence admissibility",
+      "requiresCapability": "CONSEQUENTIAL_ADMISSIBILITY",
+      "skillName": "castle.gate.0"
+    },
+    {
+      "ashAction": "gate_status",
+      "consequence": "NONE",
+      "description": "Status query for CASTLE-28-1 (Runtime crown: XaaS owns runtime existence and composition). OBSERVE surface: receipt-driven STOP; SELECT never implies DO.",
+      "exposed": true,
+      "generatedBy": "https://ggen-igniter.dev/sjira/castle-26.10.8#gate-skill-generator",
+      "label": "Crown gate 1: Runtime crown: XaaS owns runtime existence and composition",
+      "requiresCapability": "RUNTIME_EXISTENCE",
+      "skillName": "castle.gate.1"
+    },
+    {
+      "ashAction": "gate_status",
+      "consequence": "NONE",
+      "description": "Status query for CASTLE-28-2 (SA2A exact-subject transport). OBSERVE surface: receipt-driven STOP; SELECT never implies DO.",
+      "exposed": true,
+      "generatedBy": "https://ggen-igniter.dev/sjira/castle-26.10.8#gate-skill-generator",
+      "label": "Crown gate 2: SA2A exact-subject transport",
+      "requiresCapability": "SA2A_TRANSPORT",
+      "skillName": "castle.gate.2"
+    },
+    {
+      "ashAction": "gate_status",
+      "consequence": "NONE",
+      "description": "Status query for CASTLE-28-3 (Process and planning runtime). OBSERVE surface: receipt-driven STOP; SELECT never implies DO.",
+      "exposed": true,
+      "generatedBy": "https://ggen-igniter.dev/sjira/castle-26.10.8#gate-skill-generator",
+      "label": "Crown gate 3: Process and planning runtime",
+      "requiresCapability": "PROCESS_COORDINATION",
+      "skillName": "castle.gate.3"
+    },
+    {
+      "ashAction": "gate_status",
+      "consequence": "NONE",
+      "description": "Status query for CASTLE-28-4 (Semantic projection and GraphLaw). OBSERVE surface: receipt-driven STOP; SELECT never implies DO.",
+      "exposed": true,
+      "generatedBy": "https://ggen-igniter.dev/sjira/castle-26.10.8#gate-skill-generator",
+      "label": "Crown gate 4: Semantic projection and GraphLaw",
+      "requiresCapability": "SEMANTIC_LAW_DERIVATION",
+      "skillName": "castle.gate.4"
+    },
+    {
+      "ashAction": "gate_status",
+      "consequence": "NONE",
+      "description": "Status query for CASTLE-28-5 (Affidavit cryptographic standing). OBSERVE surface: receipt-driven STOP; SELECT never implies DO.",
+      "exposed": true,
+      "generatedBy": "https://ggen-igniter.dev/sjira/castle-26.10.8#gate-skill-generator",
+      "label": "Crown gate 5: Affidavit cryptographic standing",
+      "requiresCapability": "CRYPTOGRAPHIC_STANDING",
+      "skillName": "castle.gate.5"
+    },
+    {
+      "ashAction": "gate_status",
+      "consequence": "NONE",
+      "description": "Status query for CASTLE-28-6 (Deterministic WASM and resource bounds). OBSERVE surface: receipt-driven STOP; SELECT never implies DO.",
+      "exposed": true,
+      "generatedBy": "https://ggen-igniter.dev/sjira/castle-26.10.8#gate-skill-generator",
+      "label": "Crown gate 6: Deterministic WASM and resource bounds",
+      "requiresCapability": "DETERMINISTIC_WASM_RUNTIME",
+      "skillName": "castle.gate.6"
+    },
+    {
+      "ashAction": "gate_status",
+      "consequence": "NONE",
+      "description": "Status query for CASTLE-28-7 (Adversarial execution and failure discovery). OBSERVE surface: receipt-driven STOP; SELECT never implies DO.",
+      "exposed": true,
+      "generatedBy": "https://ggen-igniter.dev/sjira/castle-26.10.8#gate-skill-generator",
+      "label": "Crown gate 7: Adversarial execution and failure discovery",
+      "requiresCapability": "BOUNDED_ADVERSARIAL_EXECUTION",
+      "skillName": "castle.gate.7"
+    },
+    {
+      "ashAction": "gate_status",
+      "consequence": "NONE",
+      "description": "Status query for CASTLE-28-8 (Evidence, OCEL and process intelligence). OBSERVE surface: receipt-driven STOP; SELECT never implies DO.",
+      "exposed": true,
+      "generatedBy": "https://ggen-igniter.dev/sjira/castle-26.10.8#gate-skill-generator",
+      "label": "Crown gate 8: Evidence, OCEL and process intelligence",
+      "requiresCapability": "PROCESS_ANALYTICS",
+      "skillName": "castle.gate.8"
+    },
+    {
+      "ashAction": "gate_status",
+      "consequence": "NONE",
+      "description": "Status query for CASTLE-28-9 (Semantic manufacture and fleet generation). OBSERVE surface: receipt-driven STOP; SELECT never implies DO.",
+      "exposed": true,
+      "generatedBy": "https://ggen-igniter.dev/sjira/castle-26.10.8#gate-skill-generator",
+      "label": "Crown gate 9: Semantic manufacture and fleet generation",
+      "requiresCapability": "SEMANTIC_MANUFACTURE",
+      "skillName": "castle.gate.9"
+    },
+    {
+      "ashAction": "gate_status",
+      "consequence": "NONE",
+      "description": "Status query for CASTLE-28-10 (Bounded application and external-system surfaces). OBSERVE surface: receipt-driven STOP; SELECT never implies DO.",
+      "exposed": true,
+      "generatedBy": "https://ggen-igniter.dev/sjira/castle-26.10.8#gate-skill-generator",
+      "label": "Crown gate 10: Bounded application and external-system surfaces",
+      "requiresCapability": "HUMAN_SURFACE",
+      "skillName": "castle.gate.10"
+    },
+    {
+      "ashAction": "gate_status",
+      "consequence": "NONE",
+      "description": "Status query for CASTLE-28-11 (Berthier / 33SW board strategic command). OBSERVE surface: receipt-driven STOP; SELECT never implies DO.",
+      "exposed": true,
+      "generatedBy": "https://ggen-igniter.dev/sjira/castle-26.10.8#gate-skill-generator",
+      "label": "Crown gate 11: Berthier / 33SW board strategic command",
+      "requiresCapability": "CONSEQUENTIAL_ADMISSIBILITY",
+      "skillName": "castle.gate.11"
+    },
+    {
+      "ashAction": "gate_status",
+      "consequence": "NONE",
+      "description": "Status query for CASTLE-28-12 (One protected BRCE consequence boundary). OBSERVE surface: receipt-driven STOP; SELECT never implies DO.",
+      "exposed": true,
+      "generatedBy": "https://ggen-igniter.dev/sjira/castle-26.10.8#gate-skill-generator",
+      "label": "Crown gate 12: One protected BRCE consequence boundary",
+      "requiresCapability": "CONSEQUENTIAL_ADMISSIBILITY",
+      "skillName": "castle.gate.12"
+    },
+    {
+      "ashAction": "gate_status",
+      "consequence": "NONE",
+      "description": "Status query for CASTLE-28-13 (Single irreducible owner per retained capability). OBSERVE surface: receipt-driven STOP; SELECT never implies DO.",
+      "exposed": true,
+      "generatedBy": "https://ggen-igniter.dev/sjira/castle-26.10.8#gate-skill-generator",
+      "label": "Crown gate 13: Single irreducible owner per retained capability",
+      "requiresCapability": "CONSEQUENTIAL_ADMISSIBILITY",
+      "skillName": "castle.gate.13"
+    }
+  ],
+  "surface": "OBSERVE"
+}

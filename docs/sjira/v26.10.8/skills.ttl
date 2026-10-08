@@ -1,0 +1,180 @@
+@prefix sj: <https://ggen-igniter.dev/ontology/semantic-jira#> .
+@prefix a2a: <https://ggen-igniter.dev/ontology/a2a#> .
+@prefix gi: <https://ggen-igniter.dev/ontology/ggen-igniter#> .
+@prefix c10: <https://ggen-igniter.dev/sjira/castle-26.10.8#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# CASTLE v26.10.8 crown gates as observable A2A skills.
+#
+# Companion to docs/sjira/v26.10.8/goal.ttl. Annotates the fourteen v26.9.28
+# crown gates (CASTLE-28-0 .. CASTLE-28-13) as sj:Action individuals following
+# the semantic-jira-pack gates/060_a2a_skills.rq mechanism: every exposed
+# skill is an sj:Action with a2a:skillName, a2a:ashAction, a2a:consequence,
+# a2a:exposed true, a2a:requiresCapability naming the owning capability from
+# docs/sjira/v26.9.28/repos.ttl, and a2a:generatedBy a generator carrying
+# gi:standing "ALIVE" as gate 060 requires.
+#
+# OBSERVE surface only. These are gate STATUS queries. Every description
+# carries the surface law verbatim: receipt-driven STOP; SELECT never implies DO. A SELECT result never actuates; the
+# sole CONSTRUCT -> DO boundary remains BRCE (goal.ttl law, unchanged).
+
+c10:gate-skill-generator
+    a gi:Generator ;
+    rdfs:label "castle goal graph projection generator" ;
+    gi:standing "ALIVE" ;
+    dcterms:description "The v26.10.8 goal graph projection that exposes crown-gate status queries as observable A2A skills." .
+
+c10:skill-gate-0
+    a sj:Action ;
+    a2a:skillName "castle.gate.0" ;
+    a2a:ashAction "gate_status" ;
+    a2a:consequence "NONE" ;
+    a2a:exposed true ;
+    a2a:requiresCapability "CONSEQUENTIAL_ADMISSIBILITY" ;
+    a2a:generatedBy c10:gate-skill-generator ;
+    rdfs:label "Crown gate 0: Product crown: CASTLE owns board constitution and consequence admissibility" ;
+    dcterms:description "Status query for CASTLE-28-0 (Product crown: CASTLE owns board constitution and consequence admissibility). OBSERVE surface: receipt-driven STOP; SELECT never implies DO." .
+
+c10:skill-gate-1
+    a sj:Action ;
+    a2a:skillName "castle.gate.1" ;
+    a2a:ashAction "gate_status" ;
+    a2a:consequence "NONE" ;
+    a2a:exposed true ;
+    a2a:requiresCapability "RUNTIME_EXISTENCE" ;
+    a2a:generatedBy c10:gate-skill-generator ;
+    rdfs:label "Crown gate 1: Runtime crown: XaaS owns runtime existence and composition" ;
+    dcterms:description "Status query for CASTLE-28-1 (Runtime crown: XaaS owns runtime existence and composition). OBSERVE surface: receipt-driven STOP; SELECT never implies DO." .
+
+c10:skill-gate-2
+    a sj:Action ;
+    a2a:skillName "castle.gate.2" ;
+    a2a:ashAction "gate_status" ;
+    a2a:consequence "NONE" ;
+    a2a:exposed true ;
+    a2a:requiresCapability "SA2A_TRANSPORT" ;
+    a2a:generatedBy c10:gate-skill-generator ;
+    rdfs:label "Crown gate 2: SA2A exact-subject transport" ;
+    dcterms:description "Status query for CASTLE-28-2 (SA2A exact-subject transport). OBSERVE surface: receipt-driven STOP; SELECT never implies DO." .
+
+c10:skill-gate-3
+    a sj:Action ;
+    a2a:skillName "castle.gate.3" ;
+    a2a:ashAction "gate_status" ;
+    a2a:consequence "NONE" ;
+    a2a:exposed true ;
+    a2a:requiresCapability "PROCESS_COORDINATION" ;
+    a2a:generatedBy c10:gate-skill-generator ;
+    rdfs:label "Crown gate 3: Process and planning runtime" ;
+    dcterms:description "Status query for CASTLE-28-3 (Process and planning runtime). OBSERVE surface: receipt-driven STOP; SELECT never implies DO." .
+
+c10:skill-gate-4
+    a sj:Action ;
+    a2a:skillName "castle.gate.4" ;
+    a2a:ashAction "gate_status" ;
+    a2a:consequence "NONE" ;
+    a2a:exposed true ;
+    a2a:requiresCapability "SEMANTIC_LAW_DERIVATION" ;
+    a2a:generatedBy c10:gate-skill-generator ;
+    rdfs:label "Crown gate 4: Semantic projection and GraphLaw" ;
+    dcterms:description "Status query for CASTLE-28-4 (Semantic projection and GraphLaw). OBSERVE surface: receipt-driven STOP; SELECT never implies DO." .
+
+c10:skill-gate-5
+    a sj:Action ;
+    a2a:skillName "castle.gate.5" ;
+    a2a:ashAction "gate_status" ;
+    a2a:consequence "NONE" ;
+    a2a:exposed true ;
+    a2a:requiresCapability "CRYPTOGRAPHIC_STANDING" ;
+    a2a:generatedBy c10:gate-skill-generator ;
+    rdfs:label "Crown gate 5: Affidavit cryptographic standing" ;
+    dcterms:description "Status query for CASTLE-28-5 (Affidavit cryptographic standing). OBSERVE surface: receipt-driven STOP; SELECT never implies DO." .
+
+c10:skill-gate-6
+    a sj:Action ;
+    a2a:skillName "castle.gate.6" ;
+    a2a:ashAction "gate_status" ;
+    a2a:consequence "NONE" ;
+    a2a:exposed true ;
+    a2a:requiresCapability "DETERMINISTIC_WASM_RUNTIME" ;
+    a2a:generatedBy c10:gate-skill-generator ;
+    rdfs:label "Crown gate 6: Deterministic WASM and resource bounds" ;
+    dcterms:description "Status query for CASTLE-28-6 (Deterministic WASM and resource bounds). OBSERVE surface: receipt-driven STOP; SELECT never implies DO." .
+
+c10:skill-gate-7
+    a sj:Action ;
+    a2a:skillName "castle.gate.7" ;
+    a2a:ashAction "gate_status" ;
+    a2a:consequence "NONE" ;
+    a2a:exposed true ;
+    a2a:requiresCapability "BOUNDED_ADVERSARIAL_EXECUTION" ;
+    a2a:generatedBy c10:gate-skill-generator ;
+    rdfs:label "Crown gate 7: Adversarial execution and failure discovery" ;
+    dcterms:description "Status query for CASTLE-28-7 (Adversarial execution and failure discovery). OBSERVE surface: receipt-driven STOP; SELECT never implies DO." .
+
+c10:skill-gate-8
+    a sj:Action ;
+    a2a:skillName "castle.gate.8" ;
+    a2a:ashAction "gate_status" ;
+    a2a:consequence "NONE" ;
+    a2a:exposed true ;
+    a2a:requiresCapability "PROCESS_ANALYTICS" ;
+    a2a:generatedBy c10:gate-skill-generator ;
+    rdfs:label "Crown gate 8: Evidence, OCEL and process intelligence" ;
+    dcterms:description "Status query for CASTLE-28-8 (Evidence, OCEL and process intelligence). OBSERVE surface: receipt-driven STOP; SELECT never implies DO." .
+
+c10:skill-gate-9
+    a sj:Action ;
+    a2a:skillName "castle.gate.9" ;
+    a2a:ashAction "gate_status" ;
+    a2a:consequence "NONE" ;
+    a2a:exposed true ;
+    a2a:requiresCapability "SEMANTIC_MANUFACTURE" ;
+    a2a:generatedBy c10:gate-skill-generator ;
+    rdfs:label "Crown gate 9: Semantic manufacture and fleet generation" ;
+    dcterms:description "Status query for CASTLE-28-9 (Semantic manufacture and fleet generation). OBSERVE surface: receipt-driven STOP; SELECT never implies DO." .
+
+c10:skill-gate-10
+    a sj:Action ;
+    a2a:skillName "castle.gate.10" ;
+    a2a:ashAction "gate_status" ;
+    a2a:consequence "NONE" ;
+    a2a:exposed true ;
+    a2a:requiresCapability "HUMAN_SURFACE" ;
+    a2a:generatedBy c10:gate-skill-generator ;
+    rdfs:label "Crown gate 10: Bounded application and external-system surfaces" ;
+    dcterms:description "Status query for CASTLE-28-10 (Bounded application and external-system surfaces). OBSERVE surface: receipt-driven STOP; SELECT never implies DO." .
+
+c10:skill-gate-11
+    a sj:Action ;
+    a2a:skillName "castle.gate.11" ;
+    a2a:ashAction "gate_status" ;
+    a2a:consequence "NONE" ;
+    a2a:exposed true ;
+    a2a:requiresCapability "CONSEQUENTIAL_ADMISSIBILITY" ;
+    a2a:generatedBy c10:gate-skill-generator ;
+    rdfs:label "Crown gate 11: Berthier / 33SW board strategic command" ;
+    dcterms:description "Status query for CASTLE-28-11 (Berthier / 33SW board strategic command). OBSERVE surface: receipt-driven STOP; SELECT never implies DO." .
+
+c10:skill-gate-12
+    a sj:Action ;
+    a2a:skillName "castle.gate.12" ;
+    a2a:ashAction "gate_status" ;
+    a2a:consequence "NONE" ;
+    a2a:exposed true ;
+    a2a:requiresCapability "CONSEQUENTIAL_ADMISSIBILITY" ;
+    a2a:generatedBy c10:gate-skill-generator ;
+    rdfs:label "Crown gate 12: One protected BRCE consequence boundary" ;
+    dcterms:description "Status query for CASTLE-28-12 (One protected BRCE consequence boundary). OBSERVE surface: receipt-driven STOP; SELECT never implies DO." .
+
+c10:skill-gate-13
+    a sj:Action ;
+    a2a:skillName "castle.gate.13" ;
+    a2a:ashAction "gate_status" ;
+    a2a:consequence "NONE" ;
+    a2a:exposed true ;
+    a2a:requiresCapability "CONSEQUENTIAL_ADMISSIBILITY" ;
+    a2a:generatedBy c10:gate-skill-generator ;
+    rdfs:label "Crown gate 13: Single irreducible owner per retained capability" ;
+    dcterms:description "Status query for CASTLE-28-13 (Single irreducible owner per retained capability). OBSERVE surface: receipt-driven STOP; SELECT never implies DO." .
