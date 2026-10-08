@@ -206,7 +206,10 @@ skeletons from `doc-hdit scaffold` over the extracted Rust/Elixir code surface;
 `docs/reference/generated/reference.md`.
 
 A2A v1.0 agent card: `.well-known/agent-card.json` — descriptive capability
-discovery; grants no authority.
+discovery; grants no authority. Generated, not hand-authored: regenerate with
+`python3 scripts/gen_agent_card.py` (extracts `#[verb]` registrations from
+`src/bin/castle/verbs/routes.rs` and the package version from `Cargo.toml`;
+deterministic — repeated runs are byte-identical).
 
 Run:
 
