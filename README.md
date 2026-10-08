@@ -137,6 +137,17 @@ rail. CASTLE's signed origin, trust-root, subject, process, transition, expiry,
 and replay checks remain mandatory before the existing exclusive `DO` path can
 return a `ConstructAdmission`.
 
+## Product capability intake
+
+`castle::capability_intake` (commit `5c73d66`, merged as PR #25 `7c08090`,
+2026-09-29) is a runtime-readable, side-effect-free donor registry terminating
+at the CASTLE product crown. The projection is pinned to
+`ggen-ecosystem@50fdfa2`, names `CONSEQUENTIAL_ADMISSIBILITY` as the irreducible
+product capability, and carries the authority ceiling `CONSTRUCT` —
+`do_authority()` returns `false` for every donor, so no projection entry grants
+protected `DO` authority. The runtime core stays external at
+`seanchatmangpt/xaas`.
+
 ## Fortune-5 readiness admission
 
 CASTLE treats enterprise readiness as a deterministic evidence gate rather than a checklist assertion. The marketplace ontology currently projects 40 controls across:

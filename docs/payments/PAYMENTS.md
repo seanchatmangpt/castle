@@ -253,10 +253,18 @@ Persisted CLI state: `state/cli-rail/<hex>.submission.json` (written by `rail-su
 `state/cli-rail/<hex>.finality.json` (written by the first `finalize` that sees settlement;
 `observed_at_ms` is the wall clock at that observation).
 
-Example failure (stderr, exit 1):
+Example failure (`REFUSED:REPLAY_RECORD_MISSING`; stderr keeps the legacy line, exit 2):
 
 ```text
 ERROR: Command execution failed: REFUSED:REPLAY_RECORD_MISSING
+```
+
+The same error is additionally printed as JSON on stdout for callers that shell
+out (XaaS effectors). Exit codes are typed: `REFUSED:`/`BLOCKED:` failures exit
+2, `standing=` failures exit 3, anything else exits 1.
+
+```text
+{"ok":false,"class":"refused","code":"REFUSED:REPLAY_RECORD_MISSING","detail":"Command execution failed: REFUSED:REPLAY_RECORD_MISSING"}
 ```
 
 Input shapes: `effect.json` is a `PreparedEffect`; `cert.json` an `ActuationCertificate`;
