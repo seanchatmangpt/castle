@@ -1,0 +1,25 @@
+{
+  "name": "castle",
+  "description": "CASTLE board-governed consequence and strategic-command system (CLI). CONSTRUCT and planner results are candidates only; consequential DO is reachable only through the receipted ConstructAdmission -> BRCE boundary. This card is descriptive: it grants no authority.",
+  "version": "26.10.8+dfcm.1",
+  "supportedInterfaces": [
+    {"url": "stdio://castle", "protocolBinding": "JSONRPC", "protocolVersion": "1.0"}
+  ],
+  "capabilities": {},
+  "defaultInputModes": ["text/plain"],
+  "defaultOutputModes": ["text/plain"],
+  "skills": [
+    {"id": "castle.fortune5.requirements", "name": "fortune5 requirements", "description": "Emit the 40-control Fortune-5 readiness requirements profile.", "tags": ["qualification", "fortune5"]},
+    {"id": "castle.fortune5.qualify", "name": "fortune5 qualify", "description": "Qualify a subject against receipted metric observations; missing evidence is UNKNOWN, failing evidence is REFUSED.", "tags": ["qualification", "fortune5"]},
+    {"id": "castle.deployment.qualify", "name": "deployment qualify", "description": "Qualify deployment readiness from receipted observations.", "tags": ["qualification", "deployment"]},
+    {"id": "castle.chaos.qualify", "name": "chaos qualify", "description": "Fail-closed failure-semantics qualification for degraded/local actuation modes.", "tags": ["qualification", "chaos"]},
+    {"id": "castle.construct.manufacture", "name": "construct manufacture", "description": "Manufacture a public, reversible CONSTRUCT capability bound to BLAKE3 parent receipts (O*, config, ontology, process). Candidates only; no DO authority.", "tags": ["construct", "candidate"]},
+    {"id": "castle.do.execute", "name": "do execute", "description": "The exclusive exported DO path: requires a genuine ConstructAdmission, recomputes process digest and bounds, returns a child receipt. Refuses without admitted CONSTRUCT origin.", "tags": ["actuation", "brce", "do"]},
+    {"id": "castle.replay.admit", "name": "replay admit", "description": "Admit a replay against exact-subject receipts.", "tags": ["qualification", "replay"]},
+    {"id": "castle.impact.coverage", "name": "impact coverage", "description": "Report replay/impact coverage inventory.", "tags": ["inventory", "replay"]},
+    {"id": "castle.inventory.components", "name": "components inventory", "description": "Inventory capability components.", "tags": ["inventory"]},
+    {"id": "castle.inventory.goals", "name": "goals inventory", "description": "Inventory sJira goal-graph goals (authority-free).", "tags": ["inventory", "sjira"]},
+    {"id": "castle.release.info", "name": "release info", "description": "Report release identity and standing.", "tags": ["metadata"]},
+    {"id": "castle.protocol.a2a", "name": "protocol a2a", "description": "Report A2A protocol surface.", "tags": ["protocol", "a2a"]}
+  ]
+}

@@ -205,6 +205,9 @@ skeletons from `doc-hdit scaffold` over the extracted Rust/Elixir code surface;
 `docs/reference/generated/README.md` carries the regen command):
 `docs/reference/generated/reference.md`.
 
+A2A v1.0 agent card: `.well-known/agent-card.json` — descriptive capability
+discovery; grants no authority.
+
 Run:
 
 ```bash
