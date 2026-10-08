@@ -6,7 +6,7 @@ The implementation remains continuously self-adversarial for owned or explicitly
 
 ## Board strategic command
 
-`src/strategic_command.rs` implements the non-actuating strategic layer introduced in v26.9.28. It reuses the Berthier campaign-compiler semantics developed in `chatman-ecosystem` PR #285 without importing that closed/unmerged branch as runtime authority.
+`src/strategic_command.rs` implements the non-actuating strategic layer introduced in v26.9.28 and carried through the current 26.10.8+dfcm.1 release. It reuses the Berthier campaign-compiler semantics developed in `chatman-ecosystem` PR #285 without importing that closed/unmerged branch as runtime authority.
 
 The board path is:
 
@@ -26,7 +26,7 @@ There is deliberately no optimizer-to-DO edge. A machine may construct, falsify,
 
 ## CASTLE semantic Jira crown
 
-The governing semantic-Jira graph for the v26.9.28 product/fleet composition is
+The governing semantic-Jira graph for the 26.10.8+dfcm.1 product/fleet composition is
 `docs/sjira/v26.9.28/goal.ttl`; exact repository subjects and irreducible
 capability ownership are pinned in `docs/sjira/v26.9.28/repos.ttl`.
 
@@ -243,9 +243,13 @@ Every subcommand accepts `--format json|json-pretty|yaml|table|plain|tsv|quiet` 
 exercise the real compiled binary as a subprocess — no mocking of the CLI layer.
 
 
-## v26.9.28 ecosystem interoperability
+## Ecosystem interoperability
 
-The September 28 Los Angeles task-window review is bound in `configs/ecosystem-v26.9.28.json` and the complete 66-PR task-window ledger is in `docs/REVIEW_2026-09-28.md`. The selected semantic source is the immutable `ggen-marketplace@v26.9.29` CASTLE pack; exact release/merge SHAs are part of the manifest rather than inferred from version labels.
+The current release deployment manifest is `configs/fortune5-v26.10.8+dfcm.1.json`
+(release `26.10.8+dfcm.1`, matching `RELEASE_VERSION` in `src/v26_8_18/mod.rs`).
+The September 28 Los Angeles task-window review remains bound in the archived
+manifest `configs/ecosystem-v26.9.28.json` with the complete 66-PR task-window
+ledger in `docs/REVIEW_2026-09-28.md`. The selected semantic source is the immutable `ggen-marketplace@v26.9.29` CASTLE pack; exact release/merge SHAs are part of the manifest rather than inferred from version labels.
 
 `src/v26_9_28` adds admission courts for the capabilities that became available across the fleet during the review window:
 
