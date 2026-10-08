@@ -27,7 +27,7 @@ c10:GC-CASTLE-26.10.8
     dcterms:description "Successor bucket for the v26.10.8 campaign: full cargo suite green, pinned-XSD ISO 20022 conformance passing, v1.0 agent card landed at fe78477, capability-intake docs landed. Single BRCE consequence boundary and exact-subject evidence carried forward from GC-CASTLE-26.9.28." ;
     dcterms:source "docs/sjira/v26.10.8/CAMPAIGN-RECEIPT.md" ;
     sj:repository "seanchatmangpt/castle" ;
-    sj:baseSha "fe78477" ;
+    sj:baseSha "fe784778a400adecc4bcfa95716ea2efba576c31" ;
     sj:checkpointOf c28:GC-CASTLE-26.9.28 ;
     sj:authorityCeiling "CONSTRUCT" ;
     sj:evidenceHorizon "EXECUTED_VERIFIED" ;
