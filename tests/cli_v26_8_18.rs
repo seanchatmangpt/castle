@@ -20,14 +20,14 @@ fn run(args: &[&str]) -> (bool, serde_json::Value, String) {
 fn release_info_reports_dfcm_release_and_zero_unreceipted_do() {
     let (ok, value, stderr) = run(&["release", "info", "--format", "json"]);
     assert!(ok, "{stderr}");
-    assert_eq!(value["release"], "26.8.18+dfcm.1");
+    assert_eq!(value["release"], "26.10.8+dfcm.1");
     let invariants = value["invariants"].as_array().unwrap();
     assert!(invariants.iter().any(|v| v == "CONSTRUCT != DO"));
 }
 
 #[test]
 fn checked_in_global_manifest_qualifies_alive() {
-    let path = format!("{}/configs/fortune5-v26.8.18+dfcm.1.json", env!("CARGO_MANIFEST_DIR"));
+    let path = format!("{}/configs/fortune5-v26.10.8+dfcm.1.json", env!("CARGO_MANIFEST_DIR"));
     let (ok, value, stderr) = run(&[
         "deployment", "qualify", "--manifest-path", &path, "--now-epoch-ms", "1787080000000", "--format", "json",
     ]);
@@ -41,7 +41,7 @@ fn checked_in_global_manifest_qualifies_alive() {
 fn provider_adapter_catalog_is_exposed() {
     let (ok, value, stderr) = run(&["deployment", "adapters", "--format", "json"]);
     assert!(ok, "{stderr}");
-    assert_eq!(value["release"], "26.8.18+dfcm.1");
+    assert_eq!(value["release"], "26.10.8+dfcm.1");
     assert_eq!(value["adapters"].as_array().unwrap().len(), 5);
 }
 

@@ -1,11 +1,11 @@
 {
   "kind": "CASTLE_FORTUNE5_GLOBAL_V1",
-  "release": "26.8.18+dfcm.1",
+  "release": "26.10.8+dfcm.1",
   "constitution": {
-    "constitution_id": "constitution:fortune5:global:v26.8.18+dfcm.1",
-    "ontology_version": "castle-pack-v26.8.18+dfcm.1",
+    "constitution_id": "constitution:fortune5:global:v26.10.8+dfcm.1",
+    "ontology_version": "castle-pack-v26.10.8+dfcm.1",
     "invariant_set_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "trust_root_ids": ["castle-global-root-v26.8.18+dfcm.1"],
+    "trust_root_ids": ["castle-global-root-v26.10.8+dfcm.1"],
     "provider_semantics": {
       "aws": "2026-08-18",
       "azure": "2026-08-18",
@@ -166,7 +166,7 @@
   ],
   "protocol_surfaces": [
     {"surface": "cli", "endpoint": "castle://cli", "modes": ["select", "construct", "do"]},
-    {"surface": "api", "endpoint": "https://castle.internal/v26.8.18+dfcm.1", "modes": ["select", "construct", "do"]},
+    {"surface": "api", "endpoint": "https://castle.internal/v26.10.8+dfcm.1", "modes": ["select", "construct", "do"]},
     {"surface": "mcp", "endpoint": "mcp://castle", "modes": ["select", "construct", "do"]},
     {"surface": "a2a", "endpoint": "a2a://castle", "modes": ["select", "construct", "do"]}
   ],

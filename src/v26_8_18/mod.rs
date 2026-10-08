@@ -17,7 +17,7 @@ mod replication;
 mod runtime;
 mod topology;
 
-pub const RELEASE_VERSION: &str = "26.8.18+dfcm.1";
+pub const RELEASE_VERSION: &str = "26.10.8+dfcm.1";
 pub const RELEASE_KIND: &str = "CASTLE_FORTUNE5_GLOBAL_V1";
 
 pub use airgap::*;
