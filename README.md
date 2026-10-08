@@ -197,6 +197,9 @@ The Rust runtime implements:
 - materiality, ICFR-scope, and segregation-of-duty governance checks;
 - receipted board package assembly with evidence digest and control-count binding.
 
+Payments domain documentation (lifecycle, claim state machine, invariants, ISO 20022 projection
+and its pinned-XSD conformance testing): `docs/payments/PAYMENTS.md`.
+
 Run:
 
 ```bash

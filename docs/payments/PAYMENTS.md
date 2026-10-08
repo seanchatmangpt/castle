@@ -334,6 +334,39 @@ version-pinned XSDs. The XSDs are third-party mirrors and are not committed. Pin
 `fixtures/payments/iso20022/xsd/PINS.json`; location: `CASTLE_ISO20022_XSD_DIR`. The test
 fails when the files are absent or their sha256 differs from the pin; it never skips.
 
+## ISO 20022 conformance testing
+
+`tests/payments_iso20022_official.rs` is the official-XSD conformance suite: five tests that
+run a real `xmllint --schema` subprocess over the projection output. It validates (1) generated
+messages for USD, JPY and KWD, (2) the committed goldens under `fixtures/payments/iso20022/`,
+(3) that mutated documents (over-precise amounts, removed `DbtrAgt`/`CdtrAgt`, wrong namespace)
+are rejected, (4) that no placeholder `example.org` namespace appears anywhere in `src/payments`
+or `fixtures/payments`, and (5) that kernel-derived long obligation ids project into bounded,
+round-trippable, XSD-valid messages.
+
+The suite never skips: a missing or mismatched XSD is a loud failure, not a degraded pass.
+Because `iso20022.org` returns HTTP 403 to non-browser clients, the XSD bytes are not
+committed; instead `fixtures/payments/iso20022/xsd/PINS.json` pins each file by sha256 with a
+fetchable URL (byte-identical mirrors in `php-sepa-xml` and `moov-io/fedwire20022`), so any
+machine can reconstruct byte-identical inputs and a conformance pass means the same thing
+everywhere — reproducibility, not convenience.
+
+To run:
+
+```sh
+mkdir -p /tmp/iso-xsd && cd /tmp/iso-xsd
+curl -fsSL -o pain.001.001.09.xsd \
+  https://raw.githubusercontent.com/php-sepa-xml/php-sepa-xml/HEAD/doc/ISO20022/pain/001/001/pain.001.001.09.xsd
+curl -fsSL -o pacs.008.001.08.xsd \
+  https://raw.githubusercontent.com/moov-io/fedwire20022/HEAD/xsd/iso/pacs.008.001.08.xsd
+shasum -a 256 *.xsd   # must match PINS.json
+cd /path/to/castle
+CASTLE_ISO20022_XSD_DIR=/tmp/iso-xsd cargo test --test payments_iso20022_official
+```
+
+Witnessed pass: the v26.10.8 fleet campaign ran the full 5-test suite green with fetched,
+pin-verified XSDs on this machine.
+
 ## UNSUPPORTED / UNKNOWN
 
 - UNSUPPORTED: Fedwire, SWIFT, ACH, FedNow and card rails. Only `SimRail` exists; no adapter
