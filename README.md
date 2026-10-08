@@ -200,6 +200,11 @@ The Rust runtime implements:
 Payments domain documentation (lifecycle, claim state machine, invariants, ISO 20022 projection
 and its pinned-XSD conformance testing): `docs/payments/PAYMENTS.md`.
 
+Code-surface reference documentation (generated: per-module item tables, how-to and explanation
+skeletons from `doc-hdit scaffold` over the extracted Rust/Elixir code surface;
+`docs/reference/generated/README.md` carries the regen command):
+`docs/reference/generated/reference.md`.
+
 Run:
 
 ```bash
