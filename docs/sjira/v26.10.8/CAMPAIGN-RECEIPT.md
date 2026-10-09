@@ -23,7 +23,7 @@
 | ISO 20022 conformance | Pinned-XSD ISO 20022 conformance gate passing |
 | doc-hdit CERTIFY | ACCEPTED — S_coverage 0.9473 (≥0.90), Phi_halluc 0.0000 (≤0.001), Q_density 1.0000 (≥0.65); subject `076744f2336bc2e0e172a850a53be78e9e8c9920469b11a5726c2874dfa7c14d`; chain `docs/sjira/v26.10.8/doc-hdit.receipts.jsonl`; extractor `scripts/gen_doc_surface.py` sha256 `4c862576ab63595f9cd0417b35341af3ec1001f49450e79bf2e4c291a4a4246f` (BLAKE3 receipt identity `a579e2109941e1f27f2faf0403d6c91e3eebb7f234dcc191a814573001309616`), ggen-marketplace @ `2cf02b276` |
 
-<!-- superseded-by f51d81ac4f7e4119dff950327237effee4968f4aa9aba52c7d62c5362f441fa9 as-of 2026-10-09 (R34); pin retained as historical subject identity. -->
+<!-- extractor pinned in receipt is historical; current fleet pin see ggen-marketplace docs/sjira/v26.10.8/PIN-ROTATION-LEDGER.md; pin retained as historical subject identity. -->
 
 ### doc-hdit certify (2026-10-09, lane R5)
 
