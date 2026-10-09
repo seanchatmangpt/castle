@@ -40,7 +40,7 @@
 
 ## Standing
 
-ALIVE — full cargo suite green; pinned-XSD conformance witnessed.
+ALIVE — full cargo suite green; pinned-XSD conformance witnessed. Gated under the module-level denominator law (ggen-marketplace docs/sjira/v26.10.8/DENOMINATOR-SCOPE-DECISION.md @0f3d840ff); per-function coverage figures are the report-only layer. As-of 2026-10-09.
 
 ## Open residues
 
