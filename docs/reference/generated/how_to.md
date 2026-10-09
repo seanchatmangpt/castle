@@ -5,83 +5,83 @@
 
 - @chatman/castle::test (script)
 
+- CastlePaaS.Admission::class_iri (str_key)
+
+- CastlePaaS.Admission::table (str_key)
+
+- CastlePaaS.Admission::tenant_scoped? (str_key)
+
+- CastlePaaS.AdmissionProvider.Refuse::BLOCKED_ADMISSION_PROVIDER_NOT_CONFIGURED (str_key)
+
 - CastlePaaS.AdmissionProvider.Refuse::admit (function)
 
-- CastlePaaS.AdmissionWitness::atom_key (function)
+- CastlePaaS.AdmissionWitness::REFUSED_ADMISSION_WITNESS_MISMATCH (str_key)
 
-- CastlePaaS.AdmissionWitness::atom_key (function)
+- CastlePaaS.AdmissionWitness::REFUSED_INCOMPLETE_ADMISSION_WITNESS (str_key)
 
-- CastlePaaS.AdmissionWitness::atom_key (function)
-
-- CastlePaaS.AdmissionWitness::atom_key (function)
-
-- CastlePaaS.AdmissionWitness::atom_key (function)
-
-- CastlePaaS.AdmissionWitness::atom_key (function)
-
-- CastlePaaS.AdmissionWitness::atom_key (function)
-
-- CastlePaaS.AdmissionWitness::atom_key (function)
-
-- CastlePaaS.AdmissionWitness::digest? (function)
-
-- CastlePaaS.AdmissionWitness::digest? (function)
+- CastlePaaS.AdmissionWitness::REFUSED_INVALID_ADMISSION_WITNESS (str_key)
 
 - CastlePaaS.AdmissionWitness::external_id (function)
 
-- CastlePaaS.AdmissionWitness::external_id (function)
+- CastlePaaS.AdmissionWitness::external_id (str_key)
 
-- CastlePaaS.AdmissionWitness::external_id (function)
+- CastlePaaS.AdmissionWitness::external_id (str_key)
 
-- CastlePaaS.AdmissionWitness::external_id (function)
+- CastlePaaS.AdmissionWitness::id (str_key)
 
-- CastlePaaS.AdmissionWitness::external_id (function)
-
-- CastlePaaS.AdmissionWitness::external_id (function)
-
-- CastlePaaS.AdmissionWitness::get (function)
-
-- CastlePaaS.AdmissionWitness::stringify (function)
-
-- CastlePaaS.AdmissionWitness::stringify (function)
-
-- CastlePaaS.AdmissionWitness::stringify (function)
+- CastlePaaS.AdmissionWitness::id (str_key)
 
 - CastlePaaS.AdmissionWitness::verify (function)
 
-- CastlePaaS.AdmissionWitness::verify (function)
+- CastlePaaS.Application::name (str_key)
 
 - CastlePaaS.Application::start (function)
 
-- CastlePaaS.Canonical::encode (function)
+- CastlePaaS.Application::strategy (str_key)
 
-- CastlePaaS.Canonical::encode (function)
-
-- CastlePaaS.Canonical::encode (function)
-
-- CastlePaaS.Canonical::encode (function)
-
-- CastlePaaS.Canonical::encode (function)
+- CastlePaaS.Canonical::case (str_key)
 
 - CastlePaaS.Canonical::sha256 (function)
 
+- CastlePaaS.Capability::class_iri (str_key)
+
+- CastlePaaS.Capability::table (str_key)
+
+- CastlePaaS.Capability::tenant_scoped? (str_key)
+
+- CastlePaaS.Domain::extensions (str_key)
+
+- CastlePaaS.Evidence::class_iri (str_key)
+
+- CastlePaaS.Evidence::table (str_key)
+
+- CastlePaaS.Evidence::tenant_scoped? (str_key)
+
+- CastlePaaS.ExecutionIntent::class_iri (str_key)
+
+- CastlePaaS.ExecutionIntent::table (str_key)
+
+- CastlePaaS.ExecutionIntent::tenant_scoped? (str_key)
+
 - CastlePaaS.Generated.Resource::CastlePaaS.Generated.Resource (ash_resource)
 
-- CastlePaaS.Kernel.CLI::build_request (function)
+- CastlePaaS.Generated.Resource::allow_nil? (str_key)
 
-- CastlePaaS.Kernel.CLI::digest? (function)
+- CastlePaaS.Generated.Resource::allow_nil? (str_key)
 
-- CastlePaaS.Kernel.CLI::digest? (function)
+- CastlePaaS.Generated.Resource::class_iri (str_key)
 
-- CastlePaaS.Kernel.CLI::execute (function)
+- CastlePaaS.Generated.Resource::constraints (str_key)
 
-- CastlePaaS.Kernel.CLI::manufacture (function)
+- CastlePaaS.Generated.Resource::data_layer (str_key)
 
-- CastlePaaS.Kernel.CLI::release_info (function)
+- CastlePaaS.Generated.Resource::default (str_key)
 
-- CastlePaaS.Kernel.CLI::require_alive_construct (function)
+- CastlePaaS.Generated.Resource::default (str_key)
 
-- CastlePaaS.Kernel.CLI::require_alive_construct (function)
+- CastlePaaS.Generated.Resource::domain (str_key)
+
+- CastlePaaS.Generated.Resource::extensions (str_key)
 
 
 ## Steps
@@ -97,19 +97,19 @@
 
 5. Use `semantic_bundle` from `CastlePaaS`.
 
-6. Use `admit` from `CastlePaaS.AdmissionProvider.Refuse`.
+6. Use `class_iri` from `CastlePaaS.Admission`.
 
-7. Use `atom_key` from `CastlePaaS.AdmissionWitness`.
+7. Use `table` from `CastlePaaS.Admission`.
 
-8. Use `atom_key` from `CastlePaaS.AdmissionWitness`.
+8. Use `tenant_scoped?` from `CastlePaaS.Admission`.
 
-9. Use `atom_key` from `CastlePaaS.AdmissionWitness`.
+9. Use `admit` from `CastlePaaS.AdmissionProvider.Refuse`.
 
-10. Use `atom_key` from `CastlePaaS.AdmissionWitness`.
+10. Use `BLOCKED_ADMISSION_PROVIDER_NOT_CONFIGURED` from `CastlePaaS.AdmissionProvider.Refuse`.
 
-11. Use `atom_key` from `CastlePaaS.AdmissionWitness`.
+11. Use `external_id` from `CastlePaaS.AdmissionWitness`.
 
-12. Use `atom_key` from `CastlePaaS.AdmissionWitness`.
+12. Use `verify` from `CastlePaaS.AdmissionWitness`.
 
 
 ## Verified snippet
