@@ -1,6 +1,6 @@
 {
   "name": "@chatman/castle",
-  "version": "26.8.15",
+  "version": "26.10.8+dfcm.1",
   "private": true,
   "type": "module",
   "scripts": {

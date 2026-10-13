@@ -1,9 +1,10 @@
 # CASTLE Generated Architecture
 
-This file is a consumer projection of `ggen-marketplace/packs/castle-pack/ontology.ttl`.
+This file is generated from `ggen-marketplace/packs/castle-pack/ontology.ttl`.
 
 | Order | Kind | Identifier | Authority | Role |
 |---:|---|---|---|---|
+| 5 | component | `GgenRDFControlPlane` | `SEMANTIC_ONLY` | Provide CASTLE RDF parsing, deterministic canonical graph state, BLAKE3 graph hashing, SPARQL SELECT/ASK/CONSTRUCT, property-path traversal, and GraphLaw semantic validation through the exact-revision ggen-engine capability. |
 | 10 | component | `DfCMGoalInversion` | `CONSTRUCT_ONLY` | Derive minimal vulnerability conditions backward from prohibited adversarial goals. |
 | 20 | component | `DependencyConstruct` | `CONSTRUCT_ONLY` | Construct counterfactual dependency compromise capabilities and impacted closure. |
 | 30 | component | `AutoFDELabPlannerEnsemble` | `CANDIDATE_ONLY` | Fan out admitted planning problems across applicable planner candidates. |
@@ -19,6 +20,7 @@ This file is a consumer projection of `ggen-marketplace/packs/castle-pack/ontolo
 | 130 | goal | `IntegrityLoss` | `PROHIBITED` | Adversary causes unauthorized protected-state mutation. |
 | 140 | goal | `AvailabilityLoss` | `PROHIBITED` | Adversary prevents a required service outcome. |
 | 150 | goal | `UnauthorizedPersistence` | `PROHIBITED` | Adversary preserves unauthorized standing across state transitions. |
+
 
 ## Execution law
 
