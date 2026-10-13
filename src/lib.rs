@@ -24,6 +24,7 @@ pub mod trust_chain;
 pub mod strategic_board;
 pub mod v26_8_18;
 pub mod v26_9_28;
+pub mod xaas_feed;
 
 pub use castle::*;
 pub use dd_ui::{DdUiRefusal, PresentationAuthority};
