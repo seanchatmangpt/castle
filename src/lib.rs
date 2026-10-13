@@ -11,6 +11,7 @@ pub mod gymact_container;
 pub mod insa_witness;
 pub mod planner_minimal;
 pub mod reconstitution;
+pub mod negative_evidence;
 pub mod operation_envelope;
 pub mod payments;
 pub mod refusal_conformance;
