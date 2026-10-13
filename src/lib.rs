@@ -1,3 +1,4 @@
+pub mod beam4pm_feed;
 pub mod blake3;
 pub mod board;
 pub mod capability_intake;
