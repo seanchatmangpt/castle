@@ -48,6 +48,33 @@ The initial dependency profile uses existing public vocabularies:
 
 For `A dcterms:requires B`, CASTLE treats B as upstream of A. The impacted closure of B is therefore B plus every entity reachable through transitive `dcterms:requires` paths from dependents to B.
 
+## Strata receipt lift
+
+Strata gate-court witnesses use the `sw:` vocabulary
+(`https://strata.chatman.ai/ontology/witness#`). `rdf/strata/receipt-map.rq`
+projects that vocabulary onto the dependency profile above without replacing
+it as semantic authority:
+
+- `sw:GateRun` lifts to `prov:Entity`.
+- `sw:syncedGraphHash` lifts to a literal attribute
+  (`castle-strata:syncedGraphHash`,
+  `https://castle.chatmangpt.com/profile/strata#`). The digest is stored
+  verbatim as an opaque literal; SHA-256 and BLAKE3 digests are never
+  compared or equated across algorithms.
+- `sw:andon` and `sw:zeroRows` lift to `dcterms:type` qualifier literals
+  (`"andon:<value>"`, `"zeroRows:<bool>"`), matching the literal
+  `dcterms:type` shape of `rdf/examples/dependency-system.ttl`.
+- `sw:pack` lifts to `dcterms:requires`: the run requires the pack.
+
+The map fails closed: a `GateRun` missing `sw:syncedGraphHash`, `sw:andon`,
+or `sw:zeroRows`, and any unknown vocabulary, lifts to nothing. The pin is
+`fixtures/strata/witness.ttl` (`witness.ttl.sha256`, byte-pinned to the
+ggen-marketplace `packs/strata-ledger-pack/witness.ttl` emission); the lift
+courts live in `tests/strata_receipt_rdf_lift.rs`, which evaluates the
+CONSTRUCT through a real SPARQL engine (the ggen boundary is exercised
+end-to-end by the `castle-ggen-rdf` bridge courts; this court pins the
+projection contract itself).
+
 ## Runtime interface
 
 `src/ggen-rdf.ts` provides the bounded TypeScript adapter:

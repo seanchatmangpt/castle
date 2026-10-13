@@ -1,0 +1,67 @@
+# Pack gate-court witness — committed provenance of the witnessed sync.
+@prefix sw: <https://strata.chatman.ai/ontology/witness#> .
+
+<https://strata.chatman.ai/witness/strata-ledger-pack> a sw:GateRun ;
+    sw:pack <https://strata.chatman.ai/pack/strata-ledger-pack> ;
+    sw:syncedGraphHash "88433da4f515e4207470b9ec03ba448fca44e8265bf976b3ab028dd82f9b5068" ;
+    sw:date "2026-10-13" ;
+    sw:andon "Green" ;
+    sw:zeroRows true .
+
+sw:gate-010_ledger_layout a sw:GateRun ;
+    sw:gate "010_ledger_layout.rq" ;
+    sw:syncedGraphHash "e1dacb178a516e841d132c621d39dbaec4e0005f8f9eff5960b115de2b350176" ;
+    sw:date "2026-10-13" ;
+    sw:andon "Green" ;
+    sw:zeroRows true .
+
+sw:gate-020_transition_law a sw:GateRun ;
+    sw:gate "020_transition_law.rq" ;
+    sw:syncedGraphHash "0cc46c10827d09cbc2ed6df11248b6f2d1f97afe031c79647aa3a55e505d8a03" ;
+    sw:date "2026-10-13" ;
+    sw:andon "Green" ;
+    sw:zeroRows true .
+
+sw:gate-030_ocel_conformance a sw:GateRun ;
+    sw:gate "030_ocel_conformance.rq" ;
+    sw:syncedGraphHash "6af08d115ac4bcc756258a3380d9fcd0b67f6b127e26ad35d4dd50a7f2ec6590" ;
+    sw:date "2026-10-13" ;
+    sw:andon "Green" ;
+    sw:zeroRows true .
+
+# Witnessed-replay KAT fixture (lane L27, L9-pattern extension): a minimal
+# canonical apply_transition sequence. Genesis allocates 2,000,000 units over
+# accounts 0x01/0x02/0x03 (genesis is outside the transition law); each tx
+# conserves value exactly (sum(inputs) == sum(outputs)). Roots below were
+# derived by running the pack's own generated law
+# (generated/ledger_state.rs LedgerState::apply_transition, compiled with
+# rustc and executed), then cross-checked against the verify.py Python fold.
+sw:genesis-account-1 sw:account "0x0100000000000000000000000000000000000000000000000000000000000000" ; sw:balance "1000000" .
+sw:genesis-account-2 sw:account "0x0200000000000000000000000000000000000000000000000000000000000000" ; sw:balance "400000" .
+sw:genesis-account-3 sw:account "0x0300000000000000000000000000000000000000000000000000000000000000" ; sw:balance "600000" .
+
+sw:ledger-tx-1
+    sw:nonce "1" ;
+    sw:input "0x0100000000000000000000000000000000000000000000000000000000000000:100000" ;
+    sw:output "0x0200000000000000000000000000000000000000000000000000000000000000:100000" ;
+    sw:digest "0x210100000000000000000000000000000000000000000000000000000000000000" .
+
+sw:ledger-tx-2
+    sw:nonce "2" ;
+    sw:input "0x0200000000000000000000000000000000000000000000000000000000000000:50000" ;
+    sw:output "0x0300000000000000000000000000000000000000000000000000000000000000:50000" ;
+    sw:digest "0x210200000000000000000000000000000000000000000000000000000000000000" .
+
+sw:ledger-tx-3
+    sw:nonce "3" ;
+    sw:input "0x0300000000000000000000000000000000000000000000000000000000000000:25000" ;
+    sw:output "0x0100000000000000000000000000000000000000000000000000000000000000:25000" ;
+    sw:digest "0x210300000000000000000000000000000000000000000000000000000000000000" .
+
+sw:ledger-kat a sw:GateRun ;
+    sw:gate "witnessed-ledger-replay" ;
+    sw:genesisRoot "143eb3db4a3dd71e143eb3db4a3dd71e143eb3db4a3dd71e143eb3db4a3dd71e" ;
+    sw:ledgerHead "18b128727f1ad46318b128727f1ad46318b128727f1ad46318b128727f1ad463" ;
+    sw:date "2026-10-13" ;
+    sw:andon "Green" ;
+    sw:zeroRows true .

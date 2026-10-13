@@ -110,7 +110,7 @@ pub struct TrustStore {
     pub keys: HashMap<String, TrustKey>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct EvidenceInput {
     pub metric: String,
     pub value: crate::fortune5::MetricValue,

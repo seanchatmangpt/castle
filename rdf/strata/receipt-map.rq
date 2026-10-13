@@ -1,0 +1,39 @@
+# receipt-map.rq — strata receipt RDF lift (castle PROV/DCTERMS profile).
+#
+# Lifts the strata sw: gate-court witness vocabulary onto the public
+# dependency profile documented in docs/GGEN_RDF_CONTROL_PLANE.md
+# ("Public dependency vocabulary"):
+#
+#   sw:GateRun          -> ?run a prov:Entity
+#   sw:syncedGraphHash  -> castle-strata:syncedGraphHash (literal, verbatim;
+#                          SHA-256 vs BLAKE3 is NOT equated — the digest is
+#                          stored as an opaque literal attribute, never
+#                          compared across algorithms)
+#   sw:andon            -> dcterms:type "andon:<value>" qualifier
+#   sw:zeroRows         -> dcterms:type "zeroRows:<bool>" qualifier
+#   sw:pack             -> ?run dcterms:requires ?pack (subject requires pack)
+#
+# The sw: vocabulary stays the semantic authority; this map projects a
+# consequence view. Unknown vocabulary lifts to nothing (fail-closed).
+
+PREFIX sw: <https://strata.chatman.ai/ontology/witness#>
+PREFIX prov: <http://www.w3.org/ns/prov#>
+PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX castle-strata: <https://castle.chatmangpt.com/profile/strata#>
+
+CONSTRUCT {
+  ?run a prov:Entity .
+  ?run castle-strata:syncedGraphHash ?hash .
+  ?run dcterms:type ?andonQ .
+  ?run dcterms:type ?zeroRowsQ .
+  ?run dcterms:requires ?pack .
+}
+WHERE {
+  ?run a sw:GateRun ;
+       sw:syncedGraphHash ?hash ;
+       sw:andon ?andon ;
+       sw:zeroRows ?zeroRows .
+  OPTIONAL { ?run sw:pack ?pack . }
+  BIND(CONCAT("andon:", STR(?andon)) AS ?andonQ)
+  BIND(CONCAT("zeroRows:", STR(?zeroRows)) AS ?zeroRowsQ)
+}
