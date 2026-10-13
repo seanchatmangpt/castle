@@ -8,6 +8,7 @@ pub mod fortune5;
 pub mod fortune5_generated;
 pub mod generated;
 pub mod gymact_container;
+pub mod insa_witness;
 pub mod planner_minimal;
 pub mod reconstitution;
 pub mod operation_envelope;
