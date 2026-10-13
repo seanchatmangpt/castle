@@ -12,7 +12,7 @@
 //! delta, and that failure is by design. To re-pin: copy the live file over
 //! the fixture and update `PINNED_SHA256`/`PINNED_LINE_COUNT`.
 //!
-//! As-of pin: 16 lines (PN64 x3, head_unique, StrataNet, StrataStore x5
+//! As-of pin: 26 lines (PN64 x3, head_unique, StrataNet, StrataStore x5
 //! incl. RollbackLaw, StrataLedger, StrataMerkle, StrataValve x4).
 //! The pin was re-taken mid-run from the initial 8-line wave-v1 corpus
 //! because sibling mfact lanes landed StrataStore.RollbackLaw and
@@ -27,9 +27,9 @@ const FIXTURE: &str = "tests/fixtures/mfact_witnesses.jsonl";
 const LIVE_MFACT: &str = "/Users/sac/mfact/witnesses.jsonl";
 
 /// sha256 of the pinned fixture bytes (`shasum -a 256`).
-const PINNED_SHA256: &str = "51ea11d2bff3d4c117aa762e1f60273496716673df7bbd4a1bbe529bb22a6518";
+const PINNED_SHA256: &str = "85e92b3e91678d202d479bd2da4959ac47f8edc0488eb3b9931c82d053c1bcb8";
 /// Pinned line count (wave-v1 corpus as-of this pin).
-const PINNED_LINE_COUNT: usize = 16;
+const PINNED_LINE_COUNT: usize = 26;
 
 fn pinned_bytes() -> String {
     std::fs::read_to_string(FIXTURE)
