@@ -41,6 +41,10 @@ pub const REASON_ABSENCE: &str = "UNKNOWN:ABSENCE_OF_EVIDENCE";
 pub const REASON_SUPERSEDED: &str = "UNKNOWN:ABSENCE_SUPERSEDED_BY_POSITIVE";
 pub const REASON_CONTRADICTION: &str = "REFUSED:EVIDENCE_CONTRADICTION";
 pub const REASON_INCOMPLETE: &str = "REFUSED:NEGATION_INCOMPLETE";
+/// Guard refusal: something that is not a typed refusal was offered as one.
+pub const REASON_NOT_A_REFUSAL: &str = "REFUSED:NOT_A_TYPED_REFUSAL";
+/// Guard refusal: a stored ledger file could not be parsed.
+pub const REASON_LEDGER_MALFORMED: &str = "REFUSED:NEGATION_LEDGER_MALFORMED";
 
 /// A negative finding: "we looked for `predicate` on `subject` at
 /// `searched_at` (RFC 3339) as `searched_by` and it was absent."
@@ -65,6 +69,41 @@ impl NegationRecord {
     }
 }
 
+/// A witness adapter's typed refusal mapped into the negative-evidence
+/// channel: a refusal that a required witness for a theorem could not be
+/// produced is itself negative evidence about that theorem.
+///
+/// Mapping source: the typed refusal constants already emitted by the witness
+/// adapters (`lean_witness::REFUSED:LEAN_*`, `insa_witness` refusals). The
+/// predicate carries the refusal reason identity verbatim; the subject is the
+/// theorem the witness line names (`mfact@<sha>:<theorem>` shape when the
+/// line parsed) or a fallback subject when the line was malformed.
+pub fn negation_from_witness_refusal(
+    witness_line: &str,
+    refusal_reason: &str,
+    searched_at: &str,
+    searched_by: &str,
+) -> Result<NegationRecord, String> {
+    if !refusal_reason.starts_with("REFUSED:") {
+        return Err(crate::negative_evidence::REASON_NOT_A_REFUSAL.to_string());
+    }
+    let subject = serde_json::from_str::<serde_json::Value>(witness_line)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("theorem")
+                .and_then(|t| t.as_str())
+                .map(str::to_string)
+        })
+        .unwrap_or_else(|| "witness:unparsed-line".to_string());
+    Ok(NegationRecord {
+        predicate: refusal_reason.to_string(),
+        subject,
+        searched_at: searched_at.to_string(),
+        searched_by: searched_by.to_string(),
+    })
+}
+
 /// Stable status vocabulary for a negation record in the ledger.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NegativeEvidenceStatus {
@@ -77,6 +116,59 @@ pub enum NegativeEvidenceStatus {
     /// The negation contradicted already-admitted positive evidence at
     /// admission time; the record is retained but refused.
     ContradictionRefused,
+}
+
+/// Serializable twin of [`NegativeEvidenceStatus`] for durable ledger files.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum StoredStatus {
+    /// `NegativeEvidenceStatus::Absent(_)` — the inner Standing is carried as
+    /// its stable string identity (`ALIVE`/`REFUSED`/`UNKNOWN`).
+    Absent { standing: String },
+    /// `NegativeEvidenceStatus::Superseded { by }`.
+    Superseded { by: String },
+    /// `NegativeEvidenceStatus::ContradictionRefused`.
+    ContradictionRefused,
+}
+
+impl From<&NegativeEvidenceStatus> for StoredStatus {
+    fn from(status: &NegativeEvidenceStatus) -> Self {
+        match status {
+            NegativeEvidenceStatus::Absent(standing) => StoredStatus::Absent {
+                standing: standing.as_str().to_string(),
+            },
+            NegativeEvidenceStatus::Superseded { by } => StoredStatus::Superseded { by: by.clone() },
+            NegativeEvidenceStatus::ContradictionRefused => StoredStatus::ContradictionRefused,
+        }
+    }
+}
+
+impl From<&StoredStatus> for NegativeEvidenceStatus {
+    fn from(stored: &StoredStatus) -> Self {
+        match stored {
+            StoredStatus::Absent { standing } => {
+                let standing = match standing.as_str() {
+                    "ALIVE" => Standing::Alive,
+                    "REFUSED" => Standing::Refused,
+                    _ => Standing::Unknown,
+                };
+                NegativeEvidenceStatus::Absent(standing)
+            }
+            StoredStatus::Superseded { by } => NegativeEvidenceStatus::Superseded { by: by.clone() },
+            StoredStatus::ContradictionRefused => NegativeEvidenceStatus::ContradictionRefused,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct StoredEntry {
+    record: NegationRecord,
+    status: StoredStatus,
+}
+
+#[derive(Serialize, Deserialize)]
+struct LedgerFile {
+    records: Vec<StoredEntry>,
 }
 
 /// Durable, queryable ledger of negative findings.
@@ -115,6 +207,52 @@ impl NegativeEvidenceLedger {
         Ok(status)
     }
 
+    /// Rebuild a ledger from a previously stored record/status sequence.
+    #[must_use]
+    pub fn with_records(records: Vec<(NegationRecord, NegativeEvidenceStatus)>) -> Self {
+        Self { records }
+    }
+
+    /// Borrow the admitted record/status sequence (ledger file projection).
+    #[must_use]
+    pub fn records(&self) -> &[(NegationRecord, NegativeEvidenceStatus)] {
+        &self.records
+    }
+
+    /// Project the ledger to its durable JSON form (the `negation-ingest` /
+    /// `negation-status` CLI verbs persist and reload through this).
+    ///
+    /// # Errors
+    /// Serialization failure (never expected for owned data).
+    pub fn ledger_to_json(&self) -> Result<String, String> {
+        let file = LedgerFile {
+            records: self
+                .records
+                .iter()
+                .map(|(record, status)| StoredEntry {
+                    record: record.clone(),
+                    status: StoredStatus::from(status),
+                })
+                .collect(),
+        };
+        serde_json::to_string(&file).map_err(|error| format!("{REASON_LEDGER_MALFORMED}:{error}"))
+    }
+
+    /// Reload a ledger from [`Self::ledger_to_json`] output.
+    ///
+    /// # Errors
+    /// `REFUSED:NEGATION_LEDGER_MALFORMED` — unparsable ledger file bytes.
+    pub fn ledger_from_json(bytes: &str) -> Result<Self, String> {
+        let file: LedgerFile = serde_json::from_str(bytes)
+            .map_err(|error| format!("{REASON_LEDGER_MALFORMED}:{error}"))?;
+        Ok(Self::with_records(
+            file.records
+                .into_iter()
+                .map(|entry| (entry.record, NegativeEvidenceStatus::from(&entry.status)))
+                .collect(),
+        ))
+    }
+
     /// Query the latest status recorded for `(subject, predicate)`.
     #[must_use]
     pub fn status_of(&self, subject: &str, predicate: &str) -> Option<NegativeEvidenceStatus> {
@@ -135,6 +273,45 @@ impl NegativeEvidenceLedger {
             }
         }
     }
+}
+
+/// Current UTC time as RFC 3339 (`YYYY-MM-DDTHH:MM:SSZ`), computed from the
+/// system clock with no external time dependency. Leap seconds truncate.
+#[must_use]
+pub fn rfc3339_now() -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs() as i64);
+    rfc3339_from_epoch_secs(secs)
+}
+
+/// Convert Unix epoch seconds to RFC 3339 UTC (`YYYY-MM-DDTHH:MM:SSZ`) via
+/// the civil-from-days algorithm (Hinnant). Pure so it is court-testable.
+#[must_use]
+pub fn rfc3339_from_epoch_secs(secs: i64) -> String {
+    let days = secs.div_euclid(86_400);
+    let sod = secs.rem_euclid(86_400);
+    let (year, month, day) = civil_from_days(days);
+    format!(
+        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}Z",
+        sod / 3_600,
+        (sod % 3_600) / 60,
+        sod % 3_600 % 60
+    )
+}
+
+/// Howard Hinnant's `civil_from_days`: days since 1970-01-01 → (y, m, d).
+fn civil_from_days(days: i64) -> (i64, u32, u32) {
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let year = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    (year + i64::from(month <= 2), month as u32, day as u32)
 }
 
 /// Admit one positive evidence bundle and, if Alive, supersede any earlier
@@ -348,5 +525,100 @@ mod tests {
             ledger.admit_negation(bad, &[]),
             Err(REASON_INCOMPLETE.to_string())
         );
+    }
+
+    // ---- refusal→negation mapping + durable store + clock ----
+
+    fn sorry_ax_line() -> String {
+        r#"{"schema":"lean-witness/v1","theorem":"chatman_equation_typed","axioms":["propext","sorryAx"],"source_sha256":"a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8","toolchain":"leanprover/lean4:v4.21.0"}"#
+            .to_string()
+    }
+
+    #[test]
+    fn typed_witness_refusal_maps_to_negation_record() {
+        let record = negation_from_witness_refusal(
+            &sorry_ax_line(),
+            "REFUSED:LEAN_AXIOMS_NONSTANDARD",
+            AT,
+            "castle-lane",
+        )
+        .expect("maps");
+        assert_eq!(record.predicate, "REFUSED:LEAN_AXIOMS_NONSTANDARD");
+        assert_eq!(record.subject, "chatman_equation_typed");
+        assert_eq!(record.searched_at, AT);
+        assert_eq!(record.searched_by, "castle-lane");
+    }
+
+    #[test]
+    fn non_refusal_reason_is_typed_refused() {
+        assert_eq!(
+            negation_from_witness_refusal(&sorry_ax_line(), "ALIVE:LOOKED", AT, "lane"),
+            Err(REASON_NOT_A_REFUSAL.to_string())
+        );
+    }
+
+    #[test]
+    fn malformed_witness_line_still_maps_to_fallback_subject() {
+        let record = negation_from_witness_refusal(
+            "not json at all",
+            "REFUSED:LEAN_WITNESS_MALFORMED_JSON",
+            AT,
+            "lane",
+        )
+        .expect("maps");
+        assert_eq!(record.predicate, "REFUSED:LEAN_WITNESS_MALFORMED_JSON");
+        assert_eq!(record.subject, "witness:unparsed-line");
+    }
+
+    #[test]
+    fn ledger_json_round_trip_preserves_records_and_statuses() {
+        let mut ledger = NegativeEvidenceLedger::default();
+        ledger.admit_negation(negation(), &[]).expect("admits");
+        // Retained contradiction record too.
+        let signing = SigningKey::from_bytes(&[7u8; 32]);
+        let ctx = issue_ctx();
+        let bundle = positive_bundle(SUBJECT, PREDICATE, &ctx, &signing);
+        let admitted = vec![bundle.observation.clone()];
+        let other = NegationRecord {
+            predicate: PREDICATE.to_string(),
+            subject: SUBJECT.to_string(),
+            searched_at: AT.to_string(),
+            searched_by: "lane".to_string(),
+        };
+        let _ = ledger.admit_negation(other, &admitted);
+
+        let json = ledger.ledger_to_json().expect("serializes");
+        let reloaded = NegativeEvidenceLedger::ledger_from_json(&json).expect("reloads");
+        assert_eq!(reloaded.records().len(), 2);
+        assert_eq!(
+            reloaded.status_of(SUBJECT, PREDICATE),
+            Some(NegativeEvidenceStatus::ContradictionRefused)
+        );
+    }
+
+    #[test]
+    fn malformed_ledger_bytes_are_typed_refused() {
+        assert!(NegativeEvidenceLedger::ledger_from_json("{not json")
+            .err()
+            .map_or(false, |e| e.starts_with(REASON_LEDGER_MALFORMED)));
+    }
+
+    #[test]
+    fn rfc3339_known_epochs_render_exactly() {
+        assert_eq!(rfc3339_from_epoch_secs(0), "1970-01-01T00:00:00Z");
+        assert_eq!(
+            rfc3339_from_epoch_secs(1_000_000_000),
+            "2001-09-09T01:46:40Z"
+        );
+        // Leap day.
+        assert_eq!(rfc3339_from_epoch_secs(1_709_164_800), "2024-02-29T00:00:00Z");
+        // End of day.
+        assert_eq!(rfc3339_from_epoch_secs(86_399), "1970-01-01T23:59:59Z");
+        // now() is well-formed RFC 3339 UTC.
+        let now = rfc3339_now();
+        assert_eq!(now.len(), 20);
+        assert!(now.ends_with('Z'));
+        assert_eq!(&now[4..5], "-");
+        assert_eq!(&now[10..11], "T");
     }
 }
