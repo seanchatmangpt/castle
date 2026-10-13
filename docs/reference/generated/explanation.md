@@ -2,7 +2,7 @@
 
 ## Summary
 
-castle is a crate with 134 modules and 1254 public items on its code surface.
+castle is a crate with 145 modules and 1358 public items on its code surface.
 
 ## Verified snippet
 
