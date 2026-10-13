@@ -17,6 +17,7 @@ pub mod security_universe;
 pub mod reference_stack;
 pub mod sa2a_security;
 pub mod strategic_command;
+pub mod lean_witness;
 pub mod trust_chain;
 pub mod strategic_board;
 pub mod v26_8_18;
