@@ -220,3 +220,87 @@ fn segregation_of_duty_detects_a_real_incompatible_role_pair() {
 fn board_requirements_exposes_the_full_generated_forty_control_profile() {
     assert_eq!(board_requirements().len(), 40);
 }
+
+// ---------------------------------------------------------------------------
+// L67 — additive key-history gate over verify_receipt_dag
+// ---------------------------------------------------------------------------
+
+use castle::trust_chain::KeyHistory;
+
+#[test]
+fn key_history_revoked_at_receipt_epoch_is_refused() {
+    let signing_key = SigningKey::from_bytes(&[7u8; 32]);
+    let verifying_key = signing_key.verifying_key();
+    let trust = trust_store("board-root", verifying_key, "castle-assurance");
+    let bundle = issue("deny_by_default", MetricValue::Bool(true), &signing_key, "board-root", "castle-assurance", 5);
+
+    let mut history = KeyHistory::new();
+    history.enroll("board-root", 0, "castle-assurance").expect("enroll");
+    history.revoke("board-root", 5).expect("revoke");
+
+    let verification = verify_receipt_dag_with_history(&bundle.receipt, &trust, &HashMap::new(), Some(&history));
+    assert_eq!(verification.standing, Standing::Refused);
+    assert!(verification.reasons.contains(&"REFUSED:REVOKED_KEY_AT_EPOCH".to_string()));
+}
+
+#[test]
+fn key_history_enrolled_and_valid_accepts_the_same_receipt() {
+    let signing_key = SigningKey::from_bytes(&[7u8; 32]);
+    let verifying_key = signing_key.verifying_key();
+    let trust = trust_store("board-root", verifying_key, "castle-assurance");
+    let bundle = issue("deny_by_default", MetricValue::Bool(true), &signing_key, "board-root", "castle-assurance", 5);
+
+    let mut history = KeyHistory::new();
+    history.enroll("board-root", 0, "castle-assurance").expect("enroll");
+
+    let verification = verify_receipt_dag_with_history(&bundle.receipt, &trust, &HashMap::new(), Some(&history));
+    assert_eq!(verification.standing, Standing::Alive);
+    assert_eq!(verification.reasons, vec!["ALIVE:RECEIPT_DAG_VERIFIED".to_string()]);
+    assert_eq!(verification.verified_digests, vec![bundle.receipt.receipt_digest.clone()]);
+}
+
+#[test]
+fn key_history_tampered_chain_is_refused_through_the_dag() {
+    let signing_key = SigningKey::from_bytes(&[7u8; 32]);
+    let verifying_key = signing_key.verifying_key();
+    let trust = trust_store("board-root", verifying_key, "castle-assurance");
+    let bundle = issue("deny_by_default", MetricValue::Bool(true), &signing_key, "board-root", "castle-assurance", 5);
+
+    let mut history = KeyHistory::new();
+    history.enroll("board-root", 0, "castle-assurance").expect("enroll");
+    // Attacker mutates a stored event byte without re-folding the chain hash.
+    let mut events = history.events.clone();
+    events[0].assurance_domain = "attacker-domain".to_string();
+    let attacker_history = KeyHistory { events, chain_hash: history.chain_hash.clone() };
+
+    let verification = verify_receipt_dag_with_history(&bundle.receipt, &trust, &HashMap::new(), Some(&attacker_history));
+    assert_eq!(verification.standing, Standing::Refused);
+    assert!(verification.reasons.contains(&"REFUSED:TRUST_CHAIN_TAMPERED".to_string()));
+}
+
+#[test]
+fn verify_receipt_dag_without_history_is_byte_identical_to_the_old_path() {
+    // (c) None path: the old public entry point and the new one with an
+    // explicit None must produce identical verdicts on both a clean and a
+    // refused receipt, proving no court shift on the legacy path.
+    let signing_key = SigningKey::from_bytes(&[7u8; 32]);
+    let verifying_key = signing_key.verifying_key();
+    let trust = trust_store("board-root", verifying_key, "castle-assurance");
+    let bundle = issue("deny_by_default", MetricValue::Bool(true), &signing_key, "board-root", "castle-assurance", 5);
+    let store: HashMap<String, ReceiptV2> = HashMap::new();
+
+    let old = verify_receipt_dag(&bundle.receipt, &trust, &store);
+    let new = verify_receipt_dag_with_history(&bundle.receipt, &trust, &store, None);
+    assert_eq!(old.standing, new.standing);
+    assert_eq!(old.reasons, new.reasons);
+    assert_eq!(old.verified_digests, new.verified_digests);
+
+    // Refusal case too: untrusted-key receipt refuses identically either way.
+    let rogue_bundle = issue("deny_by_default", MetricValue::Bool(true), &SigningKey::from_bytes(&[77u8; 32]), "board-root", "castle-assurance", 5);
+    let other_trust = trust_store("board-root", SigningKey::from_bytes(&[99u8; 32]).verifying_key(), "castle-assurance");
+    let old_refused = verify_receipt_dag(&rogue_bundle.receipt, &other_trust, &store);
+    let new_refused = verify_receipt_dag_with_history(&rogue_bundle.receipt, &other_trust, &store, None);
+    assert_eq!(old_refused.standing, Standing::Refused);
+    assert_eq!(old_refused.reasons, new_refused.reasons);
+    assert_eq!(old_refused.verified_digests, new_refused.verified_digests);
+}

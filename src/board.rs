@@ -276,6 +276,7 @@ fn verify_receipt_node(
     receipt: &ReceiptV2,
     trust: &TrustStore,
     store: &HashMap<String, ReceiptV2>,
+    key_history: Option<&crate::trust_chain::KeyHistory>,
     visiting: &mut std::collections::HashSet<String>,
     verified: &mut std::collections::HashSet<String>,
     reasons: &mut Vec<String>,
@@ -361,10 +362,21 @@ fn verify_receipt_node(
         }
     }
 
+    // Additive key-history gate (L67): when a `KeyHistory` is supplied, every
+    // receipt node's signing key must be enrolled-and-unrevoked at the
+    // receipt's `trust_epoch` per the rolling BLAKE3 chain in
+    // `trust_chain::check_key_history`. `None` skips this entirely — the
+    // `None` path is byte-identical to the pre-L67 behavior.
+    if let Some(history) = key_history {
+        if let Err(refusal) = crate::trust_chain::check_key_history(history, &core.key_id, core.trust_epoch) {
+            reasons.push(refusal);
+        }
+    }
+
     for parent_digest in &core.parent_digests {
         match store.get(parent_digest) {
             None => reasons.push("REFUSED:ORPHAN_RECEIPT_PARENT".to_string()),
-            Some(parent) => verify_receipt_node(parent, trust, store, visiting, verified, reasons),
+            Some(parent) => verify_receipt_node(parent, trust, store, key_history, visiting, verified, reasons),
         }
     }
 
@@ -372,11 +384,25 @@ fn verify_receipt_node(
     verified.insert(receipt.receipt_digest.clone());
 }
 
+/// Existing public entry point — unchanged signature, delegates with `None`
+/// so every pre-L67 caller's behavior is byte-identical.
 #[must_use]
 pub fn verify_receipt_dag(root: &ReceiptV2, trust: &TrustStore, store: &HashMap<String, ReceiptV2>) -> ReceiptVerification {
+    verify_receipt_dag_with_history(root, trust, store, None)
+}
+
+/// Additive entry point (L67): same DAG verification with an optional
+/// `trust_chain::KeyHistory` gate per receipt node.
+#[must_use]
+pub fn verify_receipt_dag_with_history(
+    root: &ReceiptV2,
+    trust: &TrustStore,
+    store: &HashMap<String, ReceiptV2>,
+    key_history: Option<&crate::trust_chain::KeyHistory>,
+) -> ReceiptVerification {
     let mut reasons: Vec<String> = Vec::new();
     let mut verified = std::collections::HashSet::new();
-    verify_receipt_node(root, trust, store, &mut std::collections::HashSet::new(), &mut verified, &mut reasons);
+    verify_receipt_node(root, trust, store, key_history, &mut std::collections::HashSet::new(), &mut verified, &mut reasons);
     reasons.sort();
     reasons.dedup();
     let standing = if reasons.is_empty() { Standing::Alive } else { Standing::Refused };
@@ -426,7 +452,7 @@ pub fn admit_evidence(bundle: &EvidenceBundle, trust: &TrustStore, store: &HashM
         Err(_) => reasons.push("REFUSED:EVIDENCE_PAYLOAD_MISMATCH".to_string()),
     }
 
-    let dag = verify_receipt_dag(receipt, trust, store);
+    let dag = verify_receipt_dag_with_history(receipt, trust, store, None);
     if dag.standing != Standing::Alive {
         reasons.extend(dag.reasons);
     }
