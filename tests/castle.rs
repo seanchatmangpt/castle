@@ -438,10 +438,10 @@ fn kind_platform_eng_colima_is_available() -> bool {
 }
 
 #[tokio::test]
+#[ignore = "BLOCKED:KIND_CONTEXT_UNREACHABLE — requires reachable kubectl context kind-platform-eng-colima on the host"]
 async fn kind_cluster_gymact_observes_real_nodes_and_yields_a_receipted_ocel_log() {
     if !kind_platform_eng_colima_is_available() {
-        eprintln!("SKIPPED: kind-platform-eng-colima context is not reachable on this host");
-        return;
+        panic!("BLOCKED:KIND_CONTEXT_UNREACHABLE — context kind-platform-eng-colima is not reachable; run with the context up (test is #[ignore]-gated)");
     }
 
     let fx = fixture();
@@ -522,10 +522,10 @@ fn process_gymact_is_available() -> bool {
 }
 
 #[tokio::test]
+#[ignore = "BLOCKED:GYMACT_OR_KIND_UNREACHABLE — requires real `gymact` CLI and reachable kind-platform-eng-colima context on the host"]
 async fn process_gym_act_adapter_runs_a_real_powl_sequence_against_the_live_kubernetes_reconciliation_provider_and_yields_a_receipted_ocel_log() {
     if !process_gymact_is_available() {
-        eprintln!("SKIPPED: real `gymact` CLI or kind-platform-eng-colima context is not reachable on this host");
-        return;
+        panic!("BLOCKED:GYMACT_OR_KIND_UNREACHABLE — real `gymact` CLI or kind-platform-eng-colima context is not reachable (test is #[ignore]-gated)");
     }
 
     let fx = fixture();
@@ -608,10 +608,10 @@ fn docker_daemon_is_available() -> bool {
 }
 
 #[tokio::test]
+#[ignore = "BLOCKED:DOCKER_DAEMON_UNREACHABLE — requires a reachable local docker daemon on the host"]
 async fn container_gym_act_adapter_runs_a_real_powl_sequence_against_the_local_docker_daemon_and_yields_a_receipted_ocel_log() {
     if !docker_daemon_is_available() {
-        eprintln!("SKIPPED: no reachable local docker daemon on this host");
-        return;
+        panic!("BLOCKED:DOCKER_DAEMON_UNREACHABLE — no reachable local docker daemon on this host (test is #[ignore]-gated)");
     }
 
     let fx = fixture();
