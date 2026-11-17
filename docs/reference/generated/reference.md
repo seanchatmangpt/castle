@@ -492,6 +492,36 @@
 | `26.8.15` | str_key | GGEN_VERSION = "26.8.15" |  |  |  |  |
 
 
+### crates/castle-ggen-rdf/src/strata.rs
+
+| `ADMITTED_SCHEMAS` | const | ADMITTED_SCHEMAS: [&str; 1] |  |  |  |  |
+
+| `GENESIS_PREV` | const | GENESIS_PREV: &str |  |  |  |  |
+
+| `cli_strata_ingest` | function | cli_strata_ingest(args: &[String]) -> Result<Value, String> |  |  |  |  |
+
+| `ingest_receipt_bytes` | function | ingest_receipt_bytes( bytes: &[u8], expected_head: Option<&str>, ) -> Result<StrataIngest, String> |  |  |  |  |
+
+| `ingest_receipt_doc` | function | ingest_receipt_doc( doc: &Value, expected_head: Option<&str>, ) -> Result<StrataIngest, String> |  |  |  |  |
+
+| `ingest_receipt_file` | function | ingest_receipt_file( path: &Path, expected_head: Option<&str>, ) -> Result<StrataIngest, String> |  |  |  |  |
+
+| `ingest_receipt_log` | function | ingest_receipt_log( bytes: &[u8], expected_head: Option<&str>, ) -> Result<StrataIngest, String> |  |  |  |  |
+
+| `0000000000000000000000000000000000000000000000000000000000000000` | str_key | GENESIS_PREV = "0000000000000000000000000000000000000000000000000000000000000000" |  |  |  |  |
+
+| `ggen-receipt/v2` | str_key | ADMITTED_SCHEMAS = "ggen-receipt/v2" |  |  |  |  |
+
+| `StrataIngest` | struct | StrataIngest { pub events: Vec<StrataOcelEvent>, pub head: String, pub schema: String } |  |  |  |  |
+
+| `StrataOcelEvent` | struct | StrataOcelEvent { pub id: String, pub kind: String, pub time: String, pub attributes: BTreeMap<String, Value>, pub object_ids: Vec<String> } |  |  |  |  |
+
+
+### crates/castle-ggen-rdf/tests/strata_ingest.rs
+
+| `strata-ledger-pack` | str_key | PACK_FIXTURES = "strata-ledger-pack" |  |  |  |  |
+
+
 ### ontology/payments-fibo/generated/fibo_generated.rs
 
 | `FIBO_MAPPINGS` | const | FIBO_MAPPINGS: &[FiboMapping] |  |  |  |  |
@@ -565,6 +595,13 @@
 | `FiboMapping` | struct | FiboMapping { pub id: &'static str, pub castle_term: &'static str, pub fibo_iri: &'static str, pub fibo_kind: &'static str, pub match_kind: &'static str, pub status: &'static str, pub fibo_module: &'static str, pub version_iri: &'static str, pub corpus_file: &'static str, pub corpus_sha256: &'static str } |  |  |  |  |
 
 
+### src/beam4pm_feed.rs
+
+| `beam4pm_batch` | function | beam4pm_batch(log: &OcelLog) -> Value |  |  |  |  |
+
+| `beam4pm_event` | function | beam4pm_event(event: &OcelEvent, object_kinds: &BTreeMap<&str, &str>) -> Value |  |  |  |  |
+
+
 ### src/bin/castle/verbs/dfcm_handlers.rs
 
 | `crypto_capabilities_handler` | function | crypto_capabilities_handler() -> Result<Value> |  |  |  |  |
@@ -589,6 +626,10 @@
 ### src/bin/castle/verbs/evidence_handlers.rs
 
 | `evidence_verify_handler` | function | evidence_verify_handler(evidence_path: String) -> Result<Value> |  |  |  |  |
+
+| `negative_ingest_handler` | function | negative_ingest_handler( ledger_path: String, subject: Option<String>, predicate: Option<String>, searched_by: String, searched_at: Option<String>, refusal_reason: Option<String>, witness_json: Option<String>, ) -> Result<Value> |  |  |  |  |
+
+| `negative_status_handler` | function | negative_status_handler( ledger_path: String, subject: Option<String>, predicate: Option<String>, ) -> Result<Value> |  |  |  |  |
 
 
 ### src/bin/castle/verbs/handlers.rs
@@ -717,6 +758,8 @@
 | `qualify_verified_fortune5` | function | qualify_verified_fortune5( bundles: &[EvidenceBundle], context: &QualificationContext, trust: &TrustStore, receipt_store: &HashMap<String, ReceiptV2>, requirements: &[Fortune5Requirement], ) -> VerifiedQualification |  |  |  |  |
 
 | `verify_receipt_dag` | function | verify_receipt_dag(root: &ReceiptV2, trust: &TrustStore, store: &HashMap<String, ReceiptV2>) -> ReceiptVerification |  |  |  |  |
+
+| `verify_receipt_dag_with_history` | function | verify_receipt_dag_with_history( root: &ReceiptV2, trust: &TrustStore, store: &HashMap<String, ReceiptV2>, key_history: Option<&crate::trust_chain::KeyHistory>, ) -> ReceiptVerification |  |  |  |  |
 
 | `ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/` | str_key | ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/" |  |  |  |  |
 
@@ -929,15 +972,6 @@
 | `ReceiptVerifier` | trait |  |  |  |  |  |
 
 
-### src/dd_ui.rs
-
-| `DdUiRefusal` | enum | DdUiRefusal { IrreversiblePresentationSelection, RenderAuthorityEscalation, DirectDoFromUi, UnadmittedConstruct, NonBrceDo, UnreplayablePresentation } |  |  |  |  |
-
-| `admit` | function | admit(&self) -> Result<(), DdUiRefusal> |  |  |  |  |
-
-| `PresentationAuthority` | struct | PresentationAuthority { pub irreversible_selections: u32, pub render_actuation_authority: bool, pub output_kind: &'a str, pub construct_admitted: bool, pub do_route: &'a str, pub grammar_digest: Option<&'a str>, pub world_digest: Option<&'a str>, pub frontier_digest: Option<&'a str>, pub screen_digest: Option<&'a str> } |  |  |  |  |
-
-
 ### src/fortune5.rs
 
 | `EvidenceEpistemicClass` | enum | EvidenceEpistemicClass { Observed, Replayed, Inferred } |  |  |  |  |
@@ -1010,21 +1044,152 @@
 | `observe-alpine-container` | str_key | DEFAULT_TRANSITION = "observe-alpine-container" |  |  |  |  |
 
 
+### src/insa_witness.rs
+
+| `ADMITTED_AXIOMS` | const | ADMITTED_AXIOMS: [&str; 3] |  |  |  |  |
+
+| `ADMITTED_SCHEMAS` | const | ADMITTED_SCHEMAS: [&str; 1] |  |  |  |  |
+
+| `REFUSED` | const | REFUSED: &str |  |  |  |  |
+
+| `RUST_FAMILY_MARKER` | const | RUST_FAMILY_MARKER: &str |  |  |  |  |
+
+| `AxiomFamily` | enum | AxiomFamily { LeanTrio, RustCompiled } |  |  |  |  |
+
+| `axiom_family` | function | axiom_family(axioms: &[String]) -> Result<AxiomFamily, String> |  |  |  |  |
+
+| `evidence_input_from_insa_witness` | function | evidence_input_from_insa_witness( line: &str, observed_at: &str, ) -> Result<InsaWitnessEvidence, String> |  |  |  |  |
+
+| `tag` | function | tag(self) -> &'static str |  |  |  |  |
+
+| `2026-10-13T00:00:00Z` | str_key | OBSERVED_AT = "2026-10-13T00:00:00Z" |  |  |  |  |
+
+| `REFUSED` | str_key | REFUSED = "REFUSED" |  |  |  |  |
+
+| `a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8` | str_key | SHA1 = "a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8" |  |  |  |  |
+
+| `b1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8` | str_key | SHA2 = "b1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8" |  |  |  |  |
+
+| `insa-witness/v1` | str_key | ADMITTED_SCHEMAS = "insa-witness/v1" |  |  |  |  |
+
+| `propext` | str_key | ADMITTED_AXIOMS = "propext" |  |  |  |  |
+
+| `rust-compiled:no-lean-kernel` | str_key | RUST_FAMILY_MARKER = "rust-compiled:no-lean-kernel" |  |  |  |  |
+
+| `InsaWitness` | struct | InsaWitness { pub theorem: String, pub axioms: Vec<String>, pub source_sha256: String, pub sync_head: String, pub verified_entries: u64, pub anchor_head: String } |  |  |  |  |
+
+| `InsaWitnessEvidence` | struct | InsaWitnessEvidence { pub input: EvidenceInput } |  |  |  |  |
+
+
+### src/lean_witness.rs
+
+| `ADMITTED_AXIOMS` | const | ADMITTED_AXIOMS: [&str; 3] |  |  |  |  |
+
+| `ADMITTED_SCHEMAS` | const | ADMITTED_SCHEMAS: [&str; 1] |  |  |  |  |
+
+| `LEDGER_CONSERVANT_CONTROL` | const | LEDGER_CONSERVANT_CONTROL: Fortune5Requirement |  |  |  |  |
+
+| `REFUSED` | const | REFUSED: &str |  |  |  |  |
+
+| `STRATA_LEDGER_SUBJECT` | const | STRATA_LEDGER_SUBJECT: &str |  |  |  |  |
+
+| `evidence_input_from_lean_witness` | function | evidence_input_from_lean_witness( line: &str, observed_at: &str, ) -> Result<LeanWitnessEvidence, String> |  |  |  |  |
+
+| `ledger_conservant_observation` | function | ledger_conservant_observation( line: &str, observed_at: &str, ) -> Result<MetricObservation, String> |  |  |  |  |
+
+| `qualify_ledger_conservant` | function | qualify_ledger_conservant( observations: &[MetricObservation], context: &QualificationContext, ) -> Fortune5Qualification |  |  |  |  |
+
+| `2026-10-13T00:00:00Z` | str_key | OBSERVED_AT = "2026-10-13T00:00:00Z" |  |  |  |  |
+
+| `F5-LEDGER-001` | str_key | LEDGER_CONSERVANT_CONTROL = "F5-LEDGER-001" |  |  |  |  |
+
+| `REFUSED` | str_key | REFUSED = "REFUSED" |  |  |  |  |
+
+| `lean-witness/v1` | str_key | ADMITTED_SCHEMAS = "lean-witness/v1" |  |  |  |  |
+
+| `propext` | str_key | ADMITTED_AXIOMS = "propext" |  |  |  |  |
+
+| `strata-ledger-pack` | str_key | STRATA_LEDGER_SUBJECT = "strata-ledger-pack" |  |  |  |  |
+
+| `LeanWitness` | struct | LeanWitness { pub theorem: String, pub axioms: Vec<String>, pub source_sha256: String, pub toolchain: String } |  |  |  |  |
+
+| `LeanWitnessEvidence` | struct | LeanWitnessEvidence { pub input: EvidenceInput } |  |  |  |  |
+
+
 ### src/lib.rs
 
 | `castle::*` | use | castle::* |  |  |  |  |
-
-| `dd_ui::{DdUiRefusal, PresentationAuthority}` | use | dd_ui::{DdUiRefusal, PresentationAuthority} |  |  |  |  |
 
 | `generated::{ default_adversarial_goals, generated_components, DefaultAdversarialGoal, GeneratedBinding, GENERATED_BINDINGS, }` | use | generated::{ default_adversarial_goals, generated_components, DefaultAdversarialGoal, GeneratedBinding, GENERATED_BINDINGS, } |  |  |  |  |
 
 | `gymact_container::execute_default_container_observation` | use | gymact_container::execute_default_container_observation |  |  |  |  |
 
-| `planner_minimal::MinimalActionPlanner` | use | planner_minimal::MinimalActionPlanner |  |  |  |  |
-
 | `reconstitution::{ admit_empire_reconstitution_for_construct, EmpireReconstitutionAdmission, FinalDisposition, ReconstitutedCapability, ReconstitutionRefusal, }` | use | reconstitution::{ admit_empire_reconstitution_for_construct, EmpireReconstitutionAdmission, FinalDisposition, ReconstitutedCapability, ReconstitutionRefusal, } |  |  |  |  |
 
 | `refusal_conformance::{verify_refusal, RefusalObservation}` | use | refusal_conformance::{verify_refusal, RefusalObservation} |  |  |  |  |
+
+
+### src/negative_evidence.rs
+
+| `REASON_ABSENCE` | const | REASON_ABSENCE: &str |  |  |  |  |
+
+| `REASON_CONTRADICTION` | const | REASON_CONTRADICTION: &str |  |  |  |  |
+
+| `REASON_INCOMPLETE` | const | REASON_INCOMPLETE: &str |  |  |  |  |
+
+| `REASON_LEDGER_MALFORMED` | const | REASON_LEDGER_MALFORMED: &str |  |  |  |  |
+
+| `REASON_NOT_A_REFUSAL` | const | REASON_NOT_A_REFUSAL: &str |  |  |  |  |
+
+| `REASON_SUPERSEDED` | const | REASON_SUPERSEDED: &str |  |  |  |  |
+
+| `NegativeEvidenceStatus` | enum | NegativeEvidenceStatus { Absent(Standing), Superseded { by: String }, ContradictionRefused } |  |  |  |  |
+
+| `StoredStatus` | enum | StoredStatus { Absent { standing: String }, Superseded { by: String }, ContradictionRefused } |  |  |  |  |
+
+| `admit_negation` | function | admit_negation( &mut self, negation: NegationRecord, admitted: &[MetricObservation], ) -> Result<NegativeEvidenceStatus, String> |  |  |  |  |
+
+| `admit_positive_and_supersede` | function | admit_positive_and_supersede( bundle: &EvidenceBundle, ledger: &mut NegativeEvidenceLedger, trust: &TrustStore, store: &HashMap<String, ReceiptV2>, ) -> EvidenceAdmission |  |  |  |  |
+
+| `key` | function | key(&self) -> (&str, &str) |  |  |  |  |
+
+| `ledger_from_json` | function | ledger_from_json(bytes: &str) -> Result<Self, String> |  |  |  |  |
+
+| `ledger_to_json` | function | ledger_to_json(&self) -> Result<String, String> |  |  |  |  |
+
+| `negation_from_witness_refusal` | function | negation_from_witness_refusal( witness_line: &str, refusal_reason: &str, searched_at: &str, searched_by: &str, ) -> Result<NegationRecord, String> |  |  |  |  |
+
+| `records` | function | records(&self) -> &[(NegationRecord, NegativeEvidenceStatus)] |  |  |  |  |
+
+| `rfc3339_from_epoch_secs` | function | rfc3339_from_epoch_secs(secs: i64) -> String |  |  |  |  |
+
+| `rfc3339_now` | function | rfc3339_now() -> String |  |  |  |  |
+
+| `status_of` | function | status_of(&self, subject: &str, predicate: &str) -> Option<NegativeEvidenceStatus> |  |  |  |  |
+
+| `with_records` | function | with_records(records: Vec<(NegationRecord, NegativeEvidenceStatus)>) -> Self |  |  |  |  |
+
+| `2026-10-13T00:00:00Z` | str_key | AT = "2026-10-13T00:00:00Z" |  |  |  |  |
+
+| `REFUSED:EVIDENCE_CONTRADICTION` | str_key | REASON_CONTRADICTION = "REFUSED:EVIDENCE_CONTRADICTION" |  |  |  |  |
+
+| `REFUSED:NEGATION_INCOMPLETE` | str_key | REASON_INCOMPLETE = "REFUSED:NEGATION_INCOMPLETE" |  |  |  |  |
+
+| `REFUSED:NEGATION_LEDGER_MALFORMED` | str_key | REASON_LEDGER_MALFORMED = "REFUSED:NEGATION_LEDGER_MALFORMED" |  |  |  |  |
+
+| `REFUSED:NOT_A_TYPED_REFUSAL` | str_key | REASON_NOT_A_REFUSAL = "REFUSED:NOT_A_TYPED_REFUSAL" |  |  |  |  |
+
+| `UNKNOWN:ABSENCE_OF_EVIDENCE` | str_key | REASON_ABSENCE = "UNKNOWN:ABSENCE_OF_EVIDENCE" |  |  |  |  |
+
+| `UNKNOWN:ABSENCE_SUPERSEDED_BY_POSITIVE` | str_key | REASON_SUPERSEDED = "UNKNOWN:ABSENCE_SUPERSEDED_BY_POSITIVE" |  |  |  |  |
+
+| `lean.witness.verified` | str_key | PREDICATE = "lean.witness.verified" |  |  |  |  |
+
+| `mfact@aaa:theorem_x` | str_key | SUBJECT = "mfact@aaa:theorem_x" |  |  |  |  |
+
+| `NegationRecord` | struct | NegationRecord { pub predicate: String, pub subject: String, pub searched_at: String, pub searched_by: String } |  |  |  |  |
+
+| `NegativeEvidenceLedger` | struct | NegativeEvidenceLedger { records: Vec<(NegationRecord, NegativeEvidenceStatus)> } |  |  |  |  |
 
 
 ### src/operation_envelope.rs
@@ -1844,11 +2009,6 @@
 | `RailReport` | struct | RailReport { effect_digest: String, correlation_id: String, status: RailStatus, evidence_digest: String, _seal: () } |  |  |  |  |
 
 
-### src/planner_minimal.rs
-
-| `MinimalActionPlanner` | struct | MinimalActionPlanner { pub id: String } |  |  |  |  |
-
-
 ### src/reconstitution.rs
 
 | `FinalDisposition` | enum | FinalDisposition { Preserved, Subsumed, Replaced, Archived, Refused } |  |  |  |  |
@@ -1980,31 +2140,6 @@
 | `threshold::*` | use | threshold::* |  |  |  |  |
 
 | `verifier::*` | use | verifier::* |  |  |  |  |
-
-
-### src/sa2a_authority.rs
-
-| `Refusal` | enum | Refusal { EffectDigestMismatch, PrincipalMismatch, PolicyEpochMismatch, RevocationEpochStale, ExecutionGenerationStale, EmptyQuorum, DuplicateSigner, DuplicateIndependenceDomain, UnknownKey, KeyPrincipalMismatch, AlgorithmMismatch, AlgorithmNotAllowed, KeyNotYetValid, KeyRevoked, SignatureInvalid, QuorumNotMet } |  |  |  |  |
-
-| `SignatureAlgorithm` | enum | SignatureAlgorithm { Ed25519, MlDsa65, SlhDsaShake128f } |  |  |  |  |
-
-| `certificate_message` | function | certificate_message(c:&ActuationCertificate) -> Vec<u8> |  |  |  |  |
-
-| `new` | function | new(provider:P,keys:impl IntoIterator<Item=KeyRecord>) -> Self |  |  |  |  |
-
-| `verify` | function | verify(&self,effect:[u8;32],principal:&str,c:&ActuationCertificate,p:&VerificationPolicy) -> Result<(),Refusal> |  |  |  |  |
-
-| `ActuationCertificate` | struct | ActuationCertificate { pub effect_digest:[u8;32], pub principal:String, pub policy_epoch:u64, pub revocation_epoch:u64, pub execution_generation:u64, pub signatures:Vec<CertificateSignature> } |  |  |  |  |
-
-| `AuthorityVerifier` | struct | AuthorityVerifier { provider:P, keys:BTreeMap<String,KeyRecord> } |  |  |  |  |
-
-| `CertificateSignature` | struct | CertificateSignature { pub key_id:String, pub algorithm:SignatureAlgorithm, pub signature:Vec<u8> } |  |  |  |  |
-
-| `KeyRecord` | struct | KeyRecord { pub key_id:String, pub principal:String, pub algorithm:SignatureAlgorithm, pub public_key:Vec<u8>, pub valid_from_epoch:u64, pub revoked_at_epoch:Option<u64>, pub independence_domain:String } |  |  |  |  |
-
-| `VerificationPolicy` | struct | VerificationPolicy { pub current_policy_epoch:u64, pub current_revocation_epoch:u64, pub minimum_execution_generation:u64, pub quorum:usize, pub allowed_algorithms:BTreeSet<SignatureAlgorithm> } |  |  |  |  |
-
-| `CryptoProvider` | trait |  |  |  |  |  |
 
 
 ### src/sa2a_security/algorithm.rs
@@ -2151,6 +2286,37 @@
 | `CertificateVerifier` | struct | CertificateVerifier { pub registry: &'a KeyRegistry, pub expected_epochs: SecurityEpochs, pub expected_audience: &'a str, pub now_ms: u64 } |  |  |  |  |
 
 | `super::receipt::VerificationReceipt` | use | super::receipt::VerificationReceipt |  |  |  |  |
+
+
+### src/security_core_generated.rs
+
+| `FORTUNE5_SECURITY_CORE` | const | FORTUNE5_SECURITY_CORE: &[&str] |  |  |  |  |
+
+| `case` | str_key | FORTUNE5_SECURITY_CORE = "case" |  |  |  |  |
+
+
+### src/security_sources_generated.rs
+
+| `SECURITY_SOURCES` | const | SECURITY_SOURCES: &[SecuritySource] |  |  |  |  |
+
+| `SecurityKind` | enum | SecurityKind { GovernanceFramework, ControlCatalog, Assurance, Regulation, CloudBaseline, ApplicationSecurity, AiSecurity, IndustrialControl, ThreatKnowledge, VulnerabilityKnowledge, DetectionLanguage, TelemetrySchema, SupplyChain, EvidenceExchange, SecurityOntology, PolicyLanguage } |  |  |  |  |
+
+| `VersionPolicy` | enum | VersionPolicy { Pinned, Rolling } |  |  |  |  |
+
+| `cacao` | str_key | SECURITY_SOURCES = "cacao" |  |  |  |  |
+
+| `SecuritySource` | struct | SecuritySource { pub id: &'static str, pub authority: &'static str, pub version: &'static str, pub version_policy: VersionPolicy, pub kind: SecurityKind, pub machine_surface: &'static str, pub source_uri: &'static str } |  |  |  |  |
+
+
+### src/security_tools_generated.rs
+
+| `SECURITY_TOOLS` | const | SECURITY_TOOLS: &[SecurityToolIntegration] |  |  |  |  |
+
+| `ToolBoundary` | enum | ToolBoundary { ObserveOnly, AssessOnly, DetectOnly, ConstructIntentOnly, ExternalEnforcerBehindCastleAdmission } |  |  |  |  |
+
+| `aws-config` | str_key | SECURITY_TOOLS = "aws-config" |  |  |  |  |
+
+| `SecurityToolIntegration` | struct | SecurityToolIntegration { pub id: &'static str, pub ecosystem: &'static str, pub native_surface: &'static str, pub normalized_output: &'static str, pub boundary: ToolBoundary, pub direct_actuation_authority: bool } |  |  |  |  |
 
 
 ### src/security_universe/admission.inc.rs
@@ -2355,6 +2521,45 @@
 | `StrategyPartition` | struct | StrategyPartition { pub strategy_id: String, pub strategy: String, pub doctrine_digest: String, pub local_premise_digests: BTreeMap<String, String>, pub local_constraints: Vec<String>, pub operator_ids: Vec<String>, pub partition_digest: String } |  |  |  |  |
 
 | `crate::strategic_board::{ assess_board_reentry, assess_counterstrategies, build_strategic_board_package, build_strategic_twin_snapshot, diff_strategic_twins, judge_counterstrategy, qualify_campaign_portfolio, verify_strategic_board_package_offline, BoardReentryDecision, CampaignPortfolioAnalysis, CampaignPortfolioPolicy, CounterstrategyAssessment, CounterstrategyScenario, CounterstrategyVerdict, OfflineBoardPackageVerification, StrategicBoardDelta, StrategicBoardPackage, StrategicTwinSnapshot, }` | use | crate::strategic_board::{ assess_board_reentry, assess_counterstrategies, build_strategic_board_package, build_strategic_twin_snapshot, diff_strategic_twins, judge_counterstrategy, qualify_campaign_portfolio, verify_strategic_board_package_offline, BoardReentryDecision, CampaignPortfolioAnalysis, CampaignPortfolioPolicy, CounterstrategyAssessment, CounterstrategyScenario, CounterstrategyVerdict, OfflineBoardPackageVerification, StrategicBoardDelta, StrategicBoardPackage, StrategicTwinSnapshot, } |  |  |  |  |
+
+
+### src/trust_chain.rs
+
+| `GENESIS_SEED` | const | GENESIS_SEED: &[u8] |  |  |  |  |
+
+| `REFUSED` | const | REFUSED: &str |  |  |  |  |
+
+| `canonical_bytes` | function | canonical_bytes(&self) -> Result<Vec<u8>, String> |  |  |  |  |
+
+| `check_key_history` | function | check_key_history(history: &KeyHistory, key_id: &str, epoch: i64) -> Result<(), String> |  |  |  |  |
+
+| `enroll` | function | enroll( &mut self, key_id: &str, valid_from_epoch: i64, assurance_domain: &str, ) -> Result<(), String> |  |  |  |  |
+
+| `evidence_input_from_sealed_receipt` | function | evidence_input_from_sealed_receipt( sealed: &SealedAffidavitReceipt, ) -> Result<ReplayedEvidence, String> |  |  |  |  |
+
+| `fold_event` | function | fold_event(prev_hex: &str, event: &KeyChainEvent) -> Result<String, String> |  |  |  |  |
+
+| `key_state` | function | key_state(&self, key_id: &str) -> Option<KeyState> |  |  |  |  |
+
+| `new` | function | new() -> Self |  |  |  |  |
+
+| `recompute_chain` | function | recompute_chain(events: &[KeyChainEvent]) -> Result<String, String> |  |  |  |  |
+
+| `revoke` | function | revoke(&mut self, key_id: &str, revoked_at_epoch: i64) -> Result<(), String> |  |  |  |  |
+
+| `REFUSED` | str_key | REFUSED = "REFUSED" |  |  |  |  |
+
+| `castle-trust-chain-v1-genesis` | str_key | GENESIS_SEED = "castle-trust-chain-v1-genesis" |  |  |  |  |
+
+| `KeyChainEvent` | struct | KeyChainEvent { pub action: String, pub key_id: String, pub epoch: i64, pub assurance_domain: String } |  |  |  |  |
+
+| `KeyHistory` | struct | KeyHistory { pub events: Vec<KeyChainEvent>, pub chain_hash: String } |  |  |  |  |
+
+| `KeyState` | struct | KeyState { pub valid_from_epoch: i64, pub revoked_at_epoch: Option<i64>, pub assurance_domain: String } |  |  |  |  |
+
+| `ReplayedEvidence` | struct | ReplayedEvidence { pub input: EvidenceInput, pub receipt_digest: String } |  |  |  |  |
+
+| `SealedAffidavitReceipt` | struct | SealedAffidavitReceipt { pub base_bytes: Vec<u8>, pub envelope_subject_digest: String, pub metric: String, pub value: MetricValue, pub subject: String, pub observed_at: String } |  |  |  |  |
 
 
 ### src/v26_8_18/airgap.rs
@@ -2733,6 +2938,23 @@
 | `WitnessLimits` | struct | WitnessLimits { pub max_steps: u64, pub max_bytes: u64, pub deadline_ms: u64 } |  |  |  |  |
 
 
+### src/xaas_feed.rs
+
+| `parse_xaas_ndjson` | function | parse_xaas_ndjson(lines: &[&str]) -> Result<OcelLog, XaasFeedRefused> |  |  |  |  |
+
+| `parse_xaas_ndjson_file_contents` | function | parse_xaas_ndjson_file_contents(contents: &str) -> Result<OcelLog, XaasFeedRefused> |  |  |  |  |
+
+| `]}` | str_key | LINE_1 = "]}" |  |  |  |  |
+
+| `id` | str_key | EVENT_KEYS = "id" |  |  |  |  |
+
+| `ocel:objectTypes` | str_key | LINE_KEYS = "ocel:objectTypes" |  |  |  |  |
+
+| `Violation` | struct | Violation { pub path: String, pub reason: String } |  |  |  |  |
+
+| `XaasFeedRefused` | struct | XaasFeedRefused { pub violations: Vec<Violation> } |  |  |  |  |
+
+
 ### tests/board.rs
 
 | `castle:board-test` | str_key | SUBJECT = "castle:board-test" |  |  |  |  |
@@ -2847,6 +3069,20 @@
 | `castle:enterprise:test` | str_key | SUBJECT = "castle:enterprise:test" |  |  |  |  |
 
 
+### tests/lean_witness_receipt_l139.rs
+
+| `/Users/sac/mfact/witnesses.jsonl` | str_key | WITNESSES = "/Users/sac/mfact/witnesses.jsonl" |  |  |  |  |
+
+
+### tests/mfact_witnesses_fixture.rs
+
+| `/Users/sac/mfact/witnesses.jsonl` | str_key | LIVE_MFACT = "/Users/sac/mfact/witnesses.jsonl" |  |  |  |  |
+
+| `85e92b3e91678d202d479bd2da4959ac47f8edc0488eb3b9931c82d053c1bcb8` | str_key | PINNED_SHA256 = "85e92b3e91678d202d479bd2da4959ac47f8edc0488eb3b9931c82d053c1bcb8" |  |  |  |  |
+
+| `tests/fixtures/mfact_witnesses.jsonl` | str_key | FIXTURE = "tests/fixtures/mfact_witnesses.jsonl" |  |  |  |  |
+
+
 ### tests/payments_compliance.rs
 
 | `5493001KJTIIGC8Y1R12` | str_key | REAL_LEI = "5493001KJTIIGC8Y1R12" |  |  |  |  |
@@ -2919,6 +3155,11 @@
 | `../docs/sjira/v26.9.28/goal.ttl` | str_key | GOAL = "../docs/sjira/v26.9.28/goal.ttl" |  |  |  |  |
 
 | `../docs/sjira/v26.9.28/repos.ttl` | str_key | REPOS = "../docs/sjira/v26.9.28/repos.ttl" |  |  |  |  |
+
+
+### tests/strata_receipt_rdf_lift.rs
+
+| `911299bbb4bf39a2c0800f223f5b5f549642c9bfe53e4fd57d54a731664c3f2b` | str_key | FIXTURE_SHA256 = "911299bbb4bf39a2c0800f223f5b5f549642c9bfe53e4fd57d54a731664c3f2b" |  |  |  |  |
 
 
 
@@ -3319,6 +3560,30 @@
 
 | `26.8.15` | str_key | GGEN_VERSION = "26.8.15" |  |  |  |  |
 
+| `ADMITTED_SCHEMAS` | const | ADMITTED_SCHEMAS: [&str; 1] |  |  |  |  |
+
+| `GENESIS_PREV` | const | GENESIS_PREV: &str |  |  |  |  |
+
+| `cli_strata_ingest` | function | cli_strata_ingest(args: &[String]) -> Result<Value, String> |  |  |  |  |
+
+| `ingest_receipt_bytes` | function | ingest_receipt_bytes( bytes: &[u8], expected_head: Option<&str>, ) -> Result<StrataIngest, String> |  |  |  |  |
+
+| `ingest_receipt_doc` | function | ingest_receipt_doc( doc: &Value, expected_head: Option<&str>, ) -> Result<StrataIngest, String> |  |  |  |  |
+
+| `ingest_receipt_file` | function | ingest_receipt_file( path: &Path, expected_head: Option<&str>, ) -> Result<StrataIngest, String> |  |  |  |  |
+
+| `ingest_receipt_log` | function | ingest_receipt_log( bytes: &[u8], expected_head: Option<&str>, ) -> Result<StrataIngest, String> |  |  |  |  |
+
+| `0000000000000000000000000000000000000000000000000000000000000000` | str_key | GENESIS_PREV = "0000000000000000000000000000000000000000000000000000000000000000" |  |  |  |  |
+
+| `ggen-receipt/v2` | str_key | ADMITTED_SCHEMAS = "ggen-receipt/v2" |  |  |  |  |
+
+| `StrataIngest` | struct | StrataIngest { pub events: Vec<StrataOcelEvent>, pub head: String, pub schema: String } |  |  |  |  |
+
+| `StrataOcelEvent` | struct | StrataOcelEvent { pub id: String, pub kind: String, pub time: String, pub attributes: BTreeMap<String, Value>, pub object_ids: Vec<String> } |  |  |  |  |
+
+| `strata-ledger-pack` | str_key | PACK_FIXTURES = "strata-ledger-pack" |  |  |  |  |
+
 | `FIBO_MAPPINGS` | const | FIBO_MAPPINGS: &[FiboMapping] |  |  |  |  |
 
 | `IRI_CURRENCY` | const | IRI_CURRENCY: &str |  |  |  |  |
@@ -3389,6 +3654,10 @@
 
 | `FiboMapping` | struct | FiboMapping { pub id: &'static str, pub castle_term: &'static str, pub fibo_iri: &'static str, pub fibo_kind: &'static str, pub match_kind: &'static str, pub status: &'static str, pub fibo_module: &'static str, pub version_iri: &'static str, pub corpus_file: &'static str, pub corpus_sha256: &'static str } |  |  |  |  |
 
+| `beam4pm_batch` | function | beam4pm_batch(log: &OcelLog) -> Value |  |  |  |  |
+
+| `beam4pm_event` | function | beam4pm_event(event: &OcelEvent, object_kinds: &BTreeMap<&str, &str>) -> Value |  |  |  |  |
+
 | `crypto_capabilities_handler` | function | crypto_capabilities_handler() -> Result<Value> |  |  |  |  |
 
 | `deployment_bind_policy_handler` | function | deployment_bind_policy_handler( binding_path: String, policy_path: String, ) -> Result<Value> |  |  |  |  |
@@ -3408,6 +3677,10 @@
 | `replication_admit_handler` | function | replication_admit_handler( state_path: String, checkpoint_path: String, receiver_id: String, ) -> Result<Value> |  |  |  |  |
 
 | `evidence_verify_handler` | function | evidence_verify_handler(evidence_path: String) -> Result<Value> |  |  |  |  |
+
+| `negative_ingest_handler` | function | negative_ingest_handler( ledger_path: String, subject: Option<String>, predicate: Option<String>, searched_by: String, searched_at: Option<String>, refusal_reason: Option<String>, witness_json: Option<String>, ) -> Result<Value> |  |  |  |  |
+
+| `negative_status_handler` | function | negative_status_handler( ledger_path: String, subject: Option<String>, predicate: Option<String>, ) -> Result<Value> |  |  |  |  |
 
 | `chaos_qualify_handler` | function | chaos_qualify_handler(evidence_path: String) -> Result<Value> |  |  |  |  |
 
@@ -3524,6 +3797,8 @@
 | `qualify_verified_fortune5` | function | qualify_verified_fortune5( bundles: &[EvidenceBundle], context: &QualificationContext, trust: &TrustStore, receipt_store: &HashMap<String, ReceiptV2>, requirements: &[Fortune5Requirement], ) -> VerifiedQualification |  |  |  |  |
 
 | `verify_receipt_dag` | function | verify_receipt_dag(root: &ReceiptV2, trust: &TrustStore, store: &HashMap<String, ReceiptV2>) -> ReceiptVerification |  |  |  |  |
+
+| `verify_receipt_dag_with_history` | function | verify_receipt_dag_with_history( root: &ReceiptV2, trust: &TrustStore, store: &HashMap<String, ReceiptV2>, key_history: Option<&crate::trust_chain::KeyHistory>, ) -> ReceiptVerification |  |  |  |  |
 
 | `ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/` | str_key | ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/" |  |  |  |  |
 
@@ -3729,12 +4004,6 @@
 
 | `ReceiptVerifier` | trait |  |  |  |  |  |
 
-| `DdUiRefusal` | enum | DdUiRefusal { IrreversiblePresentationSelection, RenderAuthorityEscalation, DirectDoFromUi, UnadmittedConstruct, NonBrceDo, UnreplayablePresentation } |  |  |  |  |
-
-| `admit` | function | admit(&self) -> Result<(), DdUiRefusal> |  |  |  |  |
-
-| `PresentationAuthority` | struct | PresentationAuthority { pub irreversible_selections: u32, pub render_actuation_authority: bool, pub output_kind: &'a str, pub construct_admitted: bool, pub do_route: &'a str, pub grammar_digest: Option<&'a str>, pub world_digest: Option<&'a str>, pub frontier_digest: Option<&'a str>, pub screen_digest: Option<&'a str> } |  |  |  |  |
-
 | `EvidenceEpistemicClass` | enum | EvidenceEpistemicClass { Observed, Replayed, Inferred } |  |  |  |  |
 
 | `MetricValue` | enum | MetricValue { Number(f64), Bool(bool), Str(String) } |  |  |  |  |
@@ -3795,19 +4064,141 @@
 
 | `observe-alpine-container` | str_key | DEFAULT_TRANSITION = "observe-alpine-container" |  |  |  |  |
 
-| `castle::*` | use | castle::* |  |  |  |  |
+| `ADMITTED_AXIOMS` | const | ADMITTED_AXIOMS: [&str; 3] |  |  |  |  |
 
-| `dd_ui::{DdUiRefusal, PresentationAuthority}` | use | dd_ui::{DdUiRefusal, PresentationAuthority} |  |  |  |  |
+| `ADMITTED_SCHEMAS` | const | ADMITTED_SCHEMAS: [&str; 1] |  |  |  |  |
+
+| `REFUSED` | const | REFUSED: &str |  |  |  |  |
+
+| `RUST_FAMILY_MARKER` | const | RUST_FAMILY_MARKER: &str |  |  |  |  |
+
+| `AxiomFamily` | enum | AxiomFamily { LeanTrio, RustCompiled } |  |  |  |  |
+
+| `axiom_family` | function | axiom_family(axioms: &[String]) -> Result<AxiomFamily, String> |  |  |  |  |
+
+| `evidence_input_from_insa_witness` | function | evidence_input_from_insa_witness( line: &str, observed_at: &str, ) -> Result<InsaWitnessEvidence, String> |  |  |  |  |
+
+| `tag` | function | tag(self) -> &'static str |  |  |  |  |
+
+| `2026-10-13T00:00:00Z` | str_key | OBSERVED_AT = "2026-10-13T00:00:00Z" |  |  |  |  |
+
+| `REFUSED` | str_key | REFUSED = "REFUSED" |  |  |  |  |
+
+| `a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8` | str_key | SHA1 = "a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8" |  |  |  |  |
+
+| `b1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8` | str_key | SHA2 = "b1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8a1b2c3d4e5f6a7b8" |  |  |  |  |
+
+| `insa-witness/v1` | str_key | ADMITTED_SCHEMAS = "insa-witness/v1" |  |  |  |  |
+
+| `propext` | str_key | ADMITTED_AXIOMS = "propext" |  |  |  |  |
+
+| `rust-compiled:no-lean-kernel` | str_key | RUST_FAMILY_MARKER = "rust-compiled:no-lean-kernel" |  |  |  |  |
+
+| `InsaWitness` | struct | InsaWitness { pub theorem: String, pub axioms: Vec<String>, pub source_sha256: String, pub sync_head: String, pub verified_entries: u64, pub anchor_head: String } |  |  |  |  |
+
+| `InsaWitnessEvidence` | struct | InsaWitnessEvidence { pub input: EvidenceInput } |  |  |  |  |
+
+| `ADMITTED_AXIOMS` | const | ADMITTED_AXIOMS: [&str; 3] |  |  |  |  |
+
+| `ADMITTED_SCHEMAS` | const | ADMITTED_SCHEMAS: [&str; 1] |  |  |  |  |
+
+| `LEDGER_CONSERVANT_CONTROL` | const | LEDGER_CONSERVANT_CONTROL: Fortune5Requirement |  |  |  |  |
+
+| `REFUSED` | const | REFUSED: &str |  |  |  |  |
+
+| `STRATA_LEDGER_SUBJECT` | const | STRATA_LEDGER_SUBJECT: &str |  |  |  |  |
+
+| `evidence_input_from_lean_witness` | function | evidence_input_from_lean_witness( line: &str, observed_at: &str, ) -> Result<LeanWitnessEvidence, String> |  |  |  |  |
+
+| `ledger_conservant_observation` | function | ledger_conservant_observation( line: &str, observed_at: &str, ) -> Result<MetricObservation, String> |  |  |  |  |
+
+| `qualify_ledger_conservant` | function | qualify_ledger_conservant( observations: &[MetricObservation], context: &QualificationContext, ) -> Fortune5Qualification |  |  |  |  |
+
+| `2026-10-13T00:00:00Z` | str_key | OBSERVED_AT = "2026-10-13T00:00:00Z" |  |  |  |  |
+
+| `F5-LEDGER-001` | str_key | LEDGER_CONSERVANT_CONTROL = "F5-LEDGER-001" |  |  |  |  |
+
+| `REFUSED` | str_key | REFUSED = "REFUSED" |  |  |  |  |
+
+| `lean-witness/v1` | str_key | ADMITTED_SCHEMAS = "lean-witness/v1" |  |  |  |  |
+
+| `propext` | str_key | ADMITTED_AXIOMS = "propext" |  |  |  |  |
+
+| `strata-ledger-pack` | str_key | STRATA_LEDGER_SUBJECT = "strata-ledger-pack" |  |  |  |  |
+
+| `LeanWitness` | struct | LeanWitness { pub theorem: String, pub axioms: Vec<String>, pub source_sha256: String, pub toolchain: String } |  |  |  |  |
+
+| `LeanWitnessEvidence` | struct | LeanWitnessEvidence { pub input: EvidenceInput } |  |  |  |  |
+
+| `castle::*` | use | castle::* |  |  |  |  |
 
 | `generated::{ default_adversarial_goals, generated_components, DefaultAdversarialGoal, GeneratedBinding, GENERATED_BINDINGS, }` | use | generated::{ default_adversarial_goals, generated_components, DefaultAdversarialGoal, GeneratedBinding, GENERATED_BINDINGS, } |  |  |  |  |
 
 | `gymact_container::execute_default_container_observation` | use | gymact_container::execute_default_container_observation |  |  |  |  |
 
-| `planner_minimal::MinimalActionPlanner` | use | planner_minimal::MinimalActionPlanner |  |  |  |  |
-
 | `reconstitution::{ admit_empire_reconstitution_for_construct, EmpireReconstitutionAdmission, FinalDisposition, ReconstitutedCapability, ReconstitutionRefusal, }` | use | reconstitution::{ admit_empire_reconstitution_for_construct, EmpireReconstitutionAdmission, FinalDisposition, ReconstitutedCapability, ReconstitutionRefusal, } |  |  |  |  |
 
 | `refusal_conformance::{verify_refusal, RefusalObservation}` | use | refusal_conformance::{verify_refusal, RefusalObservation} |  |  |  |  |
+
+| `REASON_ABSENCE` | const | REASON_ABSENCE: &str |  |  |  |  |
+
+| `REASON_CONTRADICTION` | const | REASON_CONTRADICTION: &str |  |  |  |  |
+
+| `REASON_INCOMPLETE` | const | REASON_INCOMPLETE: &str |  |  |  |  |
+
+| `REASON_LEDGER_MALFORMED` | const | REASON_LEDGER_MALFORMED: &str |  |  |  |  |
+
+| `REASON_NOT_A_REFUSAL` | const | REASON_NOT_A_REFUSAL: &str |  |  |  |  |
+
+| `REASON_SUPERSEDED` | const | REASON_SUPERSEDED: &str |  |  |  |  |
+
+| `NegativeEvidenceStatus` | enum | NegativeEvidenceStatus { Absent(Standing), Superseded { by: String }, ContradictionRefused } |  |  |  |  |
+
+| `StoredStatus` | enum | StoredStatus { Absent { standing: String }, Superseded { by: String }, ContradictionRefused } |  |  |  |  |
+
+| `admit_negation` | function | admit_negation( &mut self, negation: NegationRecord, admitted: &[MetricObservation], ) -> Result<NegativeEvidenceStatus, String> |  |  |  |  |
+
+| `admit_positive_and_supersede` | function | admit_positive_and_supersede( bundle: &EvidenceBundle, ledger: &mut NegativeEvidenceLedger, trust: &TrustStore, store: &HashMap<String, ReceiptV2>, ) -> EvidenceAdmission |  |  |  |  |
+
+| `key` | function | key(&self) -> (&str, &str) |  |  |  |  |
+
+| `ledger_from_json` | function | ledger_from_json(bytes: &str) -> Result<Self, String> |  |  |  |  |
+
+| `ledger_to_json` | function | ledger_to_json(&self) -> Result<String, String> |  |  |  |  |
+
+| `negation_from_witness_refusal` | function | negation_from_witness_refusal( witness_line: &str, refusal_reason: &str, searched_at: &str, searched_by: &str, ) -> Result<NegationRecord, String> |  |  |  |  |
+
+| `records` | function | records(&self) -> &[(NegationRecord, NegativeEvidenceStatus)] |  |  |  |  |
+
+| `rfc3339_from_epoch_secs` | function | rfc3339_from_epoch_secs(secs: i64) -> String |  |  |  |  |
+
+| `rfc3339_now` | function | rfc3339_now() -> String |  |  |  |  |
+
+| `status_of` | function | status_of(&self, subject: &str, predicate: &str) -> Option<NegativeEvidenceStatus> |  |  |  |  |
+
+| `with_records` | function | with_records(records: Vec<(NegationRecord, NegativeEvidenceStatus)>) -> Self |  |  |  |  |
+
+| `2026-10-13T00:00:00Z` | str_key | AT = "2026-10-13T00:00:00Z" |  |  |  |  |
+
+| `REFUSED:EVIDENCE_CONTRADICTION` | str_key | REASON_CONTRADICTION = "REFUSED:EVIDENCE_CONTRADICTION" |  |  |  |  |
+
+| `REFUSED:NEGATION_INCOMPLETE` | str_key | REASON_INCOMPLETE = "REFUSED:NEGATION_INCOMPLETE" |  |  |  |  |
+
+| `REFUSED:NEGATION_LEDGER_MALFORMED` | str_key | REASON_LEDGER_MALFORMED = "REFUSED:NEGATION_LEDGER_MALFORMED" |  |  |  |  |
+
+| `REFUSED:NOT_A_TYPED_REFUSAL` | str_key | REASON_NOT_A_REFUSAL = "REFUSED:NOT_A_TYPED_REFUSAL" |  |  |  |  |
+
+| `UNKNOWN:ABSENCE_OF_EVIDENCE` | str_key | REASON_ABSENCE = "UNKNOWN:ABSENCE_OF_EVIDENCE" |  |  |  |  |
+
+| `UNKNOWN:ABSENCE_SUPERSEDED_BY_POSITIVE` | str_key | REASON_SUPERSEDED = "UNKNOWN:ABSENCE_SUPERSEDED_BY_POSITIVE" |  |  |  |  |
+
+| `lean.witness.verified` | str_key | PREDICATE = "lean.witness.verified" |  |  |  |  |
+
+| `mfact@aaa:theorem_x` | str_key | SUBJECT = "mfact@aaa:theorem_x" |  |  |  |  |
+
+| `NegationRecord` | struct | NegationRecord { pub predicate: String, pub subject: String, pub searched_at: String, pub searched_by: String } |  |  |  |  |
+
+| `NegativeEvidenceLedger` | struct | NegativeEvidenceLedger { records: Vec<(NegationRecord, NegativeEvidenceStatus)> } |  |  |  |  |
 
 | `EffectClass` | enum | EffectClass { Observe, Select, Construct, Do } |  |  |  |  |
 
@@ -4545,8 +4936,6 @@
 
 | `RailReport` | struct | RailReport { effect_digest: String, correlation_id: String, status: RailStatus, evidence_digest: String, _seal: () } |  |  |  |  |
 
-| `MinimalActionPlanner` | struct | MinimalActionPlanner { pub id: String } |  |  |  |  |
-
 | `FinalDisposition` | enum | FinalDisposition { Preserved, Subsumed, Replaced, Archived, Refused } |  |  |  |  |
 
 | `admission_digest` | function | admission_digest(&self) -> &str |  |  |  |  |
@@ -4659,28 +5048,6 @@
 
 | `verifier::*` | use | verifier::* |  |  |  |  |
 
-| `Refusal` | enum | Refusal { EffectDigestMismatch, PrincipalMismatch, PolicyEpochMismatch, RevocationEpochStale, ExecutionGenerationStale, EmptyQuorum, DuplicateSigner, DuplicateIndependenceDomain, UnknownKey, KeyPrincipalMismatch, AlgorithmMismatch, AlgorithmNotAllowed, KeyNotYetValid, KeyRevoked, SignatureInvalid, QuorumNotMet } |  |  |  |  |
-
-| `SignatureAlgorithm` | enum | SignatureAlgorithm { Ed25519, MlDsa65, SlhDsaShake128f } |  |  |  |  |
-
-| `certificate_message` | function | certificate_message(c:&ActuationCertificate) -> Vec<u8> |  |  |  |  |
-
-| `new` | function | new(provider:P,keys:impl IntoIterator<Item=KeyRecord>) -> Self |  |  |  |  |
-
-| `verify` | function | verify(&self,effect:[u8;32],principal:&str,c:&ActuationCertificate,p:&VerificationPolicy) -> Result<(),Refusal> |  |  |  |  |
-
-| `ActuationCertificate` | struct | ActuationCertificate { pub effect_digest:[u8;32], pub principal:String, pub policy_epoch:u64, pub revocation_epoch:u64, pub execution_generation:u64, pub signatures:Vec<CertificateSignature> } |  |  |  |  |
-
-| `AuthorityVerifier` | struct | AuthorityVerifier { provider:P, keys:BTreeMap<String,KeyRecord> } |  |  |  |  |
-
-| `CertificateSignature` | struct | CertificateSignature { pub key_id:String, pub algorithm:SignatureAlgorithm, pub signature:Vec<u8> } |  |  |  |  |
-
-| `KeyRecord` | struct | KeyRecord { pub key_id:String, pub principal:String, pub algorithm:SignatureAlgorithm, pub public_key:Vec<u8>, pub valid_from_epoch:u64, pub revoked_at_epoch:Option<u64>, pub independence_domain:String } |  |  |  |  |
-
-| `VerificationPolicy` | struct | VerificationPolicy { pub current_policy_epoch:u64, pub current_revocation_epoch:u64, pub minimum_execution_generation:u64, pub quorum:usize, pub allowed_algorithms:BTreeSet<SignatureAlgorithm> } |  |  |  |  |
-
-| `CryptoProvider` | trait |  |  |  |  |  |
-
 | `SignatureAlgorithm` | enum | SignatureAlgorithm { Ed25519, MlDsa65, SlhDsaShake128f } |  |  |  |  |
 
 | `id` | function | id(self) -> &'static str |  |  |  |  |
@@ -4778,6 +5145,28 @@
 | `CertificateVerifier` | struct | CertificateVerifier { pub registry: &'a KeyRegistry, pub expected_epochs: SecurityEpochs, pub expected_audience: &'a str, pub now_ms: u64 } |  |  |  |  |
 
 | `super::receipt::VerificationReceipt` | use | super::receipt::VerificationReceipt |  |  |  |  |
+
+| `FORTUNE5_SECURITY_CORE` | const | FORTUNE5_SECURITY_CORE: &[&str] |  |  |  |  |
+
+| `case` | str_key | FORTUNE5_SECURITY_CORE = "case" |  |  |  |  |
+
+| `SECURITY_SOURCES` | const | SECURITY_SOURCES: &[SecuritySource] |  |  |  |  |
+
+| `SecurityKind` | enum | SecurityKind { GovernanceFramework, ControlCatalog, Assurance, Regulation, CloudBaseline, ApplicationSecurity, AiSecurity, IndustrialControl, ThreatKnowledge, VulnerabilityKnowledge, DetectionLanguage, TelemetrySchema, SupplyChain, EvidenceExchange, SecurityOntology, PolicyLanguage } |  |  |  |  |
+
+| `VersionPolicy` | enum | VersionPolicy { Pinned, Rolling } |  |  |  |  |
+
+| `cacao` | str_key | SECURITY_SOURCES = "cacao" |  |  |  |  |
+
+| `SecuritySource` | struct | SecuritySource { pub id: &'static str, pub authority: &'static str, pub version: &'static str, pub version_policy: VersionPolicy, pub kind: SecurityKind, pub machine_surface: &'static str, pub source_uri: &'static str } |  |  |  |  |
+
+| `SECURITY_TOOLS` | const | SECURITY_TOOLS: &[SecurityToolIntegration] |  |  |  |  |
+
+| `ToolBoundary` | enum | ToolBoundary { ObserveOnly, AssessOnly, DetectOnly, ConstructIntentOnly, ExternalEnforcerBehindCastleAdmission } |  |  |  |  |
+
+| `aws-config` | str_key | SECURITY_TOOLS = "aws-config" |  |  |  |  |
+
+| `SecurityToolIntegration` | struct | SecurityToolIntegration { pub id: &'static str, pub ecosystem: &'static str, pub native_surface: &'static str, pub normalized_output: &'static str, pub boundary: ToolBoundary, pub direct_actuation_authority: bool } |  |  |  |  |
 
 | `EvidenceSurface` | enum | EvidenceSurface { Oscal, Stix21, Taxii21, Ocsf, Sarif, CycloneDx, Spdx, Csaf, OpenTelemetry, Ocel, Json, JsonLd, Rdf, Csv, Xml, Syslog, NativeOpaque } |  |  |  |  |
 
@@ -4964,6 +5353,42 @@
 | `StrategyPartition` | struct | StrategyPartition { pub strategy_id: String, pub strategy: String, pub doctrine_digest: String, pub local_premise_digests: BTreeMap<String, String>, pub local_constraints: Vec<String>, pub operator_ids: Vec<String>, pub partition_digest: String } |  |  |  |  |
 
 | `crate::strategic_board::{ assess_board_reentry, assess_counterstrategies, build_strategic_board_package, build_strategic_twin_snapshot, diff_strategic_twins, judge_counterstrategy, qualify_campaign_portfolio, verify_strategic_board_package_offline, BoardReentryDecision, CampaignPortfolioAnalysis, CampaignPortfolioPolicy, CounterstrategyAssessment, CounterstrategyScenario, CounterstrategyVerdict, OfflineBoardPackageVerification, StrategicBoardDelta, StrategicBoardPackage, StrategicTwinSnapshot, }` | use | crate::strategic_board::{ assess_board_reentry, assess_counterstrategies, build_strategic_board_package, build_strategic_twin_snapshot, diff_strategic_twins, judge_counterstrategy, qualify_campaign_portfolio, verify_strategic_board_package_offline, BoardReentryDecision, CampaignPortfolioAnalysis, CampaignPortfolioPolicy, CounterstrategyAssessment, CounterstrategyScenario, CounterstrategyVerdict, OfflineBoardPackageVerification, StrategicBoardDelta, StrategicBoardPackage, StrategicTwinSnapshot, } |  |  |  |  |
+
+| `GENESIS_SEED` | const | GENESIS_SEED: &[u8] |  |  |  |  |
+
+| `REFUSED` | const | REFUSED: &str |  |  |  |  |
+
+| `canonical_bytes` | function | canonical_bytes(&self) -> Result<Vec<u8>, String> |  |  |  |  |
+
+| `check_key_history` | function | check_key_history(history: &KeyHistory, key_id: &str, epoch: i64) -> Result<(), String> |  |  |  |  |
+
+| `enroll` | function | enroll( &mut self, key_id: &str, valid_from_epoch: i64, assurance_domain: &str, ) -> Result<(), String> |  |  |  |  |
+
+| `evidence_input_from_sealed_receipt` | function | evidence_input_from_sealed_receipt( sealed: &SealedAffidavitReceipt, ) -> Result<ReplayedEvidence, String> |  |  |  |  |
+
+| `fold_event` | function | fold_event(prev_hex: &str, event: &KeyChainEvent) -> Result<String, String> |  |  |  |  |
+
+| `key_state` | function | key_state(&self, key_id: &str) -> Option<KeyState> |  |  |  |  |
+
+| `new` | function | new() -> Self |  |  |  |  |
+
+| `recompute_chain` | function | recompute_chain(events: &[KeyChainEvent]) -> Result<String, String> |  |  |  |  |
+
+| `revoke` | function | revoke(&mut self, key_id: &str, revoked_at_epoch: i64) -> Result<(), String> |  |  |  |  |
+
+| `REFUSED` | str_key | REFUSED = "REFUSED" |  |  |  |  |
+
+| `castle-trust-chain-v1-genesis` | str_key | GENESIS_SEED = "castle-trust-chain-v1-genesis" |  |  |  |  |
+
+| `KeyChainEvent` | struct | KeyChainEvent { pub action: String, pub key_id: String, pub epoch: i64, pub assurance_domain: String } |  |  |  |  |
+
+| `KeyHistory` | struct | KeyHistory { pub events: Vec<KeyChainEvent>, pub chain_hash: String } |  |  |  |  |
+
+| `KeyState` | struct | KeyState { pub valid_from_epoch: i64, pub revoked_at_epoch: Option<i64>, pub assurance_domain: String } |  |  |  |  |
+
+| `ReplayedEvidence` | struct | ReplayedEvidence { pub input: EvidenceInput, pub receipt_digest: String } |  |  |  |  |
+
+| `SealedAffidavitReceipt` | struct | SealedAffidavitReceipt { pub base_bytes: Vec<u8>, pub envelope_subject_digest: String, pub metric: String, pub value: MetricValue, pub subject: String, pub observed_at: String } |  |  |  |  |
 
 | `admit_airgap_result` | function | admit_airgap_result(bundle: &AirgapBundle, result: &AirgapResult) -> AirgapAdmission |  |  |  |  |
 
@@ -5305,6 +5730,20 @@
 
 | `WitnessLimits` | struct | WitnessLimits { pub max_steps: u64, pub max_bytes: u64, pub deadline_ms: u64 } |  |  |  |  |
 
+| `parse_xaas_ndjson` | function | parse_xaas_ndjson(lines: &[&str]) -> Result<OcelLog, XaasFeedRefused> |  |  |  |  |
+
+| `parse_xaas_ndjson_file_contents` | function | parse_xaas_ndjson_file_contents(contents: &str) -> Result<OcelLog, XaasFeedRefused> |  |  |  |  |
+
+| `]}` | str_key | LINE_1 = "]}" |  |  |  |  |
+
+| `id` | str_key | EVENT_KEYS = "id" |  |  |  |  |
+
+| `ocel:objectTypes` | str_key | LINE_KEYS = "ocel:objectTypes" |  |  |  |  |
+
+| `Violation` | struct | Violation { pub path: String, pub reason: String } |  |  |  |  |
+
+| `XaasFeedRefused` | struct | XaasFeedRefused { pub violations: Vec<Violation> } |  |  |  |  |
+
 | `castle:board-test` | str_key | SUBJECT = "castle:board-test" |  |  |  |  |
 
 | `../docs/sjira/v26.9.28/capability-intake.ttl` | str_key | GRAPH = "../docs/sjira/v26.9.28/capability-intake.ttl" |  |  |  |  |
@@ -5395,6 +5834,14 @@
 
 | `castle:enterprise:test` | str_key | SUBJECT = "castle:enterprise:test" |  |  |  |  |
 
+| `/Users/sac/mfact/witnesses.jsonl` | str_key | WITNESSES = "/Users/sac/mfact/witnesses.jsonl" |  |  |  |  |
+
+| `/Users/sac/mfact/witnesses.jsonl` | str_key | LIVE_MFACT = "/Users/sac/mfact/witnesses.jsonl" |  |  |  |  |
+
+| `85e92b3e91678d202d479bd2da4959ac47f8edc0488eb3b9931c82d053c1bcb8` | str_key | PINNED_SHA256 = "85e92b3e91678d202d479bd2da4959ac47f8edc0488eb3b9931c82d053c1bcb8" |  |  |  |  |
+
+| `tests/fixtures/mfact_witnesses.jsonl` | str_key | FIXTURE = "tests/fixtures/mfact_witnesses.jsonl" |  |  |  |  |
+
 | `5493001KJTIIGC8Y1R12` | str_key | REAL_LEI = "5493001KJTIIGC8Y1R12" |  |  |  |  |
 
 | `CASTLE_FIBO_CORPUS` | env_key | std::env::var("CASTLE_FIBO_CORPUS") |  |  |  |  |
@@ -5438,6 +5885,8 @@
 | `../docs/sjira/v26.9.28/goal.ttl` | str_key | GOAL = "../docs/sjira/v26.9.28/goal.ttl" |  |  |  |  |
 
 | `../docs/sjira/v26.9.28/repos.ttl` | str_key | REPOS = "../docs/sjira/v26.9.28/repos.ttl" |  |  |  |  |
+
+| `911299bbb4bf39a2c0800f223f5b5f549642c9bfe53e4fd57d54a731664c3f2b` | str_key | FIXTURE_SHA256 = "911299bbb4bf39a2c0800f223f5b5f549642c9bfe53e4fd57d54a731664c3f2b" |  |  |  |  |
 
 
 <!-- ============================================================= -->
