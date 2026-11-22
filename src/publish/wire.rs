@@ -305,25 +305,12 @@ pub fn publish_subject_post(
         .shepherd
         .clone()
         .unwrap_or_else(|| "Keyless shims keep staff working.".into());
-    // Body uses host-of-record (no scheme). Absolute Featured URL rides
+    // Body uses host-of-record (no scheme). Absolute https Featured URL rides
     // cta_link → first_comment only (POST_EXTERNAL_LINK + redaction_court).
+    // Refuse raw https/http/www in body CTA sources — never strip-then-admit.
     let lease_id = "lease-public";
-    let body_cta = body_safe_featured_cta(brand, lease_id);
-    let cta_link = brand
-        .messaging
-        .cta
-        .featured_url_template
-        .as_ref()
-        .map(|t| t.replace(":lease_id", lease_id))
-        .or_else(|| {
-            brand
-                .messaging
-                .voice
-                .required_cta
-                .as_deref()
-                .and_then(extract_first_absolute_url)
-                .map(|u| u.replace(":lease_id", lease_id))
-        });
+    let body_cta = body_safe_featured_cta(brand, lease_id)?;
+    let cta_link = absolute_https_cta_link(brand, lease_id)?;
 
     // Build ≥150 words of action copy without soft scripts or external links.
     let mut body = format!(
@@ -356,8 +343,18 @@ pub fn publish_subject_post(
     publish_branded_post(&input, brand, true)
 }
 
+/// Default scheme-free body CTA. Absolute Featured URL rides cta_link only.
+const DEFAULT_BODY_CTA: &str = "Drop a read-only snapshot at Featured /drop/:lease_id on cos.fnox.io for a binary Claims vs Code board PDF.";
+
 /// Host-of-record CTA for LinkedIn post body (never embeds `https://`).
-fn body_safe_featured_cta(brand: &BrandManifest, lease_id: &str) -> String {
+///
+/// Law: refuse link markers in body-destined copy — never scheme-strip arbitrary
+/// URLs into body (`evil.example` must not admit after strip). Absolute Featured
+/// https belongs only in `featured_url_template` → first_comment via cta_link.
+fn body_safe_featured_cta(
+    brand: &BrandManifest,
+    lease_id: &str,
+) -> Result<String, PublishWireError> {
     if let Some(host) = brand
         .messaging
         .cta
@@ -373,6 +370,8 @@ fn body_safe_featured_cta(brand: &BrandManifest, lease_id: &str) -> String {
             .as_deref()
             .unwrap_or("/drop/:lease_id")
             .replace(":lease_id", lease_id);
+        refuse_body_link_markers(host, "messaging.cta.featured_host")?;
+        refuse_body_link_markers(&path, "messaging.cta.featured_path")?;
         let mut body = format!(
             "Drop a read-only snapshot at Featured {host}{path} for a binary Claims vs Code board PDF."
         );
@@ -384,14 +383,11 @@ fn body_safe_featured_cta(brand: &BrandManifest, lease_id: &str) -> String {
             .map(str::trim)
             .filter(|n| !n.is_empty())
         {
-            // Notes stay body-surface: strip schemes so a gated-note URL cannot
-            // re-poison POST_EXTERNAL_LINK (Featured absolute URL is first_comment).
+            refuse_body_link_markers(note, "messaging.cta.drop_gated_note")?;
             body.push(' ');
-            body.push_str(
-                &strip_external_link_schemes(note).replace(":lease_id", lease_id),
-            );
+            body.push_str(&note.replace(":lease_id", lease_id));
         }
-        return collapse_whitespace(&strip_external_link_schemes(&body));
+        return Ok(collapse_whitespace(&body));
     }
 
     let raw = brand
@@ -399,83 +395,65 @@ fn body_safe_featured_cta(brand: &BrandManifest, lease_id: &str) -> String {
         .voice
         .required_cta
         .as_deref()
-        .unwrap_or(
-            "Drop a read-only snapshot at Featured /drop/:lease_id on cos.fnox.io for a binary Claims vs Code board PDF.",
-        );
-    collapse_whitespace(
-        &strip_external_link_schemes(raw).replace(":lease_id", lease_id),
-    )
+        .unwrap_or(DEFAULT_BODY_CTA);
+    // Refuse any scheme marker — even allowlisted hosts. Never strip-then-admit.
+    refuse_body_link_markers(raw, "messaging.voice.required_cta")?;
+    Ok(collapse_whitespace(&raw.replace(":lease_id", lease_id)))
 }
 
-fn extract_first_absolute_url(text: &str) -> Option<String> {
+/// Absolute `https://` Featured URL for first_comment only (never body).
+/// Does not mine `required_cta` for URLs — that path previously strip-admitted
+/// non-allowlisted hosts. Source of record is `featured_url_template`.
+fn absolute_https_cta_link(
+    brand: &BrandManifest,
+    lease_id: &str,
+) -> Result<Option<String>, PublishWireError> {
+    let Some(template) = brand.messaging.cta.featured_url_template.as_ref() else {
+        return Ok(None);
+    };
+    let url = template.replace(":lease_id", lease_id);
+    let trimmed = url.trim();
+    if !trimmed.to_ascii_lowercase().starts_with("https://") {
+        return Err(PublishWireError::Input(
+            "messaging.cta.featured_url_template must be absolute https \
+             (http/www refused; Featured URL is first_comment-only)"
+                .into(),
+        ));
+    }
+    let court = RedactionCourt::from_policy(&brand.redaction_policy());
+    court.admit(trimmed).map_err(PublishWireError::Redaction)?;
+    Ok(Some(trimmed.to_string()))
+}
+
+/// Refuse `https://` / `http://` / `www.` in body-surface CTA copy.
+fn refuse_body_link_markers(text: &str, field: &str) -> Result<(), PublishWireError> {
+    if let Some(marker) = body_link_scheme_marker(text) {
+        return Err(PublishWireError::Input(format!(
+            "{field} must not embed {marker:?}; refuse (never strip-then-admit). \
+             Featured URL belongs in messaging.cta.featured_url_template → first_comment only"
+        )));
+    }
+    Ok(())
+}
+
+fn body_link_scheme_marker(text: &str) -> Option<&'static str> {
+    const MARKERS: [&str; 3] = ["https://", "http://", "www."];
     let lower = text.to_ascii_lowercase();
-    for scheme in ["https://", "http://"] {
+    for marker in MARKERS {
         let mut search_from = 0usize;
-        while let Some(rel) = lower[search_from..].find(scheme) {
-            let start = search_from + rel;
-            let boundary_ok = start == 0
-                || !lower[..start]
-                    .chars()
-                    .next_back()
-                    .is_some_and(|c| c.is_alphanumeric() || c == '.' || c == '/');
-            if boundary_ok {
-                let rest = &text[start..];
-                let end = rest
-                    .find(|c: char| {
-                        c.is_whitespace()
-                            || matches!(c, ')' | ']' | '"' | '\'' | '<' | '>' | '(')
-                    })
-                    .unwrap_or(rest.len());
-                let mut url = rest[..end].to_string();
-                while url
-                    .chars()
-                    .next_back()
-                    .is_some_and(|c| matches!(c, '.' | ',' | ';' | ':' | '!' | '?'))
-                {
-                    url.pop();
-                }
-                if url.len() > scheme.len() {
-                    return Some(url);
-                }
+        while let Some(rel) = lower[search_from..].find(marker) {
+            let abs = search_from + rel;
+            let boundary_free = !lower[..abs]
+                .chars()
+                .next_back()
+                .is_some_and(|c| c.is_alphanumeric() || c == '.' || c == '/');
+            if boundary_free {
+                return Some(marker);
             }
-            search_from = start + scheme.len();
+            search_from = abs + marker.len();
         }
     }
     None
-}
-
-fn strip_external_link_schemes(text: &str) -> String {
-    let lower = text.to_ascii_lowercase();
-    let mut out = String::with_capacity(text.len());
-    let chars: Vec<(usize, char)> = text.char_indices().collect();
-    let mut i = 0usize;
-    while i < chars.len() {
-        let byte_idx = chars[i].0;
-        let try_strip = |marker: &str| -> Option<usize> {
-            if !lower[byte_idx..].starts_with(marker) {
-                return None;
-            }
-            let boundary_ok = i == 0
-                || (!chars[i - 1].1.is_alphanumeric()
-                    && chars[i - 1].1 != '.'
-                    && chars[i - 1].1 != '/');
-            if boundary_ok {
-                Some(i + marker.chars().count())
-            } else {
-                None
-            }
-        };
-        if let Some(next) = try_strip("https://")
-            .or_else(|| try_strip("http://"))
-            .or_else(|| try_strip("www."))
-        {
-            i = next;
-            continue;
-        }
-        out.push(chars[i].1);
-        i += 1;
-    }
-    out
 }
 
 fn collapse_whitespace(text: &str) -> String {
@@ -916,10 +894,10 @@ forbid_external_links_in_post_body = true
         );
     }
 
-    /// Legacy brands that still embed https in required_cta must still admit:
-    /// body schemes are stripped; absolute URL rides cta_link → first_comment.
+    /// Raw https in required_cta (body path) must refuse — never strip-then-admit.
+    /// Even allowlisted hosts: Featured URL belongs in featured_url_template only.
     #[test]
-    fn legacy_https_required_cta_anonymizes_into_first_comment() {
+    fn required_cta_raw_https_refuses_body_path() {
         let brand = BrandManifest::parse_toml(
             r#"
 [brand]
@@ -947,22 +925,151 @@ require_public_anonymize = true
 "#,
         )
         .unwrap();
-        let out = publish_subject_post("t", &brand, true).expect("legacy https CTA must admit");
+        let err = publish_subject_post("t", &brand, true)
+            .expect_err("raw https in required_cta must refuse, not strip-admit");
+        let j = err.to_json();
+        assert_eq!(j["code"], "REFUSED_INPUT");
+        let detail = j["detail"].as_str().unwrap_or("");
+        assert!(
+            detail.contains("required_cta") && detail.contains("strip-then-admit"),
+            "detail must name refuse-over-strip: {detail}"
+        );
+    }
+
+    /// Non-allowlisted host https in required_cta must refuse (the strip-admit lie).
+    #[test]
+    fn evil_example_required_cta_refuses_not_strip_admits() {
+        let brand = BrandManifest::parse_toml(
+            r#"
+[brand]
+id = "fourth-watch"
+name = "Fourth Watch AI Cybersecurity"
+
+[messaging.triad]
+sentinel = "Pinned probes refuse silent failure before auditors arrive."
+steward = "Client-owned hyperscaler RAID under your own EIN with zero rent."
+shepherd = "Keyless shims wrap legacy screens so staff keep working."
+
+[messaging.voice]
+required_cta = "Drop a read-only snapshot at https://evil.example/leak for a board PDF."
+
+[redaction_court]
+forbid_private_client_names = true
+forbid_local_user_paths = true
+forbid_bearer_tokens = true
+forbid_calendar_links = true
+forbid_external_links_in_post_body = true
+require_public_anonymize = true
+"#,
+        )
+        .unwrap();
+        let err = publish_subject_post("t", &brand, true)
+            .expect_err("evil.example https must refuse, never strip to bare host then admit");
+        let j = err.to_json();
+        assert_eq!(j["code"], "REFUSED_INPUT");
+        assert!(
+            j["detail"]
+                .as_str()
+                .unwrap_or("")
+                .contains("required_cta"),
+            "must refuse at required_cta body path: {j}"
+        );
+        let inspected = format!("{err:?}");
+        assert!(
+            !inspected.contains("evil.example"),
+            "refusal must not echo evil host: {inspected}"
+        );
+    }
+
+    /// drop_gated_note with scheme markers must refuse (no strip-then-admit into body).
+    #[test]
+    fn drop_gated_note_with_scheme_refuses() {
+        let brand = BrandManifest::parse_toml(
+            r#"
+[brand]
+id = "fourth-watch"
+name = "Fourth Watch AI Cybersecurity"
+
+[messaging.triad]
+sentinel = "Pinned probes refuse silent failure before auditors arrive."
+steward = "Client-owned hyperscaler RAID under your own EIN with zero rent."
+shepherd = "Keyless shims wrap legacy screens so staff keep working."
+
+[messaging.cta]
+featured_host = "cos.fnox.io"
+featured_path = "/drop/:lease_id"
+featured_url_template = "https://cos.fnox.io/drop/:lease_id"
+drop_gated_note = "Also see https://evil.example/gate before drop."
+
+[redaction_court]
+forbid_private_client_names = true
+forbid_local_user_paths = true
+forbid_bearer_tokens = true
+forbid_calendar_links = true
+forbid_external_links_in_post_body = true
+require_public_anonymize = true
+"#,
+        )
+        .unwrap();
+        let err = publish_subject_post("t", &brand, true)
+            .expect_err("scheme in drop_gated_note must refuse");
+        let j = err.to_json();
+        assert_eq!(j["code"], "REFUSED_INPUT");
+        assert!(
+            j["detail"]
+                .as_str()
+                .unwrap_or("")
+                .contains("drop_gated_note"),
+            "must refuse at drop_gated_note: {j}"
+        );
+    }
+
+    /// Body-safe required_cta + featured_url_template: admit; Featured URL in first_comment.
+    #[test]
+    fn body_safe_required_cta_keeps_featured_url_in_first_comment() {
+        let brand = BrandManifest::parse_toml(
+            r#"
+[brand]
+id = "fourth-watch"
+name = "Fourth Watch AI Cybersecurity"
+
+[messaging.triad]
+sentinel = "Pinned probes refuse silent failure before auditors arrive."
+steward = "Client-owned hyperscaler RAID under your own EIN with zero rent."
+shepherd = "Keyless shims wrap legacy screens so staff keep working."
+
+[messaging.voice]
+required_cta = "Drop a read-only snapshot at Featured /drop/:lease_id on cos.fnox.io for a board PDF."
+
+[messaging.cta]
+featured_url_template = "https://cos.fnox.io/drop/:lease_id"
+
+[redaction_court]
+forbid_private_client_names = true
+forbid_local_user_paths = true
+forbid_bearer_tokens = true
+forbid_calendar_links = true
+forbid_external_links_in_post_body = true
+require_public_anonymize = true
+"#,
+        )
+        .unwrap();
+        let out = publish_subject_post("t", &brand, true).expect("body-safe CTA must admit");
         assert_eq!(out["ok"], true);
         let body = out["body"].as_str().unwrap_or("");
         let lower = body.to_ascii_lowercase();
         assert!(
             !lower.contains("https://") && !lower.contains("http://") && !lower.contains("www."),
-            "legacy required_cta https must not survive into body: {body}"
+            "body must stay link-marker free: {body}"
         );
         assert!(
             body.contains("cos.fnox.io"),
-            "host-of-record prose must remain after scheme strip: {body}"
+            "host-of-record prose must remain: {body}"
         );
         let first = out["first_comment"].as_str().unwrap_or("");
         assert!(
             first.contains("https://cos.fnox.io/drop/lease-public"),
-            "Featured URL must still ship in first_comment: {first}"
+            "Featured URL must ship in first_comment only: {first}"
         );
     }
 }

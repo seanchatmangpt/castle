@@ -4,7 +4,7 @@
 
 use castle::publish::anonymize::{
     RedactionCourt, RedactionPolicy, BROKEN_TERM, DEFAULT_PRIVATE_CLIENT_NAMES, REDACTED_TOKEN,
-    REFUSED_REDACTION, RULE_BEARER_TOKEN, RULE_CALENDAR_LINK, RULE_EXTERNAL_LINK,
+    REFUSED_REDACTION, RULE_BEARER_TOKEN, RULE_CALENDAR_LINK, RULE_EMAIL, RULE_EXTERNAL_LINK,
     RULE_PRIVATE_CLIENT_NAME, RULE_PRIVATE_HOME_PATH, RULE_UNREDACTED_CITATION,
 };
 use castle::publish::brand::BrandManifest;
@@ -136,6 +136,27 @@ fn redaction_refuses_calendar_bearer_external() {
         .findings
         .iter()
         .any(|f| f.rule == RULE_EXTERNAL_LINK));
+}
+
+#[test]
+fn redaction_refuses_email_without_echo() {
+    let addr = "ops@evil.example";
+    let body = format!("Contact {addr} before the Featured drop.");
+    let err = RedactionCourt::with_default_clients()
+        .admit(&body)
+        .expect_err("email must refuse at RedactionCourt");
+    assert_eq!(err.code, REFUSED_REDACTION);
+    assert!(
+        err.findings.iter().any(|f| f.rule == RULE_EMAIL),
+        "expected EMAIL, got {:?}",
+        err.findings
+    );
+    let inspected = format!("{err:?}");
+    assert!(
+        !inspected.contains(addr),
+        "refusal must not echo email: {inspected}"
+    );
+    assert!(err.findings.iter().any(|f| f.detail.contains(REDACTED_TOKEN)));
 }
 
 #[test]

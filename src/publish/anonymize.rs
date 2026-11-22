@@ -1,14 +1,14 @@
 //! Fail-closed `--public-anonymize` redaction court (CASTLE-SPEC-26.11.20).
 //!
-//! Two cooperating surfaces:
-//! 1. **Refuse court** ([`RedactionCourt`]): public publish must *prove* zero
-//!    presence of private client names, home paths, unredacted `file:line`
-//!    citations, bearer residuals, calendar links, and (when policy says so)
-//!    external links. Law: refuse, do not strip-and-ship. Refusal findings
-//!    never echo the raw private string (so `Debug`/`inspect` cannot re-leak).
-//! 2. **Strip helpers** ([`redact_text`], [`require_public_anonymize`]): optional
-//!    CLI scrubbers; residual still refuses via [`assert_public_clean`]. The
-//!    production publish wire seals via [`RedactionCourt::admit`], not strip.
+//! Production surface is the **refuse court** ([`RedactionCourt`]): public
+//! publish must *prove* zero presence of private client names, home paths,
+//! unredacted `file:line` citations, bearer residuals, calendar links, emails,
+//! and (when policy says so) external links. Law: refuse, do not strip-and-ship.
+//! Refusal findings never echo the raw private string (so `Debug`/`inspect`
+//! cannot re-leak). The publish wire seals via [`RedactionCourt::admit`].
+//!
+//! [`require_public_anonymize`] is the CLI flag gate. There is no production
+//! strip-and-ship surface — residue refuses at [`RedactionCourt::admit`].
 #![forbid(unsafe_code)]
 
 use serde::{Deserialize, Serialize};
@@ -17,15 +17,10 @@ use serde::{Deserialize, Serialize};
 
 /// Refusal when a public target is invoked without `--public-anonymize`.
 pub const REFUSED_NO_PUBLIC_ANONYMIZE: &str = "REFUSED_NO_PUBLIC_ANONYMIZE";
-/// Refusal when residual private material survives strip (should be rare).
-pub const REFUSED_REDACTION_RESIDUAL: &str = "REFUSED_REDACTION_RESIDUAL";
 /// Chatman term: publishing without the anonymize gate is unauthorized actuation.
 pub const BROKEN_TERM_NO_AUTHORITY: &str = "REFUSED_NO_AUTHORITY";
 
-const REDACTED_PATH: &str = "[REDACTED_PATH]";
-const REDACTED_NAME: &str = "[REDACTED_NAME]";
-const REDACTED_EMAIL: &str = "[REDACTED_EMAIL]";
-const REDACTED_HOST: &str = "[REDACTED_HOST]";
+/// Citation placeholder recognized by the refuse court (already-redacted).
 const REDACTED_CITE: &str = "[REDACTED_CITE]";
 
 // ── Refuse court (lane-9 / Chicago tests) ───────────────────────────────────
@@ -42,6 +37,7 @@ pub const RULE_UNREDACTED_CITATION: &str = "UNREDACTED_CITATION";
 pub const RULE_BEARER_TOKEN: &str = "BEARER_TOKEN";
 pub const RULE_CALENDAR_LINK: &str = "CALENDAR_LINK";
 pub const RULE_EXTERNAL_LINK: &str = "EXTERNAL_LINK";
+pub const RULE_EMAIL: &str = "EMAIL";
 
 /// Replacement token used inside refuse-court details (never the raw match).
 pub const REDACTED_TOKEN: &str = "[REDACTED]";
@@ -110,20 +106,6 @@ impl RedactionPolicy {
         }
         self
     }
-}
-
-/// One strip event witnessed by the strip helpers.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct StripFinding {
-    pub kind: &'static str,
-    pub detail: String,
-}
-
-/// Result of running the strip helpers over a string.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct RedactionReport {
-    pub text: String,
-    pub findings: Vec<StripFinding>,
 }
 
 /// Typed anonymize-court refusal (CLI flag / residual).
@@ -260,6 +242,7 @@ impl RedactionCourt {
         if self.forbid_external_links_in_post_body {
             self.collect_external_links(text, &mut out);
         }
+        self.collect_emails(text, &mut out);
         out
     }
 
@@ -375,6 +358,15 @@ impl RedactionCourt {
             });
         }
     }
+
+    fn collect_emails(&self, text: &str, out: &mut Vec<RedactionFinding>) {
+        if contains_email(text) {
+            out.push(RedactionFinding {
+                rule: RULE_EMAIL,
+                detail: format!("email address present ({REDACTED_TOKEN}; refuse, never strip-and-ship)"),
+            });
+        }
+    }
 }
 
 fn is_name_boundary(text: &str, start: usize, end: usize) -> bool {
@@ -477,213 +469,6 @@ pub fn require_public_anonymize(flag: bool) -> Result<(), AnonymizeRefusal> {
     })
 }
 
-/// Strip private material per policy. Deterministic: identical inputs → identical outputs.
-///
-/// Empty `private_names` + forbid-on loads [`DEFAULT_PRIVATE_CLIENT_NAMES`]
-/// before strip so brand omission cannot leave Courtroom.ai / Vince in place
-/// for a later admit to catch alone.
-pub fn redact_text(text: &str, policy: &RedactionPolicy) -> RedactionReport {
-    let policy = policy.clone().with_default_denylist_if_empty();
-    let mut out = text.to_string();
-    let mut findings = Vec::new();
-
-    if policy.forbid_local_user_paths {
-        let before = out.clone();
-        out = strip_user_paths(&out);
-        if out != before {
-            findings.push(StripFinding {
-                kind: "local_user_path",
-                detail: "stripped /Users/ or /home/ path(s)".to_string(),
-            });
-        }
-    }
-
-    if policy.forbid_private_client_names && !policy.private_names.is_empty() {
-        let before = out.clone();
-        out = strip_private_names(&out, &policy.private_names);
-        if out != before {
-            findings.push(StripFinding {
-                kind: "private_client_name",
-                detail: format!(
-                    "stripped {} private name pattern(s)",
-                    policy.private_names.len()
-                ),
-            });
-        }
-    }
-
-    {
-        let before = out.clone();
-        out = strip_emails(&out);
-        if out != before {
-            findings.push(StripFinding {
-                kind: "email",
-                detail: "stripped email address(es)".to_string(),
-            });
-        }
-    }
-
-    if policy.forbid_bearer_tokens {
-        let before = out.clone();
-        out = strip_bearer_tokens(&out);
-        if out != before {
-            findings.push(StripFinding {
-                kind: "bearer_token",
-                detail: "stripped bearer token material".to_string(),
-            });
-        }
-    }
-
-    {
-        let before = out.clone();
-        out = strip_file_line_citations(&out);
-        if out != before {
-            findings.push(StripFinding {
-                kind: "file_line_citation",
-                detail: "stripped unredacted file:line citation(s)".to_string(),
-            });
-        }
-    }
-
-    {
-        let before = out.clone();
-        out = strip_hostname_literals(&out);
-        if out != before {
-            findings.push(StripFinding {
-                kind: "hostname",
-                detail: "stripped local hostname literal(s)".to_string(),
-            });
-        }
-    }
-
-    RedactionReport {
-        text: out,
-        findings,
-    }
-}
-
-/// Refuse if `text` still contains court-forbidden residue after strip.
-pub fn assert_public_clean(text: &str, policy: &RedactionPolicy) -> Result<(), AnonymizeRefusal> {
-    let policy = policy.clone().with_default_denylist_if_empty();
-    if policy.forbid_local_user_paths && contains_user_path(text) {
-        return Err(residual("local user path residual after strip"));
-    }
-    if contains_email(text) {
-        return Err(residual("email residual after strip"));
-    }
-    if policy.forbid_private_client_names {
-        for name in &policy.private_names {
-            if !name.is_empty() && contains_ci(text, name) {
-                return Err(residual("private client name residual after strip"));
-            }
-        }
-    }
-    if contains_file_line_citation(text) {
-        return Err(residual("file:line citation residual after strip"));
-    }
-    if policy.forbid_bearer_tokens && contains_bearer_residual(text) {
-        return Err(residual("bearer token residual after strip"));
-    }
-    if policy.forbid_calendar_links && contains_calendar_link(text) {
-        return Err(residual("calendar link residual after strip"));
-    }
-    if policy.forbid_external_links_in_post_body
-        && first_disallowed_external_link_marker(text).is_some()
-    {
-        return Err(residual("external link residual after strip"));
-    }
-    Ok(())
-}
-
-/// Redact every string leaf in a JSON value (depth-first). Non-strings untouched.
-pub fn redact_json_value(
-    value: &serde_json::Value,
-    policy: &RedactionPolicy,
-) -> (serde_json::Value, Vec<StripFinding>) {
-    let mut findings = Vec::new();
-    let redacted = walk_json(value, policy, &mut findings);
-    (redacted, findings)
-}
-
-fn walk_json(
-    value: &serde_json::Value,
-    policy: &RedactionPolicy,
-    findings: &mut Vec<StripFinding>,
-) -> serde_json::Value {
-    match value {
-        serde_json::Value::String(s) => {
-            let report = redact_text(s, policy);
-            findings.extend(report.findings);
-            serde_json::Value::String(report.text)
-        }
-        serde_json::Value::Array(items) => serde_json::Value::Array(
-            items
-                .iter()
-                .map(|item| walk_json(item, policy, findings))
-                .collect(),
-        ),
-        serde_json::Value::Object(map) => {
-            let mut out = serde_json::Map::new();
-            for (k, v) in map {
-                out.insert(k.clone(), walk_json(v, policy, findings));
-            }
-            serde_json::Value::Object(out)
-        }
-        other => other.clone(),
-    }
-}
-
-fn residual(detail: &str) -> AnonymizeRefusal {
-    AnonymizeRefusal {
-        code: REFUSED_REDACTION_RESIDUAL,
-        class: "refused",
-        broken_term: BROKEN_TERM_NO_AUTHORITY,
-        detail: detail.to_string(),
-    }
-}
-
-fn strip_user_paths(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let bytes = text.as_bytes();
-    let mut i = 0usize;
-    while i < bytes.len() {
-        if let Some(end) = match_user_path(bytes, i) {
-            out.push_str(REDACTED_PATH);
-            i = end;
-            continue;
-        }
-        out.push(bytes[i] as char);
-        i += 1;
-    }
-    out
-}
-
-/// Match `/Users/<seg>/…` or `/home/<seg>/…` starting at `i`; return end index.
-fn match_user_path(bytes: &[u8], i: usize) -> Option<usize> {
-    let prefixes: &[&[u8]] = &[b"/Users/", b"/home/"];
-    for prefix in prefixes {
-        if bytes[i..].starts_with(prefix) {
-            let mut j = i + prefix.len();
-            // consume path-ish run (no whitespace)
-            while j < bytes.len() {
-                let c = bytes[j];
-                if c.is_ascii_whitespace() || c == b'"' || c == b'\'' || c == b')' || c == b']' {
-                    break;
-                }
-                j += 1;
-            }
-            if j > i + prefix.len() {
-                return Some(j);
-            }
-        }
-    }
-    None
-}
-
-fn contains_user_path(text: &str) -> bool {
-    text.contains("/Users/") || text.contains("/home/")
-}
-
 fn contains_bearer_residual(text: &str) -> bool {
     let lower = text.to_ascii_lowercase();
     if lower.contains("bearer ") {
@@ -712,11 +497,6 @@ fn contains_bearer_residual(text: &str) -> bool {
         }
     }
     false
-}
-
-fn contains_calendar_link(text: &str) -> bool {
-    let lower = text.to_ascii_lowercase();
-    CALENDAR_HOST_MARKERS.iter().any(|m| lower.contains(m))
 }
 
 /// First `https://` / `http://` / `www.` marker whose host is not allowlisted.
@@ -748,34 +528,6 @@ fn first_disallowed_external_link_marker(text: &str) -> Option<&'static str> {
         }
     }
     None
-}
-
-fn strip_private_names(text: &str, names: &[String]) -> String {
-    let mut out = text.to_string();
-    for name in names {
-        let trimmed = name.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        out = replace_ci(&out, trimmed, REDACTED_NAME);
-    }
-    out
-}
-
-fn strip_emails(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let chars: Vec<char> = text.chars().collect();
-    let mut i = 0usize;
-    while i < chars.len() {
-        if let Some(end) = match_email(&chars, i) {
-            out.push_str(REDACTED_EMAIL);
-            i = end;
-            continue;
-        }
-        out.push(chars[i]);
-        i += 1;
-    }
-    out
 }
 
 fn match_email(chars: &[char], i: usize) -> Option<usize> {
@@ -819,152 +571,6 @@ fn contains_email(text: &str) -> bool {
     (0..chars.len()).any(|i| match_email(&chars, i).is_some())
 }
 
-fn strip_bearer_tokens(text: &str) -> String {
-    // Bearer <token> or sk-… / eyJ… JWTs
-    let mut out = text.to_string();
-    out = replace_ci(&out, "bearer ", "[REDACTED_TOKEN] ");
-    // crude sk- / eyJ prefixes
-    out = strip_prefixed_token(&out, "sk-");
-    out = strip_prefixed_token(&out, "eyJ");
-    out
-}
-
-fn strip_prefixed_token(text: &str, prefix: &str) -> String {
-    let lower = text.to_lowercase();
-    let pref = prefix.to_lowercase();
-    let mut out = String::with_capacity(text.len());
-    let mut i = 0usize;
-    let bytes = text.as_bytes();
-    let lower_bytes = lower.as_bytes();
-    while i < bytes.len() {
-        if lower_bytes[i..].starts_with(pref.as_bytes()) {
-            let mut j = i + pref.len();
-            while j < bytes.len() && !bytes[j].is_ascii_whitespace() && bytes[j] != b'"' {
-                j += 1;
-            }
-            out.push_str("[REDACTED_TOKEN]");
-            i = j;
-            continue;
-        }
-        out.push(bytes[i] as char);
-        i += 1;
-    }
-    out
-}
-
-fn strip_file_line_citations(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let chars: Vec<char> = text.chars().collect();
-    let mut i = 0usize;
-    while i < chars.len() {
-        if let Some(end) = match_file_line(&chars, i) {
-            out.push_str(REDACTED_CITE);
-            i = end;
-            continue;
-        }
-        out.push(chars[i]);
-        i += 1;
-    }
-    out
-}
-
-fn match_file_line(chars: &[char], i: usize) -> Option<usize> {
-    // path/to/file.rs:123 or file.ex:45
-    if !chars[i].is_ascii_alphanumeric() && chars[i] != '.' && chars[i] != '_' && chars[i] != '/'
-    {
-        return None;
-    }
-    let mut j = i;
-    let mut saw_slash_or_dot = false;
-    let mut saw_ext = false;
-    while j < chars.len() {
-        let c = chars[j];
-        if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
-            j += 1;
-            continue;
-        }
-        if c == '/' || c == '.' {
-            saw_slash_or_dot = true;
-            if c == '.' {
-                // peek extension
-                let ext_start = j + 1;
-                let mut k = ext_start;
-                while k < chars.len() && chars[k].is_ascii_alphanumeric() {
-                    k += 1;
-                }
-                if k > ext_start && k < chars.len() && chars[k] == ':' {
-                    saw_ext = true;
-                    j = k;
-                    break;
-                }
-            }
-            j += 1;
-            continue;
-        }
-        break;
-    }
-    if !saw_slash_or_dot || !saw_ext || j >= chars.len() || chars[j] != ':' {
-        return None;
-    }
-    j += 1;
-    let line_start = j;
-    while j < chars.len() && chars[j].is_ascii_digit() {
-        j += 1;
-    }
-    if j == line_start {
-        return None;
-    }
-    Some(j)
-}
-
-fn contains_file_line_citation(text: &str) -> bool {
-    let chars: Vec<char> = text.chars().collect();
-    (0..chars.len()).any(|i| match_file_line(&chars, i).is_some())
-}
-
-fn strip_hostname_literals(text: &str) -> String {
-    // Only strip when the OS hostname is embedded; keep deterministic by reading
-    // once via std::env — if unset/unavailable, no-op.
-    let host = hostname_for_redaction();
-    if host.is_empty() || host == "localhost" {
-        return text.to_string();
-    }
-    let before = text.to_string();
-    replace_ci(&before, &host, REDACTED_HOST)
-}
-
-fn hostname_for_redaction() -> String {
-    std::env::var("HOSTNAME")
-        .or_else(|_| std::env::var("HOST"))
-        .unwrap_or_default()
-}
-
-fn contains_ci(hay: &str, needle: &str) -> bool {
-    hay.to_lowercase().contains(&needle.to_lowercase())
-}
-
-fn replace_ci(hay: &str, needle: &str, replacement: &str) -> String {
-    if needle.is_empty() {
-        return hay.to_string();
-    }
-    let lower_hay = hay.to_lowercase();
-    let lower_needle = needle.to_lowercase();
-    let mut out = String::with_capacity(hay.len());
-    let mut i = 0usize;
-    while i < hay.len() {
-        if lower_hay[i..].starts_with(&lower_needle) {
-            // char-boundary safe: needle is ASCII-oriented brand names
-            out.push_str(replacement);
-            i += needle.len();
-            continue;
-        }
-        let ch = hay[i..].chars().next().unwrap();
-        out.push(ch);
-        i += ch.len_utf8();
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -984,40 +590,6 @@ mod tests {
     #[test]
     fn admits_with_flag() {
         assert!(require_public_anonymize(true).is_ok());
-    }
-
-    #[test]
-    fn strips_users_paths() {
-        let policy = RedactionPolicy::fourth_watch_defaults();
-        let report = redact_text("see /Users/sac/secret/path.rs then done", &policy);
-        assert!(!report.text.contains("/Users/"));
-        assert!(report.text.contains(REDACTED_PATH));
-        assert!(!report.findings.is_empty());
-    }
-
-    #[test]
-    fn strips_private_names() {
-        let mut policy = RedactionPolicy::fourth_watch_defaults();
-        policy.private_names = vec!["Acme Corp".to_string()];
-        let report = redact_text("Acme Corp breach window", &policy);
-        assert!(!contains_ci(&report.text, "Acme Corp"));
-        assert!(report.text.contains(REDACTED_NAME));
-    }
-
-    #[test]
-    fn strips_file_line_citations() {
-        let policy = RedactionPolicy::fourth_watch_defaults();
-        let report = redact_text("bug at src/publish/linkedin.rs:912", &policy);
-        assert!(!report.text.contains("linkedin.rs:912"));
-        assert!(report.text.contains(REDACTED_CITE));
-    }
-
-    #[test]
-    fn determinism_twin() {
-        let policy = RedactionPolicy::fourth_watch_defaults();
-        let a = redact_text("/Users/sac/a and foo@bar.com", &policy);
-        let b = redact_text("/Users/sac/a and foo@bar.com", &policy);
-        assert_eq!(a, b);
     }
 
     #[test]
@@ -1184,6 +756,22 @@ mod tests {
     }
 
     #[test]
+    fn refuses_email_without_echoing_it() {
+        let addr = "ops@evil.example";
+        let text = format!("Contact {addr} for the drop.");
+        let err = RedactionCourt::with_default_clients()
+            .admit(&text)
+            .expect_err("email must refuse");
+        assert!(err.findings.iter().any(|f| f.rule == RULE_EMAIL));
+        let inspected = format!("{err:?}");
+        assert!(
+            !inspected.contains(addr),
+            "refusal must not echo email: {inspected}"
+        );
+        assert!(inspected.contains(REDACTED_TOKEN));
+    }
+
+    #[test]
     fn allows_airlock_host_external_link() {
         let court = RedactionCourt::with_default_clients();
         assert!(court
@@ -1191,15 +779,4 @@ mod tests {
             .is_ok());
     }
 
-    #[test]
-    fn assert_public_clean_refuses_bearer_residual() {
-        let policy = RedactionPolicy::fourth_watch_defaults();
-        let err = assert_public_clean(
-            "still has Bearer sk-live-abcdefghijklmnopqrstuvwxyz",
-            &policy,
-        )
-        .expect_err("bearer residual");
-        assert_eq!(err.code, REFUSED_REDACTION_RESIDUAL);
-        assert!(err.detail.contains("bearer"));
-    }
 }

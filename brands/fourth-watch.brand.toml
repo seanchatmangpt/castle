@@ -68,8 +68,8 @@ prohibited_patterns = [
 # in [messaging.cta].featured_url_template and surfaces in the first comment.
 required_cta = """
 Drop a read-only snapshot at Featured /drop/:lease_id on cos.fnox.io for a
-binary Claims vs Code board PDF. Surface SlotLease /readyz gate when drop is
-not healthy — never invent revops.fnox.io.
+binary Claims vs Code board PDF. Surface SlotLease /readyz ∧ 2× LOW gate when
+drop is not healthy — never invent revops.fnox.io.
 """
 
 [messaging.cta]
@@ -79,8 +79,8 @@ featured_url_template = "https://cos.fnox.io/drop/:lease_id"
 intake_policy = "self-serve-airlock-only"
 discovery_calls = false
 forbidden_hosts = ["revops.fnox.io"]
-# Featured CTA honesty — surface on every draft until live /readyz == 200
-drop_gated_note = "Featured CTA: SlotLease-gated until live cos /readyz returns 200; host stays cos.fnox.io only."
+# Featured CTA honesty — gated until /readyz 200 ∧ 2× durable LOW-only (not /readyz alone)
+drop_gated_note = "Featured CTA: SlotLease-gated until live cos /readyz 200 ∧ 2× durable LOW-only; host stays cos.fnox.io only."
 
 [messaging.commercial]
 custom_redline_duty_usd = 25000

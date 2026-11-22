@@ -444,8 +444,12 @@ safe_margin_px = { value = 72, type = "dimension" }
         );
         let gate = m.messaging.cta.drop_gated_note.as_deref().unwrap_or("");
         assert!(
-            gate.contains("SlotLease") && gate.contains("/readyz"),
-            "{label}: messaging.cta.drop_gated_note must surface SlotLease/`/readyz`"
+            gate.contains("SlotLease")
+                && gate.contains("/readyz")
+                && gate.contains("200")
+                && gate.contains("2×")
+                && gate.contains("LOW"),
+            "{label}: messaging.cta.drop_gated_note must surface SlotLease/`/readyz` 200 ∧ 2× LOW (not /readyz alone)"
         );
         assert_eq!(
             m.messaging.commercial.weekly_cell_usd,
@@ -500,8 +504,10 @@ safe_margin_px = { value = 72, type = "dimension" }
             .as_deref()
             .unwrap_or("");
         assert!(
-            unlock.contains("/readyz") && unlock.contains("2× durable LOW-only"),
-            "{label}: extensions.honesty.blast_unlock_primary AND-gate (/readyz ∧ 2× LOW)"
+            unlock.contains("/readyz")
+                && unlock.contains("200")
+                && unlock.contains("2× durable LOW-only"),
+            "{label}: extensions.honesty.blast_unlock_primary AND-gate (/readyz 200 ∧ 2× LOW)"
         );
         let low = m
             .extensions
@@ -542,8 +548,11 @@ safe_margin_px = { value = 72, type = "dimension" }
             "{label}: featured_url_template keeps honest https Featured URL off the body"
         );
         assert!(
-            cta.contains("SlotLease") && cta.contains("/readyz"),
-            "{label}: required_cta must surface SlotLease /readyz gate"
+            cta.contains("SlotLease")
+                && cta.contains("/readyz")
+                && cta.contains("2×")
+                && cta.contains("LOW"),
+            "{label}: required_cta must surface SlotLease /readyz ∧ 2× LOW gate"
         );
         for pattern in ["@fnox/* GA", "2× LOW cleared", "code bar cleared"] {
             assert!(
