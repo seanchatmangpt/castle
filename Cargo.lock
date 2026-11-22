@@ -219,6 +219,7 @@ dependencies = [
  "sha2 0.10.9",
  "slh-dsa",
  "tokio",
+ "toml 0.8.23",
  "tracing",
 ]
 
@@ -261,7 +262,7 @@ dependencies = [
 
 [[package]]
 name = "chicago-tdd-tools-proc-macros"
-version = "26.10.12"
+version = "26.11.17"
 dependencies = [
  "proc-macro2",
  "quote",

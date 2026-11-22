@@ -273,7 +273,7 @@ ledger in `docs/REVIEW_2026-09-28.md`. The selected semantic source is the immut
 - FOND/TLA+ differential agreement with counterexample refusal;
 - edge-local provider recovery that excludes failed edges without converting recovery into authority.
 
-These integrations are upstream evidence and compute surfaces only. GraphLaw, Affidavit, wasm4pm, DSPy-WASM, AutoFDE-Lab, AshA2A, AshPPlan, Ferroplan, Beam4PM, AshR2RML, XaaS, ggen, and ggen-marketplace do not receive ambient CASTLE actuation authority. `CONSTRUCT != DO` remains unchanged: consequential execution still requires CASTLE's existing opaque `ConstructAdmission -> BRCE -> DO -> OCEL/receipt` path.
+These integrations are upstream evidence and compute surfaces only. GraphLaw, Affidavit, wasm4pm, DSPy-WASM, AutoFDE-Lab, AshA2A, AshPPlan, Ferroplan, Beam4PM, AshR2RML, XaaS, ggen, and ggen-marketplace do not receive ambient CASTLE actuation authority. `CONSTRUCT != DO` remains unchanged: consequential execution still requires CASTLE's opaque `ConstructAdmission` (sealed in-crate; **↛** AshA2A.CommandBus / gymact `BRCEBroker` product wire) → in-crate `GymActAdapter` DO → OCEL/receipt. Cross-repo `ConstructAdmission→BRCE` is DOC-ONLY / aspirational.
 
 The strongest same-day runtime composition is `AshPPlan → AshA2A → GymAct/Beam4PM/XaaS`: planner ownership stays separate, AshA2A owns portable recovery/consequence semantics, and consumers preserve rather than re-derive the decision. CASTLE admits that chain only as bounded evidence/compute semantics.
 

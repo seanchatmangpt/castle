@@ -5,6 +5,10 @@
 //! into the `castle` library crate. DfCM closure handlers are separated only to
 //! keep the existing release-line handler file bounded.
 
+pub mod castle_261120_handlers;
+pub mod castle_261120_routes;
+pub mod deletion_handlers;
+pub mod deletion_routes;
 pub mod dfcm_handlers;
 pub mod evidence_handlers;
 pub mod evidence_routes;

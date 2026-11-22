@@ -12,11 +12,23 @@ use std::process::ExitCode;
 mod verbs;
 
 /// Machine-readable failure for callers that shell out (XaaS effectors): the error is also
-/// printed as JSON on stdout. Exit 2 = typed refusal/block (`REFUSED:`/`BLOCKED:` prefix),
+/// printed as JSON on stdout. Exit 2 = typed refusal/block (`REFUSED:`/`BLOCKED:` prefix, or an
+/// already-structured refused/blocked JSON embedded in an ExecutionError string),
 /// 3 = non-settled standing (`standing=` in the detail), 1 = anything else. stderr keeps the
 /// legacy `ERROR: ...` line.
 fn failure_json(error: &str) -> (serde_json::Value, u8) {
     let detail = error.trim();
+    // Promote a handler-emitted refused/blocked JSON (e.g. publish anonymize court) out of the
+    // clap-noun-verb ExecutionError wrapper into a bare envelope + exit 2 (F-ANON-2 contract).
+    if let Some(start) = detail.find('{') {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&detail[start..]) {
+            let class = v.get("class").and_then(|c| c.as_str()).unwrap_or("");
+            let ok_false = v.get("ok") == Some(&serde_json::Value::Bool(false));
+            if ok_false && (class == "refused" || class == "blocked") {
+                return (v, 2);
+            }
+        }
+    }
     let marker = ["REFUSED:", "BLOCKED:"].iter().find_map(|p| detail.find(p).map(|i| (i, *p)));
     if let Some((i, prefix)) = marker {
         let rest = &detail[i..];

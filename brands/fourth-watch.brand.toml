@@ -1,0 +1,161 @@
+# Fourth Watch — intentional slim twin of marketplace SoT (castle publish / BrandManifest).
+# SoT: ggen-marketplace/packs/mobile-ui-layout-pack/brand/fourth-watch.brand.toml
+# Projects: [brand], messaging.{triad,voice,cta,commercial,redaction_court},
+#   top-level redaction_court (require_public_anonymize), extensions.honesty, tokens.*.
+# Omits BrandTheme-only: [meta], primitive.*, semantic.*, component.*, extensions.ggen.*
+# Dual-surface (intentional, not drift): twin scale_body_px=24 LinkedIn court;
+#   SoT BrandTheme UI body stays 18; BrandManifest::carousel_geometry clamps ≥24.
+# Twin sync: castle/brands ≡ zcode-cli/brands (byte-identical); SoT hash differs
+#   (BrandTheme tables + dual-surface body). Re-sync both twins together.
+# Honesty: no 120 Hz / WebGPU / zero-DOM / 4-Cloud RAID GA / @fnox/* GA shipping.
+# CTA host: cos.fnox.io only (never revops.fnox.io).
+# Jobs blast unlock AND-gate: Live cos /readyz 200 (billing∧JWKS∧redeploy)
+# ∧ 2× durable LOW-only receipts on disk. 2× LOW = required second gate (not void).
+
+[brand]
+id = "fourth-watch"
+name = "Fourth Watch AI Cybersecurity"
+short_name = "Fourth Watch"
+tagline = "Sentinel, Steward, and Shepherd for Mission-Critical Infrastructure"
+domain = "fourthwatch.ai"
+intake_airlock = "https://cos.fnox.io/drop/:lease_id"
+intake_policy = "self-serve-airlock-only"
+discovery_calls = false
+target_verticals = ["holdco", "enterprise-cyber", "church-anchor", "msp-oem"]
+
+[messaging.triad]
+sentinel = """
+Diagnose before narrative: pinned CASTLE probes and zero-mock evidence emit a
+binary Claims vs Code board — ALIVE or REFUSED — before attackers or auditors
+arrive. No discovery calls; standing is measured, not pitched.
+"""
+steward = """
+Own the rails you depend on: zero vendor custody, 0.00% transaction rent, and
+client-owned infrastructure under your EIN. Multi-cloud RAID remains a target
+architecture — commercial metering may name the cell; shipping RAID is not
+attested until measured.
+"""
+shepherd = """
+Protect without disruption: wrap legacy staff screens with keyless FFB shims so
+workflows stay familiar and retraining stays at zero. Shim inventory is
+on-disk truth only — do not claim @fnox package GA or canvas Hz as shipping.
+"""
+
+[messaging.voice]
+register = "calm-decisive-protective"
+prohibited_patterns = [
+  "book a demo",
+  "schedule a call",
+  "calendly.com",
+  "hop on a quick call",
+  "synergy",
+  "AI-powered magic",
+  "revops.fnox.io",
+  "120 Hz",
+  "120Hz",
+  "WebGPU GA",
+  "WebGPU shipping",
+  "zero-DOM shipping",
+  "4-Cloud RAID GA",
+  "verified 21k",
+  "@fnox/react",
+  "@fnox/* GA",
+  "@fnox package GA",
+  "2× LOW cleared",
+  "code bar cleared",
+]
+# Body prose only — no https/http/www (POST_EXTERNAL_LINK). Featured URL lives
+# in [messaging.cta].featured_url_template and surfaces in the first comment.
+required_cta = """
+Drop a read-only snapshot at Featured /drop/:lease_id on cos.fnox.io for a
+binary Claims vs Code board PDF. Surface SlotLease /readyz gate when drop is
+not healthy — never invent revops.fnox.io.
+"""
+
+[messaging.cta]
+featured_host = "cos.fnox.io"
+featured_path = "/drop/:lease_id"
+featured_url_template = "https://cos.fnox.io/drop/:lease_id"
+intake_policy = "self-serve-airlock-only"
+discovery_calls = false
+forbidden_hosts = ["revops.fnox.io"]
+# Featured CTA honesty — surface on every draft until live /readyz == 200
+drop_gated_note = "Featured CTA: SlotLease-gated until live cos /readyz returns 200; host stays cos.fnox.io only."
+
+[messaging.commercial]
+custom_redline_duty_usd = 25000
+weekly_cell_usd = 5000
+custody_pct = 0.0
+transaction_rent_pct = 0.0
+# weekly_cell_usd meters the white-glove cell — not a proven RAID shipping claim
+target_verticals = ["holdco", "enterprise-cyber", "church-anchor", "msp-oem"]
+
+[messaging.redaction_court]
+forbid_private_client_names = true
+forbid_local_user_paths = true
+forbid_bearer_tokens = true
+forbid_external_links_in_post_body = true
+forbid_calendar_links = true
+require_public_anonymize = true
+
+# Top-level twin for castle::publish::brand::BrandManifest.redaction_court
+[redaction_court]
+forbid_private_client_names = true
+forbid_local_user_paths = true
+forbid_bearer_tokens = true
+forbid_external_links_in_post_body = true
+forbid_calendar_links = true
+require_public_anonymize = true
+
+[extensions.honesty]
+webgpu_120hz_status = "doc-only-not-shipping"
+zero_dom_status = "doc-only-not-shipping"
+raid_4cloud_status = "target-not-proven"
+linkedin_graph_count_status = "unverified"
+intake_host_of_record = "cos.fnox.io"
+# Jobs lock — blast unlock = /readyz 200 ∧ 2× durable LOW-only (required second gate)
+blast_unlock_primary = "Live cos /readyz 200 (billing∧JWKS∧redeploy) ∧ 2× durable LOW-only receipts on disk — Jobs P3 blast authorized on cos drop path."
+low_durable_status = "required-second-gate-0x-missing"
+forbid_shipping_claims = [
+  "120Hz",
+  "120 Hz",
+  "WebGPU",
+  "zero-DOM",
+  "4-Cloud RAID GA",
+  "@fnox/* GA",
+  "@fnox package GA",
+]
+
+[tokens.dtcg]
+spec_version = "2025.10"
+surface_target = "css-theme-spacing"
+surface_target_note = "BrandTheme emits Tailwind @theme spacing. Zero-DOM WebGPU/Taffy AOT is aspirational, not this cut's shipping surface."
+
+[tokens.color]
+bg_obsidian = { value = "#0B0F14", type = "color", description = "Primary watchtower canvas" }
+bg_slate = { value = "#131A22", type = "color", description = "Elevated card & sight-glass surface" }
+border_steel = { value = "#24303F", type = "color", description = "1px hairline structural divider" }
+text_primary = { value = "#F3F6FA", type = "color", description = "High-contrast primary copy" }
+text_muted = { value = "#9AA8B8", type = "color", description = "Secondary metadata & receipt hashes" }
+accent_brass = { value = "#C89B3C", type = "color", description = "Sentinel watch-lamp highlight" }
+status_alive = { value = "#22C55E", type = "color", description = "Verified ALIVE standing" }
+status_refused = { value = "#EF4444", type = "color", description = "Fail-closed REFUSED standing" }
+status_partial = { value = "#F59E0B", type = "color", description = "PARTIAL_ALIVE / bounded caution" }
+
+[tokens.typography]
+font_display = { value = "Source Serif 4, Libre Baskerville, Georgia, serif", type = "fontFamily" }
+font_mono = { value = "IBM Plex Mono, ui-monospace, monospace", type = "fontFamily" }
+scale_h1_px = { value = 48, type = "dimension" }
+scale_h2_px = { value = 32, type = "dimension" }
+# Twin surface: 24pt LinkedIn court (SoT UI surface is 18 — intentional dual-surface).
+scale_body_px = { value = 24, type = "dimension", description = "Carousel body floor (≥24pt LinkedIn court); SoT UI body remains 18" }
+scale_caption_px = { value = 16, type = "dimension", description = "Caption floor = base ≥16 (no sub-16 UI type)" }
+base_min_px = { value = 16, type = "dimension", description = "Statutory / iOS auto-zoom floor" }
+
+[tokens.spacing]
+unit_px = { value = 8, type = "dimension" }
+touch_target_min_px = { value = 44, type = "dimension", description = "Apple HIG floor (tap ≥44); prefer 48 for primary CTAs" }
+touch_target_comfortable_px = { value = 48, type = "dimension" }
+carousel_width_px = { value = 1080, type = "dimension" }
+carousel_height_px = { value = 1350, type = "dimension" }
+safe_margin_px = { value = 72, type = "dimension" }

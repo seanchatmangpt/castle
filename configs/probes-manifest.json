@@ -1,0 +1,67 @@
+{
+  "schema_version": "26.11.20",
+  "authority_ceiling": "CONSTRUCT",
+  "network_egress": "FORBIDDEN",
+  "probes": [
+    {
+      "tool_id": "anti-cheat-scorecard",
+      "repo": "seanchatmangpt/anti-cheat-scorecard",
+      "version": "v26.8.29",
+      "commit_sha": "9c3ba49",
+      "binary_name": "scorecard",
+      "binary_sha256": "PIN_ON_BUILD",
+      "offline_args": [
+        "--local",
+        "{repo}",
+        "--checks",
+        "Anti-Cheat,SAST,Pinned-Dependencies,Token-Permissions,Dangerous-Workflow,CI-Tests",
+        "--format",
+        "json"
+      ],
+      "output_format": "scorecard-json",
+      "fortune5_controls": [
+        "F5-CI-INTEGRITY",
+        "F5-ANTI-MOCK",
+        "F5-GEN-AUTHORITY",
+        "F5-SUPPLY-CHAIN"
+      ]
+    },
+    {
+      "tool_id": "trivy-iac-fork",
+      "version": "pinned",
+      "binary_name": "trivy",
+      "binary_sha256": "PIN_ON_BUILD",
+      "offline_args": ["config", "--offline-scan", "--format", "sarif", "{repo}"],
+      "output_format": "sarif-2.1.0",
+      "fortune5_controls": ["F5-IAM-LEAST-PRIV", "F5-PERIMETER-AUTH", "F5-4CLOUD-RAID"]
+    },
+    {
+      "tool_id": "opengrep-rules",
+      "version": "pinned",
+      "binary_name": "opengrep",
+      "binary_sha256": "PIN_ON_BUILD",
+      "rulepack_sha256": "PIN_ON_BUILD",
+      "offline_args": ["scan", "--metrics=off", "--sarif", "{repo}"],
+      "output_format": "sarif-2.1.0",
+      "fortune5_controls": ["F5-NO-RCE", "F5-NO-XSS", "F5-TLS-STRICT", "F5-JWT-VERIFY"]
+    },
+    {
+      "tool_id": "gitleaks-pii-fork",
+      "version": "pinned",
+      "binary_name": "gitleaks",
+      "binary_sha256": "PIN_ON_BUILD",
+      "offline_args": ["detect", "--no-git", "--report-format", "json", "--source", "{repo}"],
+      "output_format": "gitleaks-json",
+      "fortune5_controls": ["F5-NO-PLAINTEXT-PII", "F5-SECRET-CUSTODY"]
+    },
+    {
+      "tool_id": "syft-osv-sbom",
+      "version": "pinned",
+      "binary_name": "syft",
+      "binary_sha256": "PIN_ON_BUILD",
+      "offline_args": ["dir:{repo}", "-o", "cyclonedx-json"],
+      "output_format": "cyclonedx-json",
+      "fortune5_controls": ["F5-SBOM-PROVENANCE", "F5-CVE-ZERO-CRIT"]
+    }
+  ]
+}
