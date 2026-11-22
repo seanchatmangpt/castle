@@ -1,6 +1,10 @@
 /target
 
+# Alt / lane cargo target dirs (fan-out builds, e.g. target-brand-req/)
+target-*/
+
 # ggen-generated local state: private signing keys (.ggen/keys/*.key) and
 # receipt logs (.ggen-v2/) must never be committed.
 .ggen/
 .ggen-v2/
+crates/castle-ggen-rdf/target/

@@ -3,6 +3,8 @@ use std::env;
 use std::fs;
 use std::process::ExitCode;
 
+use castle_ggen_rdf::strata::cli_strata_ingest;
+
 use ggen_engine::graph::{EngineQueryResults, EngineValue, GraphEngine, GraphLawStore};
 use serde_json::{json, Map, Value};
 
@@ -130,6 +132,7 @@ fn execute(args: &[String]) -> Result<Value, String> {
             let graph = load_graph(&graph_file)?;
             query_envelope(&graph, &sparql)
         }
+        "strata-ingest" => cli_strata_ingest(&args[1..]),
         _ => Err(format!("REFUSED:UNKNOWN_COMMAND:{command}")),
     }
 }
