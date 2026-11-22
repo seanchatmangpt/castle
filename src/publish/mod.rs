@@ -5,9 +5,10 @@
 //! - **PDF compile** is best-effort via host `typst` (`typst_pdf`); when the
 //!   binary is missing the wire documents a `pdf.standing = gap` — never a
 //!   fake ALIVE PDF claim.
-//! - **Ggen layout digest-bind** (`digest_bind`) is a **PRESENT** stub/admit
-//!   API only — production wire does not yet assert `ggen_layout_digest` on
-//!   mint receipts. Stub ≠ ALIVE crown wire (Foundry residual).
+//! - **Ggen layout digest-bind** (`digest_bind`) is wired through
+//!   `wire::seal_public_artifact` when `--ggen-layout-digest` / an API pin is
+//!   supplied (`crown_wire: WIRED`). Omit pin → key absent (optional).
+//!   Wire bind ≠ Foundry / zero-HITL crown `ALIVE`.
 //!
 //! Public targets require `--public-anonymize` and an *explicit* `--brand
 //! <path>` (e.g. `brands/fourth-watch.brand.toml`) — omitting `--brand` is

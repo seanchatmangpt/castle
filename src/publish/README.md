@@ -3,7 +3,7 @@
 Deterministic public mint for LinkedIn carousel / post / newsletter and gatekeeper packs.
 **Typst/JSON mint is ALIVE; live LinkedIn send is stop-worked** until the Jobs AND-gate unlocks.
 
-Module map: `anonymize` (refuse court) · `brand` (manifest + honesty floors) · `digest_bind` (**PRESENT** stub/admit for ggen `AotSealReceipt` layout digest → mint; wire bind **ABSENT** — stub ≠ ALIVE crown wire; see `docs/sjira/v26.11.22/DIGEST-BIND-ADMIT.md`) · `wire` (orchestration) · `linkedin` · `typst_pdf` (optional host `typst`; missing binary → `pdf.standing = gap`).
+Module map: `anonymize` (refuse court) · `brand` (manifest + honesty floors) · `digest_bind` (ggen `AotSealReceipt` layout digest → mint; wire bind **WIRED** when `--ggen-layout-digest` / pin supplied — Foundry/zero-HITL crown still orthogonal; see `docs/sjira/v26.11.22/DIGEST-BIND-ADMIT.md`) · `wire` (orchestration) · `linkedin` · `typst_pdf` (optional host `typst`; missing binary → `pdf.standing = gap`).
 
 ## Mandatory CLI gates
 
@@ -32,13 +32,14 @@ Production seal is [`RedactionCourt::admit`](anonymize.rs) via `wire::seal_publi
 
 There is no production redact-and-continue surface.
 
-## Digest-bind (crown residual — ABSENT on wire)
+## Digest-bind (optional pin → mint `ggen_layout_digest`)
 
-Stub API: `digest_bind::{admit_ggen_layout_digest,bind_into_mint,assert_mint_binds_digest}`.
-Hook: after `RedactionCourt::admit` inside `wire::seal_public_artifact` (commented; not called).
-Chicago falsifier: `cargo test --test publish_digest_bind_court` — stub rows green;
-`mint_receipt_must_bind_admitted_ggen_layout_digest` stays **red** until mint JSON
-carries `ggen_layout_digest`. Eventual CLI: `--ggen-layout-digest <64-hex>`.
+API: `digest_bind::{admit_ggen_layout_digest,bind_into_mint,assert_mint_binds_digest}`.
+Wire: after `RedactionCourt::admit`, `wire::seal_public_artifact` calls `bind_into_mint`
+when a pin is threaded. CLI: `--ggen-layout-digest <64-hex>` (AotSealReceipt-shaped).
+Omit pin → sibling redaction/brand courts stay green without the key.
+Chicago court: `cargo test --test publish_digest_bind_court` — all PASS when wired.
+Wire **WIRED** ≠ Foundry / zero-HITL crown `ALIVE`.
 
 ## F-ANON-3 — Featured CTA in `first_comment` only
 

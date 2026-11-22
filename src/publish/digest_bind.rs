@@ -1,32 +1,33 @@
 //! Ggen layout / brand digest-bind admit surface for CASTLE mint.
 //!
 //! **Standing honesty (Foundry crown wire):**
-//! - This module is a **PRESENT** stub/admit API for binding an admitted ggen
+//! - This module admits a ggen
 //!   [`AotSealReceipt`](https://github.com/seanchatmangpt/ggen)-shaped layout
-//!   digest (64-hex BLAKE3) into a CASTLE mint receipt.
-//! - Production publish wire (`wire::seal_public_artifact` /
-//!   `publish_subject_post` / branded mint paths) does **not** call this yet
-//!   at tip `2774039ea` lineage — crown wire remains **UNKNOWN**.
-//! - Stub ≠ ALIVE crown wire. Sibling redaction/brand courts ALIVE ≠ digest bind.
+//!   digest (64-hex BLAKE3) and binds it into a CASTLE mint receipt.
+//! - Production publish wire (`wire::seal_public_artifact`) calls
+//!   [`bind_into_mint`] when a pin is threaded (CLI `--ggen-layout-digest` or
+//!   API `Option<&GgenLayoutDigestPin>`). Omit pin → mint omits the key
+//!   (sibling redaction/brand paths stay green without a digest).
+//! - Wire bind **WIRED** ≠ Foundry / zero-HITL crown `ALIVE`. Sibling
+//!   redaction/brand courts ALIVE ≠ spine crown without a bound digest.
 //!
 //! Plug-in hooks (exact):
-//! - After brand load + before/alongside `RedactionCourt::admit` seal:
-//!   `src/publish/wire.rs` → `seal_public_artifact` (attach `ggen_layout_digest`
-//!   + `digest_bind` receipt onto the sealed mint JSON).
-//! - CLI eventual surface: `castle publish … --ggen-layout-digest <64-hex>`
-//!   (flag **ABSENT** today; constant [`CLI_FLAG_GGEN_LAYOUT_DIGEST`] names it).
+//! - After `RedactionCourt::admit` in `src/publish/wire.rs` →
+//!   `seal_public_artifact` (optional pin → attach `ggen_layout_digest` +
+//!   `digest_bind` receipt onto the sealed mint JSON).
+//! - CLI: `castle publish … --ggen-layout-digest <64-hex>`
+//!   ([`CLI_FLAG_GGEN_LAYOUT_DIGEST`]).
 //! - Brand twin may later carry `extensions.ggen.layout_digest` (castle twin
 //!   currently omits `extensions.ggen.*` by design).
 //!
-//! Chicago falsifier: `tests/publish_digest_bind_court.rs` —
-//! `mint_receipt_must_bind_admitted_ggen_layout_digest` stays red until wire
-//! calls [`bind_into_mint`].
+//! Chicago court: `tests/publish_digest_bind_court.rs` — all green when wire
+//! threads a pin into `publish_subject_post` / `seal_public_artifact`.
 
 #![forbid(unsafe_code)]
 
 use serde_json::{json, Value};
 
-/// Eventual CLI flag name (not wired into clap routes yet).
+/// CLI flag name wired into `castle publish …` clap-noun-verb routes.
 pub const CLI_FLAG_GGEN_LAYOUT_DIGEST: &str = "--ggen-layout-digest";
 
 /// Typed refusal when digest-bind admit fails.
@@ -74,19 +75,26 @@ pub struct DigestBindReceipt {
     pub collaborator: &'static str,
     pub source: String,
     pub ggen_layout_digest: String,
+    /// `"UNKNOWN"` for admit-only; `"WIRED"` after [`bind_into_mint`].
+    /// Foundry / zero-HITL crown remains orthogonal.
+    pub crown_wire: &'static str,
 }
 
 impl DigestBindReceipt {
     pub fn to_json(&self) -> Value {
+        let note = if self.crown_wire == "WIRED" {
+            "bind_into_mint attached ggen_layout_digest; Foundry/zero-HITL crown ≠ this wire"
+        } else {
+            "admit-only PRESENT; crown_wire stays UNKNOWN until bind_into_mint"
+        };
         json!({
             "standing": self.standing,
             "code": self.code,
             "collaborator": self.collaborator,
             "source": self.source,
             "ggen_layout_digest": self.ggen_layout_digest,
-            // Honesty: API admit ≠ production wire ALIVE.
-            "crown_wire": "UNKNOWN",
-            "note": "stub admit PRESENT; wire bind ABSENT until seal_public_artifact calls bind_into_mint",
+            "crown_wire": self.crown_wire,
+            "note": note,
         })
     }
 }
@@ -191,19 +199,20 @@ pub fn admit_ggen_layout_digest(
         collaborator: COLLABORATOR,
         source: pin.source.clone(),
         ggen_layout_digest: digest.to_ascii_lowercase(),
+        crown_wire: "UNKNOWN",
     })
 }
 
 /// Attach an admitted ggen layout digest onto a mint JSON object.
 ///
-/// Intended call site: `wire::seal_public_artifact` after redaction admit
-/// (or immediately before returning sealed mint). **Not yet called** from
-/// production wire — see Chicago court red test.
+/// Production call site: `wire::seal_public_artifact` after redaction admit
+/// when a ggen pin is threaded (CLI `--ggen-layout-digest` or API pin).
 pub fn bind_into_mint(
     mint: &mut Value,
     pin: &GgenLayoutDigestPin,
 ) -> Result<DigestBindReceipt, DigestBindRefusal> {
-    let receipt = admit_ggen_layout_digest(Some(pin))?;
+    let mut receipt = admit_ggen_layout_digest(Some(pin))?;
+    receipt.crown_wire = "WIRED";
     if let Some(obj) = mint.as_object_mut() {
         obj.insert(
             MINT_KEY_GGEN_LAYOUT_DIGEST.to_string(),
@@ -222,8 +231,8 @@ pub fn bind_into_mint(
 
 /// Assert a mint receipt already carries a bound ggen layout digest.
 ///
-/// Used by Chicago courts to falsify the crown-wire gap: today production
-/// `publish_subject_post` / `seal_public_artifact` omit the key → refuse.
+/// Used by Chicago courts: production `publish_subject_post` /
+/// `seal_public_artifact` with a pin must bind; omit pin → refuse.
 pub fn assert_mint_binds_digest(
     mint: &Value,
     expected: Option<&str>,
@@ -263,6 +272,7 @@ mod tests {
         assert_eq!(receipt.standing, "ADMITTED");
         assert_eq!(receipt.ggen_layout_digest, sample_digest());
         assert_eq!(receipt.collaborator, COLLABORATOR);
+        assert_eq!(receipt.crown_wire, "UNKNOWN");
         assert_eq!(receipt.to_json()["crown_wire"], "UNKNOWN");
     }
 
@@ -288,9 +298,11 @@ mod tests {
     fn bind_into_mint_attaches_keys() {
         let mut mint = json!({"ok": true, "redaction_court": {"standing": "ALIVE"}});
         let pin = GgenLayoutDigestPin::from_aot_seal_digest(sample_digest());
-        bind_into_mint(&mut mint, &pin).expect("bind");
+        let receipt = bind_into_mint(&mut mint, &pin).expect("bind");
+        assert_eq!(receipt.crown_wire, "WIRED");
         assert_eq!(mint[MINT_KEY_GGEN_LAYOUT_DIGEST], sample_digest());
         assert_eq!(mint[MINT_KEY_DIGEST_BIND]["collaborator"], COLLABORATOR);
+        assert_eq!(mint[MINT_KEY_DIGEST_BIND]["crown_wire"], "WIRED");
         assert_mint_binds_digest(&mint, Some(&sample_digest())).expect("assert");
     }
 

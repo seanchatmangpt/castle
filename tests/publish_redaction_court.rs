@@ -179,8 +179,7 @@ forbid_external_links_in_post_body = true
     let policy = brand.redaction_policy();
     let err = seal_public_artifact(
         json!({"body": "leak at /Users/sac/private/client.md"}),
-        &policy,
-    )
+        &policy, None)
     .expect_err("wire seal must refuse, not strip");
     let j = err.to_json();
     assert_eq!(j["code"], REFUSED_REDACTION);
@@ -216,7 +215,7 @@ forbid_external_links_in_post_body = true
 "#,
     )
     .unwrap();
-    let out = publish_subject_post("t", &brand, true).expect("clean subject");
+    let out = publish_subject_post("t", &brand, true, None).expect("clean subject");
     assert_eq!(out["ok"], true);
     assert_eq!(out["redaction_court"]["collaborator"], "RedactionCourt");
     assert_eq!(out["redaction_court"]["standing"], "ALIVE");
@@ -257,8 +256,7 @@ fn wire_seal_refuses_calendar_bearer_external_and_default_client() {
 
     let err = seal_public_artifact(
         json!({"body": "Book https://calendly.com/acme/intro"}),
-        &policy,
-    )
+        &policy, None)
     .expect_err("calendar floor on wire");
     assert!(err.to_json()["findings"]
         .as_array()
@@ -268,8 +266,7 @@ fn wire_seal_refuses_calendar_bearer_external_and_default_client() {
 
     let err = seal_public_artifact(
         json!({"auth": "Authorization: Bearer sk-live-abcdefghijklmnopqrstuvwxyz"}),
-        &policy,
-    )
+        &policy, None)
     .expect_err("bearer residual refuse on wire");
     assert!(err.to_json()["findings"]
         .as_array()
@@ -279,8 +276,7 @@ fn wire_seal_refuses_calendar_bearer_external_and_default_client() {
 
     let err = seal_public_artifact(
         json!({"body": "See https://evil.example/leak"}),
-        &policy,
-    )
+        &policy, None)
     .expect_err("external floor on wire");
     assert!(err.to_json()["findings"]
         .as_array()
@@ -290,8 +286,7 @@ fn wire_seal_refuses_calendar_bearer_external_and_default_client() {
 
     let err = seal_public_artifact(
         json!({"body": "Pilot update from Courtroom.ai this week."}),
-        &policy,
-    )
+        &policy, None)
     .expect_err("default denylist on wire");
     assert!(err.to_json()["findings"]
         .as_array()
@@ -312,7 +307,7 @@ fn wire_real_brand_refuses_default_client_in_subject() {
             .any(|n| n.eq_ignore_ascii_case("Vince Pilot")),
         "empty brand denylist must wire DEFAULT_PRIVATE_CLIENT_NAMES"
     );
-    let err = publish_subject_post("Vince Pilot breach window", &brand, true)
+    let err = publish_subject_post("Vince Pilot breach window", &brand, true, None)
         .expect_err("default client in subject must refuse");
     let j = err.to_json();
     assert_eq!(j["code"], REFUSED_REDACTION);

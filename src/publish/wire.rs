@@ -3,16 +3,13 @@
 //! Pipeline: require anonymize flag → require explicit `--brand` (no soft
 //! default) → load brand → mint artifact (Typst source for carousels) →
 //! [`RedactionCourt::admit`] seal (refuse, never strip-and-ship) → optional
-//! PDF compile (gap-honest).
+//! [`super::digest_bind::bind_into_mint`] when `--ggen-layout-digest` / pin
+//! is threaded → optional PDF compile (gap-honest).
 //!
-//! **Digest-bind crown residual (ABSENT on this wire):** after redaction
-//! admit, mint JSON should call
-//! [`super::digest_bind::bind_into_mint`] with an admitted ggen
-//! `AotSealReceipt.digest` pin so receipts carry `ggen_layout_digest`.
-//! Hook point: [`seal_public_artifact`] (and branded `publish_*` return sites).
-//! Stub API is PRESENT under `publish::digest_bind`; wire does **not** call
-//! it yet — Chicago court `publish_digest_bind_court` stays red until wired.
-//! Stub ≠ ALIVE crown wire.
+//! Digest-bind is **optional** on the pin: omit → sibling redaction/brand
+//! courts stay green without `ggen_layout_digest`; supply pin → mint carries
+//! the bound digest (`crown_wire: WIRED`). Foundry / zero-HITL crown remains
+//! orthogonal to this wire actuation.
 #![forbid(unsafe_code)]
 
 use serde_json::{json, Value};
@@ -22,6 +19,7 @@ use super::anonymize::{
     require_public_anonymize, AnonymizeRefusal, RedactionCourt, RedactionPolicy, RedactionRefusal,
 };
 use super::brand::{BrandLoadError, BrandManifest};
+use super::digest_bind::{bind_into_mint, DigestBindRefusal, GgenLayoutDigestPin};
 use super::linkedin::{
     publish_carousel, publish_newsletter, publish_post, CarouselInput, NewsletterInput, PostInput,
     PublishRefusal, SlideInput,
@@ -45,6 +43,7 @@ pub enum PublishWireError {
     Anonymize(AnonymizeRefusal),
     Redaction(RedactionRefusal),
     Brand(BrandLoadError),
+    DigestBind(DigestBindRefusal),
     Lint(PublishRefusal),
     Input(String),
 }
@@ -72,6 +71,7 @@ impl PublishWireError {
                 "code": "REFUSED_BRAND",
                 "detail": e.detail,
             }),
+            Self::DigestBind(e) => e.to_json(),
             Self::Lint(e) => json!({
                 "ok": false,
                 "class": "refused",
@@ -93,6 +93,7 @@ impl PublishWireError {
             Self::Anonymize(e) => e.to_string(),
             Self::Redaction(e) => e.to_string(),
             Self::Brand(e) => e.to_string(),
+            Self::DigestBind(e) => e.to_string(),
             Self::Lint(e) => e.to_string(),
             Self::Input(d) => format!("REFUSED_INPUT: {d}"),
         }
@@ -130,20 +131,20 @@ pub fn load_brand(brand_path: &str) -> Result<BrandManifest, PublishWireError> {
 /// Law: refuse private residue — never strip-and-ship. On success the artifact
 /// bytes are unchanged and the court receipt records an ALIVE admit.
 ///
-/// **Crown digest-bind hook (not yet actuated):** after this redaction admit
-/// succeeds, callers that hold a ggen `AotSealReceipt` pin should invoke
-/// `crate::publish::digest_bind::bind_into_mint(&mut artifact, &pin)` so the
-/// sealed mint carries `ggen_layout_digest` + `digest_bind` receipt. Today
-/// this function returns without that bind — intentional ABSENT residual
-/// (see `tests/publish_digest_bind_court.rs`).
+/// When `ggen_pin` is `Some`, calls [`bind_into_mint`] after redaction admit so
+/// the sealed mint carries `ggen_layout_digest` + `digest_bind` receipt
+/// (`crown_wire: WIRED`). When `None`, digest keys stay absent (optional pin).
 pub fn seal_public_artifact(
-    artifact: Value,
+    mut artifact: Value,
     policy: &RedactionPolicy,
+    ggen_pin: Option<&GgenLayoutDigestPin>,
 ) -> Result<(Value, Value), PublishWireError> {
     let court = RedactionCourt::from_policy(policy);
     let flat = artifact.to_string();
     court.admit(&flat).map_err(PublishWireError::Redaction)?;
-    // DIGEST-BIND HOOK (ABSENT): bind_into_mint(&mut artifact, &ggen_pin) goes here.
+    if let Some(pin) = ggen_pin {
+        bind_into_mint(&mut artifact, pin).map_err(PublishWireError::DigestBind)?;
+    }
     let receipt = json!({
         "public_anonymize": true,
         "standing": "ALIVE",
@@ -159,6 +160,7 @@ pub fn publish_branded_carousel(
     brand: &BrandManifest,
     public_anonymize: bool,
     out_dir: Option<&Path>,
+    ggen_pin: Option<&GgenLayoutDigestPin>,
 ) -> Result<Value, PublishWireError> {
     brand
         .enforce_public_anonymize(public_anonymize)
@@ -219,7 +221,7 @@ pub fn publish_branded_carousel(
     };
     payload["pdf"] = serde_json::to_value(&pdf_status).unwrap_or(json!({}));
 
-    let (sealed, court) = seal_public_artifact(payload, &policy)?;
+    let (sealed, court) = seal_public_artifact(payload, &policy, ggen_pin)?;
     let mut sealed = sealed;
     sealed["redaction_court"] = court;
     Ok(sealed)
@@ -230,6 +232,7 @@ pub fn publish_branded_post(
     input: &PostInput,
     brand: &BrandManifest,
     public_anonymize: bool,
+    ggen_pin: Option<&GgenLayoutDigestPin>,
 ) -> Result<Value, PublishWireError> {
     brand
         .enforce_public_anonymize(public_anonymize)
@@ -254,7 +257,7 @@ pub fn publish_branded_post(
             typst_source_emitted: false,
         },
     });
-    let (mut sealed, court) = seal_public_artifact(payload, &policy)?;
+    let (mut sealed, court) = seal_public_artifact(payload, &policy, ggen_pin)?;
     sealed["redaction_court"] = court;
     Ok(sealed)
 }
@@ -264,6 +267,7 @@ pub fn publish_branded_newsletter(
     input: &NewsletterInput,
     brand: &BrandManifest,
     public_anonymize: bool,
+    ggen_pin: Option<&GgenLayoutDigestPin>,
 ) -> Result<Value, PublishWireError> {
     brand
         .enforce_public_anonymize(public_anonymize)
@@ -286,7 +290,7 @@ pub fn publish_branded_newsletter(
             typst_source_emitted: false,
         },
     });
-    let (mut sealed, court) = seal_public_artifact(payload, &policy)?;
+    let (mut sealed, court) = seal_public_artifact(payload, &policy, ggen_pin)?;
     sealed["redaction_court"] = court;
     Ok(sealed)
 }
@@ -294,10 +298,12 @@ pub fn publish_branded_newsletter(
 /// Subject-only post court used by F-ANON probes (`publish post --subject t`).
 ///
 /// Builds a lint-admissible post from brand triad copy + subject, then seals.
+/// Optional `ggen_pin` threads an AotSealReceipt-shaped digest into the mint.
 pub fn publish_subject_post(
     subject: &str,
     brand: &BrandManifest,
     public_anonymize: bool,
+    ggen_pin: Option<&GgenLayoutDigestPin>,
 ) -> Result<Value, PublishWireError> {
     brand
         .enforce_public_anonymize(public_anonymize)
@@ -357,7 +363,7 @@ pub fn publish_subject_post(
         lease_id: Some(lease_id.to_string()),
         cta_link,
     };
-    publish_branded_post(&input, brand, true)
+    publish_branded_post(&input, brand, true, ggen_pin)
 }
 
 /// Default scheme-free body CTA. Absolute Featured URL rides cta_link only.
@@ -493,6 +499,7 @@ pub fn publish_target(
     input_path: Option<&str>,
     subject: Option<&str>,
     out_dir: Option<&str>,
+    ggen_layout_digest: Option<&str>,
 ) -> Result<Value, PublishWireError> {
     let is_public = target_requires_anonymize(target);
     if is_public {
@@ -519,20 +526,25 @@ pub fn publish_target(
         None
     };
     let out = out_dir.map(Path::new);
+    let ggen_pin = ggen_layout_digest
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(GgenLayoutDigestPin::from_aot_seal_digest);
+    let ggen_pin_ref = ggen_pin.as_ref();
 
     match target {
         "linkedin-carousel" | "carousel" => {
             let brand = brand.expect("public target always loads brand");
             let input = read_carousel_input(input_path)?;
-            publish_branded_carousel(&input, &brand, public_anonymize, out)
+            publish_branded_carousel(&input, &brand, public_anonymize, out, ggen_pin_ref)
         }
         "linkedin-post" | "post" => {
             let brand = brand.expect("public target always loads brand");
             if let Some(path) = input_path {
                 let input = read_json_input::<PostInput>(path)?;
-                publish_branded_post(&input, &brand, public_anonymize)
+                publish_branded_post(&input, &brand, public_anonymize, ggen_pin_ref)
             } else if let Some(subj) = subject {
-                publish_subject_post(subj, &brand, public_anonymize)
+                publish_subject_post(subj, &brand, public_anonymize, ggen_pin_ref)
             } else {
                 Err(PublishWireError::Input(
                     "post requires --input-path or --subject".into(),
@@ -544,7 +556,7 @@ pub fn publish_target(
             let input = read_json_input::<NewsletterInput>(input_path.ok_or_else(|| {
                 PublishWireError::Input("newsletter requires --input-path".into())
             })?)?;
-            publish_branded_newsletter(&input, &brand, public_anonymize)
+            publish_branded_newsletter(&input, &brand, public_anonymize, ggen_pin_ref)
         }
         "gatekeeper-pack" => {
             let brand = brand.expect("public target always loads brand");
@@ -562,7 +574,8 @@ pub fn publish_target(
                 "brand_id": brand.brand.id,
                 "pack": value,
             });
-            let (sealed, court) = seal_public_artifact(envelope, &brand.redaction_policy())?;
+            let (sealed, court) =
+                seal_public_artifact(envelope, &brand.redaction_policy(), ggen_pin_ref)?;
             envelope = sealed;
             envelope["redaction_court"] = court;
             Ok(envelope)
@@ -705,7 +718,7 @@ private_client_names = ["TotallyPrivateClient"]
     #[test]
     fn refuses_without_anonymize() {
         let brand = brand_toml();
-        let err = publish_subject_post("t", &brand, false).unwrap_err();
+        let err = publish_subject_post("t", &brand, false, None).unwrap_err();
         let j = err.to_json();
         assert_eq!(j["ok"], false);
         assert_eq!(j["class"], "refused");
@@ -715,13 +728,13 @@ private_client_names = ["TotallyPrivateClient"]
     #[test]
     fn publish_target_anonymize_before_brand() {
         // Missing both flags: anonymize court wins (F-ANON-2 contract).
-        let err = publish_target("linkedin-post", None, false, None, Some("t"), None)
+        let err = publish_target("linkedin-post", None, false, None, Some("t"), None, None)
             .unwrap_err();
         let j = err.to_json();
         assert!(j["code"].as_str().unwrap().contains("ANONYMIZE"));
 
         // Anonymize present, brand omitted: soft-default closed.
-        let err = publish_target("linkedin-post", None, true, None, Some("t"), None)
+        let err = publish_target("linkedin-post", None, true, None, Some("t"), None, None)
             .unwrap_err();
         let j = err.to_json();
         assert_eq!(j["code"], "REFUSED_BRAND");
@@ -732,7 +745,7 @@ private_client_names = ["TotallyPrivateClient"]
     fn non_public_unknown_target_without_brand_is_input_not_brand() {
         // Private/non-public: omitting --brand must not soft-default, and must
         // not pretend the miss was a public REFUSED_BRAND court.
-        let err = publish_target("private-draft", None, false, None, None, None).unwrap_err();
+        let err = publish_target("private-draft", None, false, None, None, None, None).unwrap_err();
         let j = err.to_json();
         assert_eq!(j["code"], "REFUSED_INPUT");
         assert!(
@@ -753,6 +766,7 @@ private_client_names = ["TotallyPrivateClient"]
             None,
             Some("t"),
             None,
+            None,
         )
         .unwrap_err();
         let j = err.to_json();
@@ -763,7 +777,7 @@ private_client_names = ["TotallyPrivateClient"]
     #[test]
     fn subject_post_refuses_users_paths_via_court() {
         let brand = brand_toml();
-        let err = publish_subject_post("incident at /Users/sac/private/client", &brand, true)
+        let err = publish_subject_post("incident at /Users/sac/private/client", &brand, true, None)
             .expect_err("home path must refuse at RedactionCourt seal");
         let j = err.to_json();
         assert_eq!(j["ok"], false);
@@ -788,8 +802,7 @@ private_client_names = ["TotallyPrivateClient"]
         let policy = brand.redaction_policy();
         let (sealed, court) = seal_public_artifact(
             json!({"ok": true, "body": "Seal the ledger then publish the receipt."}),
-            &policy,
-        )
+            &policy, None)
         .expect("clean artifact admits");
         assert_eq!(sealed["ok"], true);
         assert_eq!(court["collaborator"], "RedactionCourt");
@@ -825,8 +838,7 @@ forbid_external_links_in_post_body = true
         );
         let err = seal_public_artifact(
             json!({"body": "Pilot update from Courtroom.ai this week."}),
-            &policy,
-        )
+            &policy, None)
         .expect_err("default denylist must refuse");
         let j = err.to_json();
         assert_eq!(j["code"], "REFUSED_REDACTION");
@@ -844,8 +856,7 @@ forbid_external_links_in_post_body = true
 
         let cal = seal_public_artifact(
             json!({"body": "Book via https://calendly.com/fourth-watch/intro"}),
-            &policy,
-        )
+            &policy, None)
         .expect_err("calendar link must refuse");
         assert!(cal.to_json()["findings"]
             .as_array()
@@ -855,8 +866,7 @@ forbid_external_links_in_post_body = true
 
         let bearer = seal_public_artifact(
             json!({"auth": "Authorization: Bearer sk-live-abcdefghijklmnopqrstuvwxyz"}),
-            &policy,
-        )
+            &policy, None)
         .expect_err("bearer residual must refuse");
         assert!(bearer.to_json()["findings"]
             .as_array()
@@ -866,8 +876,7 @@ forbid_external_links_in_post_body = true
 
         let ext = seal_public_artifact(
             json!({"body": "See https://evil.example/leak for details"}),
-            &policy,
-        )
+            &policy, None)
         .expect_err("disallowed external link must refuse");
         assert!(ext.to_json()["findings"]
             .as_array()
@@ -879,7 +888,7 @@ forbid_external_links_in_post_body = true
     #[test]
     fn subject_post_admits_clean_and_records_court() {
         let brand = brand_toml();
-        let out = publish_subject_post("t", &brand, true).expect("clean subject admits");
+        let out = publish_subject_post("t", &brand, true, None).expect("clean subject admits");
         assert_eq!(out["ok"], true);
         assert_eq!(out["redaction_court"]["collaborator"], "RedactionCourt");
         assert_eq!(out["redaction_court"]["standing"], "ALIVE");
@@ -890,7 +899,7 @@ forbid_external_links_in_post_body = true
     fn real_brand_subject_post_admits_without_body_https() {
         let brand = BrandManifest::load_path("brands/fourth-watch.brand.toml")
             .expect("castle brands twin");
-        let out = publish_subject_post("t", &brand, true).expect("real brand must admit");
+        let out = publish_subject_post("t", &brand, true, None).expect("real brand must admit");
         assert_eq!(out["ok"], true);
         assert_eq!(out["redaction_court"]["collaborator"], "RedactionCourt");
         let body = out["body"].as_str().unwrap_or("");
@@ -942,7 +951,7 @@ require_public_anonymize = true
 "#,
         )
         .unwrap();
-        let err = publish_subject_post("t", &brand, true)
+        let err = publish_subject_post("t", &brand, true, None)
             .expect_err("raw https in required_cta must refuse, not strip-admit");
         let j = err.to_json();
         assert_eq!(j["code"], "REFUSED_INPUT");
@@ -980,7 +989,7 @@ require_public_anonymize = true
 "#,
         )
         .unwrap();
-        let err = publish_subject_post("t", &brand, true)
+        let err = publish_subject_post("t", &brand, true, None)
             .expect_err("evil.example https must refuse, never strip to bare host then admit");
         let j = err.to_json();
         assert_eq!(j["code"], "REFUSED_INPUT");
@@ -1028,7 +1037,7 @@ require_public_anonymize = true
 "#,
         )
         .unwrap();
-        let err = publish_subject_post("t", &brand, true)
+        let err = publish_subject_post("t", &brand, true, None)
             .expect_err("scheme in drop_gated_note must refuse");
         let j = err.to_json();
         assert_eq!(j["code"], "REFUSED_INPUT");
@@ -1071,7 +1080,7 @@ require_public_anonymize = true
 "#,
         )
         .unwrap();
-        let out = publish_subject_post("t", &brand, true).expect("body-safe CTA must admit");
+        let out = publish_subject_post("t", &brand, true, None).expect("body-safe CTA must admit");
         assert_eq!(out["ok"], true);
         let body = out["body"].as_str().unwrap_or("");
         let lower = body.to_ascii_lowercase();
