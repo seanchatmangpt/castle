@@ -4,6 +4,15 @@
 //! default) → load brand → mint artifact (Typst source for carousels) →
 //! [`RedactionCourt::admit`] seal (refuse, never strip-and-ship) → optional
 //! PDF compile (gap-honest).
+//!
+//! **Digest-bind crown residual (ABSENT on this wire):** after redaction
+//! admit, mint JSON should call
+//! [`super::digest_bind::bind_into_mint`] with an admitted ggen
+//! `AotSealReceipt.digest` pin so receipts carry `ggen_layout_digest`.
+//! Hook point: [`seal_public_artifact`] (and branded `publish_*` return sites).
+//! Stub API is PRESENT under `publish::digest_bind`; wire does **not** call
+//! it yet — Chicago court `publish_digest_bind_court` stays red until wired.
+//! Stub ≠ ALIVE crown wire.
 #![forbid(unsafe_code)]
 
 use serde_json::{json, Value};
@@ -120,6 +129,13 @@ pub fn load_brand(brand_path: &str) -> Result<BrandManifest, PublishWireError> {
 ///
 /// Law: refuse private residue — never strip-and-ship. On success the artifact
 /// bytes are unchanged and the court receipt records an ALIVE admit.
+///
+/// **Crown digest-bind hook (not yet actuated):** after this redaction admit
+/// succeeds, callers that hold a ggen `AotSealReceipt` pin should invoke
+/// `crate::publish::digest_bind::bind_into_mint(&mut artifact, &pin)` so the
+/// sealed mint carries `ggen_layout_digest` + `digest_bind` receipt. Today
+/// this function returns without that bind — intentional ABSENT residual
+/// (see `tests/publish_digest_bind_court.rs`).
 pub fn seal_public_artifact(
     artifact: Value,
     policy: &RedactionPolicy,
@@ -127,6 +143,7 @@ pub fn seal_public_artifact(
     let court = RedactionCourt::from_policy(policy);
     let flat = artifact.to_string();
     court.admit(&flat).map_err(PublishWireError::Redaction)?;
+    // DIGEST-BIND HOOK (ABSENT): bind_into_mint(&mut artifact, &ggen_pin) goes here.
     let receipt = json!({
         "public_anonymize": true,
         "standing": "ALIVE",
